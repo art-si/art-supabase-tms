@@ -45,7 +45,7 @@
   const { tableQueryRef, overview, search, searchItems, searchBarProps, tableProps, fetchRows } =
     useReportQuery('order-transit', 'day')
   const note =
-    '按订单开单日期筛选未完成订单；执行车辆、司机与提货时间从运单和分配记录关联，签收时间取订单记录。异常标记覆盖超时未签收与已登记回单异常工单；其他未登记货损不推定为零。'
+    '按订单开单日期筛选未完成订单；执行车辆、司机与提货时间从运单和分配记录关联，签收时间取订单记录。异常标记覆盖超期未签收、人工运输工单和回单异常工单；已解决或已结案的工单保留历史说明，仍超期未签收的订单继续提示异常。未登记货损不推定为零。'
   const metrics = computed(() => [
     reportMetric(
       '分析订单',

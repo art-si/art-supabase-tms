@@ -2,8 +2,8 @@
   <ReportWorkspace
     title="司机日常运营台账"
     eyebrow="运营管理分析"
-    description="按所选期间核对执行情况，跟进待办与异常。"
-    icon="ri:bar-chart-box-line"
+    description="核对司机期间任务、出回场里程和考勤，跟进签收与回单回收。"
+    icon="ri:user-location-line"
     :metrics="metrics"
     :table="tableQueryRef"
   >
@@ -18,13 +18,14 @@
       focusable
     >
       <template #header-left
-        ><ReportNote description="按所选日期统计，明细保留业务追溯入口。" :note="note"
+        ><ReportNote description="一名司机一行，任务按运单创建日期统计。" :note="note"
       /></template>
     </ArtTableQuery>
   </ReportWorkspace>
 </template>
 <script setup lang="ts">
-  import { computed } from 'vue'
+  import { computed, h } from 'vue'
+  import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
 
   import type { ColumnOption } from '@/types'
   import type { ReportRow } from '../../../api/modules/management-reports'
@@ -39,7 +40,7 @@
   const { tableQueryRef, overview, search, searchItems, searchBarProps, tableProps, fetchRows } =
     useReportQuery('driver-operations', 'day')
   const note =
-    '一名司机一行；期间任务按运单创建日期，出回场与里程来自执行记录；未完整记录出回场里程则不汇总。考勤通过司机员工关联读取，事故通过司机 ID 关联，违章暂缺可靠司机 ID 不按同名强行匹配。任务数量为运单数，不将多订单运单重复计算。'
+    '一名司机一行；期间任务按运单创建日期，出回场与里程来自执行记录；未完整记录出回场里程则不汇总。考勤通过司机员工关联读取，事故和违章通过司机 ID 关联。违章按发生日期统计；本租户期间存在未关联或无权读取司机身份的违章时，违章数待核实，可在车辆违章中核实关联，不按同名匹配。任务数量为运单数，不将多订单运单重复计算。'
   const metrics = computed(() => [
     reportMetric(
       '分析司机',
@@ -63,9 +64,9 @@
       overview.loading
     ),
     reportMetric(
-      '已上传回单',
+      '已回收 / 上传',
       overview.summary.receipt,
-      '票 · 上传不等于审核通过',
+      '票 · 回收不等于扫描归档',
       'ri:file-check-line',
       overview.loading
     )
@@ -83,7 +84,23 @@
     numberColumn('violation', '违章记录数'),
     numberColumn('accident', '事故记录数'),
     numberColumn('receipt', '回单回收数'),
-    textColumn('attendance', '出勤状态'),
+    {
+      ...textColumn('attendance', '出勤状态'),
+      formatter: (row) =>
+        typeof row.attendance === 'string' && row.attendance
+          ? h(
+              'span',
+              { class: 'flex flex-wrap gap-1' },
+              row.attendance.split('、').map((status) =>
+                h(ArtDictDisplay, {
+                  dictCode: 'hrAttendanceStatus',
+                  value: status,
+                  unknownText: '待核实'
+                })
+              )
+            )
+          : '待核实'
+    },
     textColumn('note', '备注', 280)
   ]
 </script>

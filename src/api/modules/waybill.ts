@@ -395,6 +395,10 @@ export async function completeWaybillExecution(params: ExecutionCompletionPayloa
         p_waybill_id: params.waybillId,
         p_return_time: params.returnTime,
         p_return_odometer_km: params.returnOdometerKm,
+        p_empty_mileage_km: params.emptyMileageKm ?? null,
+        p_departure_fuel_liters: params.departureFuelLiters ?? null,
+        p_refueled_liters: params.refueledLiters ?? null,
+        p_return_fuel_liters: params.returnFuelLiters ?? null,
         p_photo_urls: params.photoUrls,
         p_remark: params.remark || null
       }),

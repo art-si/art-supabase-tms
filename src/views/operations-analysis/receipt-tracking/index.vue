@@ -2,8 +2,8 @@
   <ReportWorkspace
     title="回单跟踪管理"
     eyebrow="运营管理分析"
-    description="按所选期间核对执行情况，跟进待办与异常。"
-    icon="ri:bar-chart-box-line"
+    description="核对回单应收与实收日期，跟进逾期回收、缺失和扫描归档。"
+    icon="ri:file-check-line"
     :metrics="metrics"
     :table="tableQueryRef"
   >
@@ -18,14 +18,17 @@
       focusable
     >
       <template #header-left
-        ><ReportNote description="按所选日期统计，明细保留业务追溯入口。" :note="note"
+        ><ReportNote description="按开单日期筛选，点击订单号查看业务详情。" :note="note"
       /></template>
     </ArtTableQuery>
+    <ReceiptFollowupDialog ref="followupDialog" @success="tableQueryRef?.refreshData()" />
   </ReportWorkspace>
 </template>
 <script setup lang="ts">
-  import { computed } from 'vue'
+  import { computed, h, ref } from 'vue'
   import { useRouter } from 'vue-router'
+  import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
+  import ReceiptFollowupDialog from './modules/receipt-followup-dialog.vue'
 
   import type { ColumnOption } from '@/types'
   import type { ReportRow } from '../../../api/modules/management-reports'
@@ -41,6 +44,7 @@
   import { reportMetric } from '../../components/management-reports/report-metrics'
   defineOptions({ name: 'TmsReportReceiptTracking' })
   const router = useRouter()
+  const followupDialog = ref<InstanceType<typeof ReceiptFollowupDialog>>()
   const { tableQueryRef, overview, search, searchItems, searchBarProps, tableProps, fetchRows } =
     useReportQuery('receipt-tracking', 'day')
   const note =
@@ -92,6 +96,27 @@
     textColumn('receipt_timeliness', '回收及时性', 140),
     textColumn('archived', '扫描归档'),
     textColumn('missing_reason', '缺失原因'),
-    textColumn('note', '备注', 280)
+    textColumn('receipt_followup_note', '跟进措施', 240),
+    textColumn('note', '备注', 280),
+    {
+      prop: 'operation',
+      label: '操作',
+      width: 72,
+      fixed: 'right',
+      formatter: (row) => {
+        if (typeof row.order_id !== 'string') return '—'
+        const orderId = row.order_id
+        return h(ArtButtonTable, {
+          type: 'edit',
+          label: '登记回单跟进',
+          permission: 'TmsReportReceiptTracking:EditFollowup',
+          onClick: () =>
+            void followupDialog.value?.handleOpen({
+              orderId,
+              orderNo: String(row.order_no ?? '')
+            })
+        })
+      }
+    }
   ]
 </script>

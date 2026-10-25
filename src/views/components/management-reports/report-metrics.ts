@@ -8,7 +8,7 @@ export function reportMetric(
   icon: string,
   loading: boolean
 ): BusinessWorkspaceMetric {
-  return { label, value: loading ? '…' : reportNumber(value), description, icon }
+  return { label, value: reportNumber(value), description, icon, loading }
 }
 export function financialMetrics(
   summary: ReportRow,
@@ -24,11 +24,19 @@ export function financialMetrics(
       loading
     ),
     reportMetric('营收合计', summary.revenue, '元 · 订单收入去重统计', 'ri:funds-line', loading),
-    reportMetric('已归集成本', summary.cost, '元 · 已审核的运单费用', 'ri:wallet-3-line', loading),
     reportMetric(
-      '已归集毛利',
-      summary.profit,
-      '元 · 不等同于完整净利润',
+      '核算成本',
+      summary.reconciled_cost,
+      '元 · 费用与分摊去重',
+      'ri:wallet-3-line',
+      loading
+    ),
+    reportMetric(
+      '核算毛利',
+      summary.reconciled_profit,
+      typeof summary.reconciliation_pending === 'number' && summary.reconciliation_pending > 0
+        ? `${summary.reconciliation_pending} 项缺核算依据`
+        : '元 · 不等同于净利润',
       'ri:line-chart-line',
       loading
     )

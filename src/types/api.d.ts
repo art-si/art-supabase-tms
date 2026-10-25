@@ -1491,6 +1491,10 @@ declare global {
           signatureRecordedAt?: string | null
           returnTime?: string | null
           returnOdometerKm?: number | null
+          emptyMileageKm?: number | null
+          departureFuelLiters?: number | null
+          refueledLiters?: number | null
+          returnFuelLiters?: number | null
           returnPhotoUrls: string[]
           completionRemark?: string | null
           completionOperatorName?: string | null
@@ -1540,6 +1544,10 @@ declare global {
           waybillId: string
           returnTime: string
           returnOdometerKm: number
+          emptyMileageKm?: number | null
+          departureFuelLiters?: number | null
+          refueledLiters?: number | null
+          returnFuelLiters?: number | null
           photoUrls: string[]
           remark?: string | null
         }

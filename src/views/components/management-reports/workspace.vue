@@ -30,6 +30,14 @@
 </script>
 <style scoped lang="scss">
   .management-report-page {
+    @media (width <= 640px) {
+      height: auto;
+
+      :deep(.art-table-card) {
+        min-height: 560px;
+      }
+    }
+
     :deep(.art-search-bar) {
       container-type: inline-size;
     }

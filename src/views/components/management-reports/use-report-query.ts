@@ -21,6 +21,7 @@ export function useReportQuery(
 ) {
   const tableQueryRef = ref<ArtTableQueryExpose>()
   const route = useRoute()
+  const pageRouteName = route.name
   const scope = useTenantScopeStore()
   const overview = reactive<{
     loading: boolean
@@ -127,6 +128,7 @@ export function useReportQuery(
   watch(
     () => route.query,
     async () => {
+      if (route.name !== pageRouteName) return
       Object.assign(search, initialSearch())
       await nextTick()
       void tableQueryRef.value?.getData()

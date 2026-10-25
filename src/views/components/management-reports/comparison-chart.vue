@@ -15,6 +15,7 @@
     unit: string
     axisUnit: string
     divisor: number
+    axisRange: [number, number]
   }
   const props = withDefaults(defineProps<Props>(), { height: '142px' })
   const { chartRef } = useChartComponent({
@@ -25,7 +26,8 @@
       () => props.series,
       () => props.unit,
       () => props.axisUnit,
-      () => props.divisor
+      () => props.divisor,
+      () => props.axisRange
     ],
     generateOptions: (): EChartsOption => {
       const text = getCssVar('--el-text-color-secondary')
@@ -35,7 +37,7 @@
       return {
         animation: false,
         color: colors,
-        grid: { left: 112, right: 70, top: 25, bottom: 20 },
+        grid: { left: 152, right: 70, top: 28, bottom: 20 },
         legend: {
           top: 0,
           right: 0,
@@ -47,15 +49,19 @@
         tooltip: {
           trigger: 'axis',
           renderMode: 'richText',
+          confine: true,
           axisPointer: { type: 'shadow' },
           valueFormatter: (value) =>
             typeof value === 'number' ? `${formatNumberValue(value)} ${props.unit}` : '待核算'
         },
         xAxis: {
           type: 'value',
+          min: props.axisRange[0],
+          max: props.axisRange[1],
           name: props.axisUnit,
           nameTextStyle: { color: text, fontSize: 10 },
           splitNumber: 4,
+          minInterval: props.unit === '票' ? 1 : undefined,
           axisLabel: {
             color: text,
             fontSize: 10,
@@ -71,21 +77,23 @@
           data: props.labels,
           axisTick: { show: false },
           axisLine: { show: false },
-          axisLabel: { color: strong, fontSize: 11, width: 100, overflow: 'truncate' }
+          axisLabel: { color: strong, fontSize: 12, width: 140, overflow: 'truncate' }
         },
         series: props.series.map((series) => ({
           name: series.name,
-          type: 'bar',
+          // Keep unknown measures in the legend/tooltip without reserving a bar slot.
+          type: series.data.some((value) => typeof value === 'number') ? 'bar' : 'line',
+          symbol: 'none',
           data: series.data,
-          barMaxWidth: 9,
+          barMaxWidth: 18,
           barGap: '35%',
           itemStyle: { borderRadius: [0, 3, 3, 0] },
           label: {
-            show: props.labels.length <= 3,
+            show: true,
             position: 'right',
             color: text,
             fontSize: 10,
-            formatter: (params) => formatNumberValue(params.value)
+            formatter: (params: { value: unknown }) => formatNumberValue(params.value)
           }
         }))
       }

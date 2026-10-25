@@ -7,6 +7,7 @@ export interface ReportTrendPoint {
   label: string
   revenue: number | null
   cost: number | null
+  reconciled_cost?: number | null
   count: number | null
   completed: number | null
 }
@@ -29,6 +30,9 @@ const isReportRow = (value: unknown): value is ReportRow =>
 const isTrendPoint = (value: unknown): value is ReportTrendPoint =>
   isPlainObjectRecord(value) &&
   typeof value.label === 'string' &&
+  (value.reconciled_cost === undefined ||
+    value.reconciled_cost === null ||
+    (typeof value.reconciled_cost === 'number' && Number.isFinite(value.reconciled_cost))) &&
   ['revenue', 'cost', 'count', 'completed'].every(
     (key) => value[key] === null || (typeof value[key] === 'number' && Number.isFinite(value[key]))
   )
@@ -86,8 +90,8 @@ export async function fetchMonthlyOverview(params: ManagementReportParams) {
     summary: {
       ...period.summary,
       ytd_revenue: year.summary.revenue,
-      ytd_cost: year.summary.cost,
-      ytd_profit: year.summary.profit,
+      ytd_cost: year.summary.reconciled_cost ?? null,
+      ytd_profit: year.summary.reconciled_profit ?? null,
       ytd_end: params.end
     }
   }

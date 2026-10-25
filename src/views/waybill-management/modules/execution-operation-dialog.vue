@@ -166,6 +166,10 @@
   interface ExecutionForm {
     occurredAt: string
     odometerKm: number | null
+    emptyMileageKm: number | null
+    departureFuelLiters: number | null
+    refueledLiters: number | null
+    returnFuelLiters: number | null
     signerName: string
     photoUrls: string[]
     receiptUrls: string[]
@@ -254,6 +258,10 @@
   const createInitialForm = (): ExecutionForm => ({
     occurredAt: dayjs().format('YYYY-MM-DD HH:mm:ss'),
     odometerKm: null,
+    emptyMileageKm: null,
+    departureFuelLiters: null,
+    refueledLiters: null,
+    returnFuelLiters: null,
     signerName: '',
     photoUrls: [],
     receiptUrls: [],
@@ -331,6 +339,43 @@
           type: 'number',
           props: { min: 0, precision: 1, step: 1, controlsPosition: 'right', class: '!w-full' }
         },
+        ...(action.value === 'completion'
+          ? [
+              {
+                label: '本次空驶里程（公里）',
+                key: 'emptyMileageKm',
+                type: 'number' as const,
+                props: {
+                  min: 0,
+                  precision: 1,
+                  controlsPosition: 'right',
+                  class: '!w-full',
+                  placeholder: '选填；未确认请留空'
+                }
+              },
+              {
+                label: '本次油量（选填，未核实请留空）',
+                key: 'fuelSection',
+                type: 'divider' as const,
+                span: 24
+              },
+              ...[
+                { label: '出车余油（升）', key: 'departureFuelLiters' },
+                { label: '途中加油（升）', key: 'refueledLiters' },
+                { label: '回场余油（升）', key: 'returnFuelLiters' }
+              ].map((item) => ({
+                ...item,
+                type: 'number' as const,
+                props: {
+                  min: 0,
+                  precision: 3,
+                  controlsPosition: 'right',
+                  class: '!w-full',
+                  placeholder: '未核实请留空；无加油填 0'
+                }
+              }))
+            ]
+          : []),
         {
           label: action.value === 'departure' ? '发车照片' : '收车照片',
           key: 'photoUrls',
@@ -374,6 +419,10 @@
           ? (record?.departureOdometerKm ?? null)
           : (record?.returnOdometerKm ?? null),
       signerName: record?.signerName ?? currentRow.value?.receivingContactName ?? '',
+      emptyMileageKm: record?.emptyMileageKm ?? null,
+      departureFuelLiters: record?.departureFuelLiters ?? null,
+      refueledLiters: record?.refueledLiters ?? null,
+      returnFuelLiters: record?.returnFuelLiters ?? null,
       photoUrls:
         action.value === 'departure'
           ? (record?.departurePhotoUrls ?? [])
@@ -413,6 +462,34 @@
         return false
       }
       const signedAt = context.value?.record?.signedAt
+      const { departureFuelLiters, refueledLiters, returnFuelLiters } = form.data
+      if (
+        [departureFuelLiters, refueledLiters, returnFuelLiters].some(
+          (value) => value != null && (!Number.isFinite(value) || value < 0)
+        )
+      ) {
+        ElMessage.warning('油量须为大于或等于零的有效升数')
+        return false
+      }
+      if (
+        departureFuelLiters != null &&
+        refueledLiters != null &&
+        returnFuelLiters != null &&
+        returnFuelLiters > departureFuelLiters + refueledLiters
+      ) {
+        ElMessage.warning('回场余油不能大于出车余油与途中加油之和')
+        return false
+      }
+      const emptyMileage = form.data.emptyMileageKm
+      if (
+        emptyMileage != null &&
+        (!Number.isFinite(emptyMileage) ||
+          emptyMileage < 0 ||
+          emptyMileage > Number(form.data.odometerKm) - departureOdometer)
+      ) {
+        ElMessage.warning('空驶里程须在 0 与本次总里程之间')
+        return false
+      }
       if (signedAt && occurredAt.isBefore(dayjs(signedAt))) {
         ElMessage.warning('收车时间不能早于签收时间')
         return false
@@ -467,6 +544,10 @@
           waybillId,
           returnTime: occurredAtIso,
           returnOdometerKm: Number(form.data.odometerKm),
+          emptyMileageKm: form.data.emptyMileageKm ?? null,
+          departureFuelLiters: form.data.departureFuelLiters ?? null,
+          refueledLiters: form.data.refueledLiters ?? null,
+          returnFuelLiters: form.data.returnFuelLiters ?? null,
           photoUrls: [...form.data.photoUrls],
           remark: normalizeNullableText(form.data.remark)
         })
