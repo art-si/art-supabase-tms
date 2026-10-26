@@ -70,26 +70,22 @@
             {{ image.label }}
           </button>
         </div>
-        <ArtUploadImage
-          v-if="activeImage"
-          v-model="form[activeImage]"
-          :resource-tenant-id="form.tenantId || ''"
-          :title="activeImageLabel"
-          width="100%"
-          :height="196"
-          :limit="1"
-          :readonly="!form.tenantId || !canEditDriverField('identityDocuments')"
-        />
+        <div class="driver-dialog__image-disabled">
+          <ArtSvgIcon icon="ri:shield-keyhole-line" aria-hidden="true" />
+          <strong>{{ activeImageLabel }}需要私有存储</strong>
+          <span>证件影像暂不可上传或预览，请先在右侧手工填写资料。</span>
+        </div>
         <ElButton
-          v-if="activeImage !== 'portraitUrl'"
+          v-if="sensitiveStorageReady && activeImage !== 'portraitUrl'"
           v-auth="'TmsDriver:Ocr'"
           type="primary"
           plain
           :loading="ocrBusy"
-          :disabled="!form[activeImage] || !canRecognizeDocument"
+          :disabled="!activeOcrImageUrl || !canRecognizeDocument"
           @click="recognizeDocument"
-        >智能识别当前影像</ElButton>
-        <p>识别后先核对结果，再填入右侧表单；看不清的内容请手工修改。</p>
+          >智能识别当前影像</ElButton
+        >
+        <p>证件影像涉及个人敏感信息，私有存储启用后开放智能识别。</p>
       </section>
       <div class="driver-dialog__form-area">
         <div class="driver-dialog__section-heading"
@@ -168,7 +164,16 @@
   import { replaceReactiveModel } from '@/utils/form/model'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
-  import { ElAlert, ElButton, ElCheckbox, ElMessage, ElTabPane, ElTabs, ElTag, type FormRules } from 'element-plus'
+  import {
+    ElAlert,
+    ElButton,
+    ElCheckbox,
+    ElMessage,
+    ElTabPane,
+    ElTabs,
+    ElTag,
+    type FormRules
+  } from 'element-plus'
   import { h } from 'vue'
   import type { ColumnOption } from '@/types'
   import { omit, pick } from 'lodash-es'
@@ -183,7 +188,6 @@
     DataSelectKey,
     DataSelectRecord
   } from '@/components/core/forms/art-data-select/types'
-  import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
   import ArtTable from '@/components/core/tables/art-table/index.vue'
   import {
     addDriver,
@@ -191,11 +195,16 @@
     fetchCarrierOptions,
     fetchDriverAssignedVehicles,
     fetchDriverCertificates,
+    fetchDriverDetail,
     fetchDriverEmployeeOptions,
     fetchDriverProfile,
     analyzeDriverDocumentByAi
   } from '@tms/api'
-  import type { DriverCertificateRecord, DriverDocumentImageSide, DriverDocumentOcrResult } from '@tms/api'
+  import type {
+    DriverCertificateRecord,
+    DriverDocumentImageSide,
+    DriverDocumentOcrResult
+  } from '@tms/api'
   import DriverCommissionRules from './driver-commission-rules.vue'
   import { useUserStore } from '@/store/modules/user'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
@@ -521,27 +530,50 @@
 
   const form = reactive<DriverForm>(createInitialForm())
   const ocrReviewDialogRef = ref<ArtDialogExpose<DriverDocumentOcrResult>>()
+  const sensitiveStorageReady = false
   const ocrBusy = ref(false)
   const ocrResult = ref<DriverDocumentOcrResult | null>(null)
   const ocrReplaceExisting = ref(false)
+  const activeOcrImageUrl = computed(() => activeImage.value ? form[activeImage.value] : '')
   const ocrFieldLabels: Record<string, string> = {
-    driverName: '姓名', idCardNo: '身份证号', gender: '性别', birthDate: '出生日期',
-    ethnicity: '民族', homeAddress: '住址', homeAddressDetail: '详细地址',
-    idCardIssuer: '身份证发证机关', idCardValidFrom: '身份证起始日',
-    idCardValidTo: '身份证有效期', licenseArchiveNo: '档案编号',
-    licenseClasses: '准驾车型', licenseIssuer: '驾驶证发证机关',
-    licenseValidFrom: '驾照起始日', licenseExpireDate: '驾照有效期',
-    qualificationType: '资格证类型', qualificationNo: '资格证号',
+    driverName: '姓名',
+    idCardNo: '身份证号',
+    gender: '性别',
+    birthDate: '出生日期',
+    ethnicity: '民族',
+    homeAddress: '住址',
+    homeAddressDetail: '详细地址',
+    idCardIssuer: '身份证发证机关',
+    idCardValidFrom: '身份证起始日',
+    idCardValidTo: '身份证有效期',
+    licenseArchiveNo: '档案编号',
+    licenseClasses: '准驾车型',
+    licenseIssuer: '驾驶证发证机关',
+    licenseValidFrom: '驾照起始日',
+    licenseExpireDate: '驾照有效期',
+    qualificationType: '资格证类型',
+    qualificationNo: '资格证号',
     qualificationValidTo: '资格证有效期'
   }
   const ocrFieldsByTab: Record<'identity' | 'license' | 'qualification', string[]> = {
     identity: [
-      'driverName', 'idCardNo', 'gender', 'birthDate', 'ethnicity', 'homeAddress',
-      'homeAddressDetail', 'idCardIssuer', 'idCardValidFrom', 'idCardValidTo'
+      'driverName',
+      'idCardNo',
+      'gender',
+      'birthDate',
+      'ethnicity',
+      'homeAddress',
+      'homeAddressDetail',
+      'idCardIssuer',
+      'idCardValidFrom',
+      'idCardValidTo'
     ],
     license: [
-      'licenseArchiveNo', 'licenseClasses', 'licenseIssuer',
-      'licenseValidFrom', 'licenseExpireDate'
+      'licenseArchiveNo',
+      'licenseClasses',
+      'licenseIssuer',
+      'licenseValidFrom',
+      'licenseExpireDate'
     ],
     qualification: ['qualificationType', 'qualificationNo', 'qualificationValidTo']
   }
@@ -552,10 +584,12 @@
     recognized: string
     confidence: string
   }
-  const canRecognizeDocument = computed(() =>
-    hasAuth('TmsDriver:Ocr') && hasAuth(form.id ? 'TmsDriver:Edit' : 'TmsDriver:Add') &&
-    canEditDriverField('identityDocuments') &&
-    (activeTab.value !== 'identity' || canEditDriverField('idCardNo'))
+  const canRecognizeDocument = computed(
+    () =>
+      hasAuth('TmsDriver:Ocr') &&
+      hasAuth(form.id ? 'TmsDriver:Edit' : 'TmsDriver:Add') &&
+      canEditDriverField('identityDocuments') &&
+      (activeTab.value !== 'identity' || canEditDriverField('idCardNo'))
   )
   const ocrReviewRows = computed<OcrReviewRow[]>(() => {
     const result = ocrResult.value
@@ -566,12 +600,15 @@
       if (!recognized || (Array.isArray(recognized) && !recognized.length)) return []
       const current = form[field as keyof DriverForm]
       const confidence = result.fieldConfidence[field]
-      return [{
-        field, label: ocrFieldLabels[field] ?? field,
-        current: Array.isArray(current) ? current.join('、') : String(current ?? ''),
-        recognized: Array.isArray(recognized) ? recognized.join('、') : recognized,
-        confidence: confidence == null ? '—' : `${Math.round(confidence * 100)}%`
-      }]
+      return [
+        {
+          field,
+          label: ocrFieldLabels[field] ?? field,
+          current: Array.isArray(current) ? current.join('、') : String(current ?? ''),
+          recognized: Array.isArray(recognized) ? recognized.join('、') : recognized,
+          confidence: confidence == null ? '—' : `${Math.round(confidence * 100)}%`
+        }
+      ]
     })
   })
   const ocrReviewColumns: ColumnOption<OcrReviewRow>[] = [
@@ -583,13 +620,15 @@
 
   const recognizeDocument = async (): Promise<void> => {
     const imageSide = activeImage.value
-    if (!imageSide || imageSide === 'portraitUrl' || !canRecognizeDocument.value || ocrBusy.value) return
+    if (!imageSide || imageSide === 'portraitUrl' || !canRecognizeDocument.value || ocrBusy.value)
+      return
     const imageUrl = form[imageSide]
     if (!imageUrl || !form.tenantId) return
     ocrBusy.value = true
     try {
       const { data, error } = await analyzeDriverDocumentByAi({
-        imageUrl, imageSide: imageSide as DriverDocumentImageSide,
+        imageUrl,
+        imageSide: imageSide as DriverDocumentImageSide,
         driverId: form.id ? String(form.id) : undefined,
         tenantId: form.tenantId
       })
@@ -637,7 +676,9 @@
       Object.assign(form, { [row.field]: value })
       applied += 1
     }
-    ElMessage.success(applied ? `已填入 ${applied} 个字段，请对照原件核对` : '没有可填入的字段，请手工填写')
+    ElMessage.success(
+      applied ? `已填入 ${applied} 个字段，请对照原件核对` : '没有可填入的字段，请手工填写'
+    )
     ocrReviewDialogRef.value?.handleClose()
   }
 
@@ -1302,22 +1343,30 @@
       activeTab.value = 'identity'
     }
     if (row) {
-      const profileResult = await fetchDriverProfile(String(row.id))
-      if (profileResult.error) {
-        notifyFriendlyError(profileResult.error, '司机扩展资料加载失败，请稍后重试')
+      const [detailResult, profileResult] = await Promise.all([
+        fetchDriverDetail(String(row.id)),
+        fetchDriverProfile(String(row.id))
+      ])
+      if (detailResult.error || profileResult.error || !detailResult.data?.tenantId) {
+        notifyFriendlyError(
+          detailResult.error ?? profileResult.error ?? new Error('缺少司机所属租户'),
+          '司机资料加载失败，请稍后重试'
+        )
         return
       }
-      const editData = omit(structuredClone(toRaw(row)), ['assignedVehicles'])
+      const editData = omit(structuredClone(detailResult.data), ['assignedVehicles'])
       replaceForm({
         ...createInitialForm(),
         ...editData,
         ...(profileResult.data ?? {}),
         licenseClasses: profileResult.data?.licenseClasses?.length
           ? profileResult.data.licenseClasses
-          : row.licenseType
-            ? [row.licenseType]
+          : detailResult.data.licenseType
+            ? [detailResult.data.licenseType]
             : [],
-        carrierVehiclePlates: (row.assignedVehicles ?? []).map((vehicle) => vehicle.plateNo)
+        carrierVehiclePlates: (detailResult.data.assignedVehicles ?? []).map(
+          (vehicle) => vehicle.plateNo
+        )
       })
     }
 

@@ -3,8 +3,12 @@ import { normalizeSupabaseFunctionError } from '@/utils/supabase'
 import { TENANT_SCOPE_HEADER } from '@/utils/tenant-scope-context'
 
 export type DriverDocumentImageSide =
-  | 'idCardFrontUrl' | 'idCardBackUrl' | 'driverLicenseFrontUrl'
-  | 'driverLicenseBackUrl' | 'licenseBackExtraUrl' | 'qualificationFrontUrl'
+  | 'idCardFrontUrl'
+  | 'idCardBackUrl'
+  | 'driverLicenseFrontUrl'
+  | 'driverLicenseBackUrl'
+  | 'licenseBackExtraUrl'
+  | 'qualificationFrontUrl'
   | 'qualificationAssessmentUrl'
 
 export interface DriverDocumentOcrResult {
@@ -27,9 +31,12 @@ export async function analyzeDriverDocumentByAi(params: {
   tenantId: string
 }) {
   const { data, error } = await supabase.functions.invoke<DriverDocumentOcrResult>(
-    'ai-tms-driver-document-ocr', {
+    'ai-tms-driver-document-ocr',
+    {
       body: {
-        action: 'analyze', imageUrls: [params.imageUrl], imageSide: params.imageSide,
+        action: 'analyze',
+        imageUrls: [params.imageUrl],
+        imageSide: params.imageSide,
         driverId: params.driverId ?? null
       },
       headers: { [TENANT_SCOPE_HEADER]: params.tenantId }
