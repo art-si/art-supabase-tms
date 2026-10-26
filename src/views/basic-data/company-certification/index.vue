@@ -270,6 +270,8 @@
                 title="营业执照"
                 :limit="1"
                 :resource-tenant-id="formTenantId"
+                :upload-request="uploadImage"
+                :show-resource-picker="false"
             /></ElFormItem>
             <ElFormItem label="身份证人像面" required
               ><ArtUploadImage
@@ -277,6 +279,8 @@
                 title="身份证人像面"
                 :limit="1"
                 :resource-tenant-id="formTenantId"
+                :upload-request="uploadImage"
+                :show-resource-picker="false"
             /></ElFormItem>
             <ElFormItem label="身份证国徽面" required
               ><ArtUploadImage
@@ -284,6 +288,8 @@
                 title="身份证国徽面"
                 :limit="1"
                 :resource-tenant-id="formTenantId"
+                :upload-request="uploadImage"
+                :show-resource-picker="false"
             /></ElFormItem>
           </div>
         </template>
@@ -307,6 +313,8 @@
                 title="授权委托书"
                 :limit="1"
                 :resource-tenant-id="formTenantId"
+                :upload-request="uploadImage"
+                :show-resource-picker="false"
             /></ElFormItem>
             <ElFormItem label="身份证人像面" required
               ><ArtUploadImage
@@ -314,6 +322,8 @@
                 title="身份证人像面"
                 :limit="1"
                 :resource-tenant-id="formTenantId"
+                :upload-request="uploadImage"
+                :show-resource-picker="false"
             /></ElFormItem>
             <ElFormItem label="身份证国徽面" required
               ><ArtUploadImage
@@ -321,6 +331,8 @@
                 title="身份证国徽面"
                 :limit="1"
                 :resource-tenant-id="formTenantId"
+                :upload-request="uploadImage"
+                :show-resource-picker="false"
             /></ElFormItem>
           </div>
         </template>
@@ -335,6 +347,9 @@
                 :limit="3"
                 multiple
                 :resource-tenant-id="formTenantId"
+                :upload-request="uploadDocument"
+                :show-resource-picker="false"
+                :file-size="15 * 1024 * 1024"
             /></ElFormItem>
             <ElFormItem label="线上支付确认书" required
               ><ArtUploadFile
@@ -344,6 +359,9 @@
                 :limit="3"
                 multiple
                 :resource-tenant-id="formTenantId"
+                :upload-request="uploadDocument"
+                :show-resource-picker="false"
+                :file-size="15 * 1024 * 1024"
             /></ElFormItem>
             <ElFormItem label="联系邮箱" required
               ><ElInput v-model="forms.account.email" type="email" maxlength="120"
@@ -380,6 +398,8 @@
               title="道路运输经营许可证"
               :limit="1"
               :resource-tenant-id="formTenantId"
+              :upload-request="uploadImage"
+              :show-resource-picker="false"
           /></ElFormItem>
         </template>
 
@@ -441,6 +461,7 @@
   import {
     fetchCompanyCertification,
     submitCompanyCertification,
+    uploadCompanyCertificationAttachment,
     type CertificationPayloadBySection,
     type CertificationRequest,
     type CertificationSection,
@@ -473,6 +494,11 @@
   const dialogRef = ref<ArtDialogExpose>()
   const formTenantId = ref('')
   const submitting = ref(false)
+
+  const uploadImage = (file: File) =>
+    uploadCompanyCertificationAttachment(file, formTenantId.value, 'image')
+  const uploadDocument = (file: File) =>
+    uploadCompanyCertificationAttachment(file, formTenantId.value, 'document')
 
   const emptyForms = (): CertificationPayloadBySection => ({
     enterprise: {

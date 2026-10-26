@@ -70,13 +70,32 @@
             {{ image.label }}
           </button>
         </div>
-        <div class="driver-dialog__image-disabled">
-          <ArtSvgIcon icon="ri:shield-keyhole-line" aria-hidden="true" />
-          <strong>{{ activeImageLabel }}需要私有存储</strong>
-          <span>证件影像暂不可上传或预览，请先在右侧手工填写资料。</span>
-        </div>
+        <ArtUploadImage
+          v-if="activeImage"
+          v-model="form[activeImage]"
+          :resource-tenant-id="form.tenantId || ''"
+          :title="activeImageLabel"
+          width="100%"
+          :height="196"
+          :limit="1"
+          :file-size="8 * 1024 * 1024"
+          file-type="image/png,image/jpeg,image/webp"
+          :upload-request="uploadDriverDocument"
+          :show-resource-picker="false"
+          :readonly="
+            !form.tenantId ||
+            !canEditDriverField('identityDocuments') ||
+            !hasAuth('TmsDriver:UploadDocument')
+          "
+        />
+        <ElAlert
+          v-if="activeImage && hiddenLegacyImages.has(activeImage)"
+          type="warning"
+          title="历史影像未在此处展示；请上传到私有存储以替换。"
+          :closable="false"
+        />
         <ElButton
-          v-if="sensitiveStorageReady && activeImage !== 'portraitUrl'"
+          v-if="activeImage !== 'portraitUrl'"
           v-auth="'TmsDriver:Ocr'"
           type="primary"
           plain
@@ -85,7 +104,7 @@
           @click="recognizeDocument"
           >智能识别当前影像</ElButton
         >
-        <p>证件影像涉及个人敏感信息，私有存储启用后开放智能识别。</p>
+        <p>影像保存在租户私有存储；识别结果需核对，字段也可手工填写。</p>
       </section>
       <div class="driver-dialog__form-area">
         <div class="driver-dialog__section-heading"
@@ -189,6 +208,13 @@
     DataSelectRecord
   } from '@/components/core/forms/art-data-select/types'
   import ArtTable from '@/components/core/tables/art-table/index.vue'
+  import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
+  import {
+    isPrivateAttachmentPath,
+    privateAttachmentPathFromSignedUrl,
+    signPrivateAttachmentPaths,
+    uploadPrivateAttachment
+  } from '@/utils/supabase/private-attachment'
   import {
     addDriver,
     editDriver,
@@ -529,8 +555,21 @@
   })
 
   const form = reactive<DriverForm>(createInitialForm())
+  const privateBucket = 'tms-driver-private'
+  const imageKeys: readonly DriverImageKey[] = [
+    'portraitUrl', 'idCardFrontUrl', 'idCardBackUrl', 'driverLicenseFrontUrl',
+    'driverLicenseBackUrl', 'licenseBackExtraUrl', 'qualificationFrontUrl',
+    'qualificationAssessmentUrl'
+  ]
+  const originalImageReferences = reactive<Partial<Record<DriverImageKey, string>>>({})
+  const hiddenLegacyImages = reactive(new Set<DriverImageKey>())
+  const uploadDriverDocument = (file: File) => uploadPrivateAttachment(file, {
+    bucket: privateBucket,
+    tenantId: form.tenantId || '',
+    allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp'],
+    maxBytes: 8 * 1024 * 1024
+  })
   const ocrReviewDialogRef = ref<ArtDialogExpose<DriverDocumentOcrResult>>()
-  const sensitiveStorageReady = false
   const ocrBusy = ref(false)
   const ocrResult = ref<DriverDocumentOcrResult | null>(null)
   const ocrReplaceExisting = ref(false)
@@ -626,8 +665,11 @@
     if (!imageUrl || !form.tenantId) return
     ocrBusy.value = true
     try {
+      const imagePath = isPrivateAttachmentPath(imageUrl)
+        ? imageUrl
+        : privateAttachmentPathFromSignedUrl(imageUrl, privateBucket)
       const { data, error } = await analyzeDriverDocumentByAi({
-        imageUrl,
+        imagePath,
         imageSide: imageSide as DriverDocumentImageSide,
         driverId: form.id ? String(form.id) : undefined,
         tenantId: form.tenantId
@@ -1244,6 +1286,14 @@
     profile: DriverProfile
   } => {
     const rawPayload = structuredClone(toRaw(form))
+    for (const key of imageKeys) {
+      const value = rawPayload[key]
+      if (!value) {
+        if (hiddenLegacyImages.has(key)) rawPayload[key] = originalImageReferences[key] || ''
+      } else if (!isPrivateAttachmentPath(value)) {
+        rawPayload[key] = privateAttachmentPathFromSignedUrl(value, privateBucket)
+      }
+    }
     if (rawPayload.id && !canEditField(rawPayload.fieldAccess, 'contactPhone')) {
       delete rawPayload.phone
     }
@@ -1262,6 +1312,10 @@
       delete rawPayload.idCardBackUrl
       delete rawPayload.driverLicenseFrontUrl
       delete rawPayload.driverLicenseBackUrl
+      delete rawPayload.portraitUrl
+      delete rawPayload.licenseBackExtraUrl
+      delete rawPayload.qualificationFrontUrl
+      delete rawPayload.qualificationAssessmentUrl
     }
 
     const payload = omit(rawPayload, [
@@ -1334,6 +1388,8 @@
     commissionRuleId?: string
   ): Promise<void> => {
     await resetForm()
+    hiddenLegacyImages.clear()
+    for (const key of imageKeys) delete originalImageReferences[key]
     const isEdit = Boolean(row?.id)
     if (!isEdit) await tenantScopeStore.loadTenantOptions()
     if (initial && !row) {
@@ -1355,7 +1411,7 @@
         return
       }
       const editData = omit(structuredClone(detailResult.data), ['assignedVehicles'])
-      replaceForm({
+      const editForm: DriverForm = {
         ...createInitialForm(),
         ...editData,
         ...(profileResult.data ?? {}),
@@ -1367,7 +1423,40 @@
         carrierVehiclePlates: (detailResult.data.assignedVehicles ?? []).map(
           (vehicle) => vehicle.plateNo
         )
-      })
+      }
+      const paths: string[] = []
+      for (const key of imageKeys) {
+        const reference = editForm[key] || ''
+        originalImageReferences[key] = reference
+        if (isPrivateAttachmentPath(reference)) paths.push(reference)
+        else if (reference) {
+          hiddenLegacyImages.add(key)
+          editForm[key] = ''
+        }
+      }
+      try {
+        const signed = await signPrivateAttachmentPaths(privateBucket, paths)
+        for (const key of imageKeys) {
+          const reference = originalImageReferences[key]
+          if (reference && isPrivateAttachmentPath(reference)) {
+            const previewUrl = signed.get(reference)
+            if (previewUrl) editForm[key] = previewUrl
+            else {
+              hiddenLegacyImages.add(key)
+              editForm[key] = ''
+            }
+          }
+        }
+      } catch (error) {
+        for (const key of imageKeys) {
+          if (originalImageReferences[key]) {
+            hiddenLegacyImages.add(key)
+            editForm[key] = ''
+          }
+        }
+        notifyFriendlyError(error, '证件影像预览失败，仍可修改其他资料')
+      }
+      replaceForm(editForm)
     }
 
     if (initialTab) activeTab.value = initialTab

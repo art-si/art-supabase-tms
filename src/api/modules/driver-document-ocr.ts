@@ -25,7 +25,7 @@ export interface DriverDocumentOcrResult {
 const { supabase } = useSupabase()
 
 export async function analyzeDriverDocumentByAi(params: {
-  imageUrl: string
+  imagePath: string
   imageSide: DriverDocumentImageSide
   driverId?: string
   tenantId: string
@@ -35,7 +35,7 @@ export async function analyzeDriverDocumentByAi(params: {
     {
       body: {
         action: 'analyze',
-        imageUrls: [params.imageUrl],
+        imageUrls: [params.imagePath],
         imageSide: params.imageSide,
         driverId: params.driverId ?? null
       },
