@@ -90,6 +90,43 @@
             :show-reset="false"
             :show-submit="false"
           />
+          <div
+            v-if="form.data.transferStationIds?.length"
+            class="mt-4 border-t border-[var(--el-border-color-light)] pt-4"
+          >
+            <span class="text-xs font-semibold text-[var(--el-text-color-secondary)]"
+              >中转顺序</span
+            >
+            <div class="mt-2 flex flex-wrap gap-2">
+              <div
+                v-for="(stationId, index) in form.data.transferStationIds"
+                :key="stationId"
+                class="flex items-center gap-1 rounded-lg border border-[var(--el-border-color-light)] bg-[var(--el-fill-color-light)] px-2 py-1"
+              >
+                <span
+                  class="flex size-5 items-center justify-center rounded-full bg-[var(--el-color-primary-light-9)] text-xs text-[var(--el-color-primary)]"
+                  >{{ index + 1 }}</span
+                >
+                <strong class="px-1 text-sm">{{
+                  findStationOption('transfer', stationId)?.stationName || stationId
+                }}</strong>
+                <ElButton
+                  text
+                  size="small"
+                  :disabled="index === 0"
+                  @click="moveTransferStation(index, -1)"
+                  >上移</ElButton
+                >
+                <ElButton
+                  text
+                  size="small"
+                  :disabled="index === (form.data.transferStationIds?.length ?? 0) - 1"
+                  @click="moveTransferStation(index, 1)"
+                  >下移</ElButton
+                >
+              </div>
+            </div>
+          </div>
         </ArtSectionCard>
 
         <ArtSectionCard
@@ -200,6 +237,36 @@
                 hide-region-selector
                 show-coordinate-hint
               />
+            </div>
+          </div>
+          <div
+            class="my-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--el-border-color-light)] bg-[var(--el-fill-color-lighter)] px-4 py-3"
+          >
+            <div class="min-w-0">
+              <strong class="text-sm text-[var(--el-text-color-primary)]">关联客户合同</strong>
+              <p class="mt-1 text-xs text-[var(--el-text-color-secondary)]">
+                {{
+                  contractSummary
+                    ? `${contractSummary.contractNo} · ${contractSummary.contractName}`
+                    : form.data.contractId
+                      ? '已关联合同，摘要暂不可用；可重新选择或移除'
+                      : '可选一份与发货客户一致的有效合同'
+                }}
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <ElButton v-if="form.data.contractId" size="small" @click="clearOrderContract"
+                >移除关联</ElButton
+              >
+              <ElButton
+                size="small"
+                type="primary"
+                plain
+                :disabled="!form.data.shippingCustomerId"
+                @click="openOrderContractSelector"
+              >
+                {{ form.data.contractId ? '更换合同' : '选择合同' }}
+              </ElButton>
             </div>
           </div>
           <div class="order-open__journey">
@@ -608,6 +675,12 @@
         @confirm="handleContractDetailSelectorConfirm"
       />
       <component
+        :is="orderContractSelectorComponent"
+        v-if="orderContractSelectorComponent"
+        ref="orderContractSelectorRef"
+        @select="handleOrderContractSelect"
+      />
+      <component
         :is="cargoSelectorComponent"
         v-if="cargoSelectorComponent"
         ref="cargoSelectorRef"
@@ -675,6 +748,7 @@
     fetchCustomerDefaultAddress,
     fetchCustomerPriceList,
     fetchOrderDetail,
+    fetchOrderContractSummary,
     fetchStationOptions,
     reviewAiOrderArtifact
   } from '@tms/api'
@@ -719,6 +793,7 @@
   type CargoItem = Api.Tms.Order.CargoItem
   type CargoMaster = Api.Tms.BasicData.Cargo
   type ContractDetail = Api.Tms.BasicData.ContractDetailSelectorItem
+  type OrderContractCandidate = import('@tms/api').OrderContractCandidate
   type CustomerItem = Api.Tms.Order.CustomerSelectorItem
   type CustomerAddress = Api.Tms.BasicData.CustomerAddress
   type CustomerPriceCargoItem = Api.Tms.BasicData.CustomerPriceCargoItem
@@ -785,7 +860,11 @@
   }
 
   interface ContractDetailSelectorExpose {
-    open: () => Promise<void>
+    open: (contractId: string) => Promise<void>
+  }
+
+  interface OrderContractSelectorExpose {
+    open: (customerId: string) => Promise<void>
   }
 
   interface PageGroup {
@@ -858,6 +937,8 @@
   )
   const { component: contractDetailSelectorComponent, load: loadContractDetailSelector } =
     useLazyComponent(() => import('./modules/contract-detail-multiple-select.vue'))
+  const { component: orderContractSelectorComponent, load: loadOrderContractSelector } =
+    useLazyComponent(() => import('./modules/order-contract-selector.vue'))
   const { component: cargoSelectorComponent, load: loadCargoSelector } = useLazyComponent(
     () => import('../modules/cargo-multiple-select.vue')
   )
@@ -883,6 +964,8 @@
   const printDialogRef = ref<PrintDialogExpose>()
   const cargoSelectorRef = ref<CargoSelectorExpose>()
   const contractDetailSelectorRef = ref<ContractDetailSelectorExpose>()
+  const orderContractSelectorRef = ref<OrderContractSelectorExpose>()
+  const contractSummary = ref<NonNullable<OrderRecord['contract']> | null>(null)
   const aiOrderDrawerRef = ref<AiOrderDrawerExpose>()
   const aiArtifactId = ref<string>()
   const initializedOrderId = ref<string>()
@@ -993,7 +1076,7 @@
       },
       {
         label: '中转站',
-        key: 'transferStationId',
+        key: 'transferStationIds',
         type: 'select',
         api: fetchStationOptions,
         resultField: 'data',
@@ -1003,10 +1086,13 @@
         beforeFetch: (params) => ({ ...params, stationType: 'transfer' }),
         afterFetch: (result) => syncStationOptions('transfer', result),
         props: {
+          multiple: true,
           filterable: true,
           clearable: true,
-          placeholder: '经由',
-          onChange: (value: string) => handleStationChange('transfer', value)
+          collapseTags: true,
+          collapseTagsTooltip: true,
+          placeholder: '选择途经站，可在下方调整顺序',
+          onChange: (value: string[]) => handleTransferStationsChange(value)
         }
       },
       {
@@ -1386,7 +1472,10 @@
         loadNumberRules()
       ])
       if (orderId) await loadOrderDetail(orderId)
-      else replaceForm(createInitialForm())
+      else {
+        replaceForm(createInitialForm())
+        contractSummary.value = null
+      }
       fillDefaultOptions()
       await nextTick()
       clearFormRefsValidation(validatedFormRefs)
@@ -1429,7 +1518,8 @@
 
   function syncContractFreightTotals(): void {
     const result = synchronizeContractCargoFreight(form.data.cargoItems ?? [])
-    if (result.hasContractCargo) form.data.transportFee = result.transportFee
+    if (result.hasContractCargo && result.transportFee !== null)
+      form.data.transportFee = result.transportFee
   }
 
   watch(
@@ -1508,10 +1598,23 @@
     replaceForm({
       ...createInitialForm(),
       ...cloneDeep(data),
+      transferStationIds: data.transferStationIds?.length
+        ? [...data.transferStationIds]
+        : data.transferStationId
+          ? [data.transferStationId]
+          : [],
       cargoItems: data.cargoItems?.length ? cloneDeep(data.cargoItems) : [createInitialCargoItem()],
       imageUrls: data.imageUrls ?? [],
       orderConfig: { ...createInitialOrderConfig(), ...data.orderConfig }
     })
+    contractSummary.value = null
+    if (data.contractId) {
+      try {
+        contractSummary.value = (await fetchOrderContractSummary(id)).data ?? null
+      } catch {
+        // 合同摘要加载失败时仍允许核对、编辑订单；卡片展示可重选的反馈。
+      }
+    }
   }
 
   function replaceForm(nextForm: OrderForm): void {
@@ -1583,6 +1686,21 @@
     updateStationSnapshot(mode)
   }
 
+  function handleTransferStationsChange(stationIds: string[]): void {
+    const ids = stationIds ?? []
+    form.data.transferStationIds = ids
+    form.data.transferStationId = ids[0] ?? null
+    updateStationSnapshot('transfer')
+  }
+
+  function moveTransferStation(index: number, step: -1 | 1): void {
+    const ids = [...(form.data.transferStationIds ?? [])]
+    const nextIndex = index + step
+    if (nextIndex < 0 || nextIndex >= ids.length) return
+    ;[ids[index], ids[nextIndex]] = [ids[nextIndex], ids[index]]
+    handleTransferStationsChange(ids)
+  }
+
   function updateStationSnapshot(mode: StationMode): void {
     const patchMap: Record<StationMode, Partial<OrderForm>> = {
       origin: {
@@ -1616,16 +1734,65 @@
   }
 
   async function openContractDetailSelector(): Promise<void> {
+    if (!form.data.contractId) {
+      ElMessage.warning('请先选择一份客户合同')
+      return
+    }
     await loadContractDetailSelector()
-    await contractDetailSelectorRef.value?.open()
+    await contractDetailSelectorRef.value?.open(form.data.contractId)
+  }
+
+  async function openOrderContractSelector(): Promise<void> {
+    if (!form.data.shippingCustomerId) return
+    await loadOrderContractSelector()
+    await orderContractSelectorRef.value?.open(form.data.shippingCustomerId)
+  }
+
+  function clearOrderContract(): void {
+    const hadPricedContractCargo = (form.data.cargoItems ?? []).some(
+      (item) => item.sourceContractId && item.unitPrice != null
+    )
+    form.data.contractId = null
+    contractSummary.value = null
+    form.data.cargoItems = (form.data.cargoItems ?? []).filter((item) => !item.sourceContractId)
+    if (!form.data.cargoItems.length) form.data.cargoItems = [createInitialCargoItem()]
+    if (hadPricedContractCargo) form.data.transportFee = 0
+  }
+
+  function handleOrderContractSelect(contract: OrderContractCandidate): void {
+    if (contract.id !== form.data.contractId) clearOrderContract()
+    form.data.contractId = contract.id
+    contractSummary.value = {
+      id: contract.id,
+      contractNo: contract.contractNo,
+      contractName: contract.contractName,
+      customerId: contract.customerId,
+      contractStatus: 'approved'
+    }
   }
 
   function handleContractDetailSelectorConfirm(selectedDetails: ContractDetail[]): void {
+    if (
+      !form.data.contractId ||
+      selectedDetails.some((item) => item.contractId !== form.data.contractId)
+    ) {
+      ElMessage.warning('请选择当前关联合同的货物明细')
+      return
+    }
     const result = mergeOrderContractDetails(form.data.cargoItems ?? [], selectedDetails)
     if (!result.addedCount) return
     form.data.cargoItems = result.items
-    form.data.transportFee = calculateContractTransportFee(result.items)
+    const transportFee = calculateContractTransportFee(result.items)
+    if (transportFee !== null) form.data.transportFee = transportFee
   }
+
+  watch(
+    () => form.data.shippingCustomerId,
+    (current, previous) => {
+      if (!page.loading && previous && current !== previous && form.data.contractId)
+        clearOrderContract()
+    }
+  )
 
   function handleCargoSelectorConfirm(selectedCargoes: CargoMaster[]): void {
     const currentItems = form.data.cargoItems ?? []
@@ -1650,7 +1817,8 @@
     }
     form.data.cargoItems = rows.filter((item) => item !== row)
     if (row.sourceContractId) {
-      form.data.transportFee = calculateContractTransportFee(form.data.cargoItems)
+      const transportFee = calculateContractTransportFee(form.data.cargoItems)
+      if (transportFee !== null) form.data.transportFee = transportFee
     }
   }
 
@@ -1718,7 +1886,8 @@
     }
     Object.assign(row, patch)
     if (wasContractCargo) {
-      form.data.transportFee = calculateContractTransportFee(form.data.cargoItems ?? [])
+      const transportFee = calculateContractTransportFee(form.data.cargoItems ?? [])
+      if (transportFee !== null) form.data.transportFee = transportFee
     }
   }
 
@@ -1941,6 +2110,7 @@
     if (references.transferStation.id) {
       Object.assign(patch, {
         transferStationId: references.transferStation.id,
+        transferStationIds: [references.transferStation.id],
         transferStation: references.transferStation.label || draft.transferStationName || ''
       })
     }

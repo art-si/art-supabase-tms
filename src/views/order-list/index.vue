@@ -50,6 +50,8 @@
 
     <FreightDialog ref="freightDialogRef" @success="handleFreightSuccess" />
     <QuoteDialog ref="quoteDialogRef" @success="handleFreightSuccess" />
+    <ReturnTripDrawer ref="returnTripDrawerRef" @success="handleFreightSuccess" />
+    <ReturnTripSummaryDialog ref="returnTripSummaryDialogRef" />
     <MasterDataDeleteGuard ref="deleteGuardRef" @cleared="handleDeleteDependenciesCleared" />
   </div>
 </template>
@@ -60,7 +62,9 @@
 
   import { useArtFeedback } from '@/hooks/core/useArtFeedback'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
-  import { ElLink, ElMessage } from 'element-plus'
+  import { ElMessage, ElTag } from 'element-plus'
+  import BusinessRecordLink from '@/components/business/business-record-link/index.vue'
+  import { useAuth } from '@/hooks/core/useAuth'
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
   import type {
     ArtTableQueryExcelColumn,
@@ -94,6 +98,8 @@
   } from '@tms/api'
   import FreightDialog from './modules/freight-dialog.vue'
   import QuoteDialog from './modules/quote-dialog.vue'
+  import ReturnTripDrawer from './modules/return-trip/return-trip-drawer.vue'
+  import ReturnTripSummaryDialog from './modules/return-trip/return-trip-summary-dialog.vue'
   import BusinessWorkspaceHeader, {
     type BusinessWorkspaceMetric
   } from '@/components/business/business-workspace-header/index.vue'
@@ -147,16 +153,19 @@
 
   const router = useRouter()
   const route = useRoute()
+  const { hasAuth } = useAuth()
   const { getDictMap } = storeToRefs(useUserStore())
   const tableQueryRef = ref<ArtTableQueryExpose>()
   const freightDialogRef = ref<FreightDialogExpose>()
   const quoteDialogRef = ref<{ handleOpen: (row: OrderRecord) => Promise<void> }>()
+  const returnTripDrawerRef = ref<{ handleOpen: (row: OrderRecord) => Promise<void> }>()
+  const returnTripSummaryDialogRef = ref<{ handleOpen: (row: OrderRecord) => Promise<void> }>()
   const deleteGuardRef = ref<MasterDataDeleteGuardExpose>()
   const statusCountRequestId = ref(0)
   const orderFieldAccess = ref<Api.Tms.Order.OrderFieldAccessMap>({})
 
   const orderExcelColumns = computed<ArtTableQueryExcelColumn[]>(() => [
-    { key: 'orderNo', title: '运单号' },
+    { key: 'orderNo', title: '订单号' },
     { key: 'shippingContactName', title: '发货人' },
     ...(canViewOrderField('shipperContact')
       ? [{ key: 'shippingContactPhone', title: '发货人电话' }]
@@ -214,10 +223,10 @@
     }),
     searchItems: computed<SearchFormItem[]>(() => [
       {
-        label: '运单号',
+        label: '订单号',
         key: 'cargoKeyword',
         type: 'input',
-        props: { clearable: true, placeholder: '请输入运单号' }
+        props: { clearable: true, placeholder: '请输入订单号或货物名称' }
       },
       {
         label: '发货人',
@@ -364,13 +373,27 @@
       { type: 'selection', width: 50, fixed: 'left', reserveSelection: true },
       {
         prop: 'orderNo',
-        label: '运单号',
+        label: '订单号',
         fixed: 'left',
-        width: 140,
+        width: 210,
         formatter: (row) => (
-          <ElLink type="primary" underline="never" onClick={() => openDetail(row)}>
-            {row.orderNo}
-          </ElLink>
+          <div class="flex min-w-0 items-center gap-1">
+            <BusinessRecordLink
+              label={row.orderNo}
+              title="查看运输订单综合跟踪"
+              to={
+                row.id && hasAuth('TmsOrderQuery:View')
+                  ? `/tms/order-query/detail/${row.id}`
+                  : undefined
+              }
+              compact
+            />
+            {row.hasReturnTrip && (
+              <ElTag size="small" type="success" effect="plain">
+                返程
+              </ElTag>
+            )}
+          </div>
         )
       },
       { prop: 'shippingContactName', label: '发货人', minWidth: 110 },
@@ -392,8 +415,8 @@
       {
         prop: 'transferStation',
         label: '中转站',
-        minWidth: 120,
-        formatter: (row) => row.transferStation || '-'
+        minWidth: 160,
+        formatter: (row) => row.transferStationNames?.join(' → ') || row.transferStation || '-'
       },
 
       {
@@ -565,6 +588,20 @@
         disabled: !canQuote(row)
       },
       {
+        key: 'returnTripSummary',
+        label: '返程收益预估',
+        icon: 'ri:line-chart-line',
+        auth: 'TmsOrderList:View',
+        disabled: !row.hasReturnTrip
+      },
+      {
+        key: 'returnTrip',
+        label: '新增返程配货',
+        icon: 'ri:arrow-go-back-line',
+        auth: 'TmsOrderList:AddReturnTrip',
+        disabled: !row.id || ['cancelled', 'completed'].includes(String(row.orderStatus || ''))
+      },
+      {
         key: 'waybillExpense',
         label: '新增运单费用',
         icon: 'ri:gas-station-line',
@@ -607,6 +644,8 @@
   function handleMoreAction(item: ButtonMoreItem, row: OrderRecord): void {
     const actionMap: Record<string, () => void> = {
       quote: () => openQuote(row),
+      returnTripSummary: () => void returnTripSummaryDialogRef.value?.handleOpen(row),
+      returnTrip: () => void returnTripDrawerRef.value?.handleOpen(row),
       waybillExpense: () => openWaybillExpense(row),
       edit: () => openOrderEdit(row),
       freight: () => openFreight(row),

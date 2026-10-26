@@ -96,7 +96,7 @@
 </template>
 
 <script setup lang="ts">
-  import { getAverageProgress } from './monitor-utils'
+  import { getAverageProgress, withAlpha } from './monitor-utils'
   import { formatPercentValue } from '@/utils/ui/format'
   import { Search, Tickets } from '@element-plus/icons-vue'
   import ArtAsyncState from '@/components/core/feedback/art-async-state/index.vue'
@@ -136,14 +136,6 @@
   })
 
   const averageProgress = computed(() => getAverageProgress(props.orders))
-
-  function withAlpha(color: string, alpha: number): string {
-    if (/^#[\da-f]{6}$/i.test(color)) {
-      const numeric = Number.parseInt(color.slice(1), 16)
-      return `rgba(${(numeric >> 16) & 255}, ${(numeric >> 8) & 255}, ${numeric & 255}, ${alpha})`
-    }
-    return color
-  }
 </script>
 
 <style scoped lang="scss">

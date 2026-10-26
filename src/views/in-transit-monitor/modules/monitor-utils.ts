@@ -170,6 +170,14 @@ export const getAverageProgress = (
   return known.length ? Math.round(meanBy(known, 'progress')) : null
 }
 
+/** Adds a bounded alpha channel to six-digit hex colors while preserving CSS variables and keywords. */
+export const withAlpha = (color: string, alpha: number): string => {
+  if (!/^#[\da-f]{6}$/i.test(color)) return color
+  const numeric = Number.parseInt(color.slice(1), 16)
+  const boundedAlpha = Number.isFinite(alpha) ? clamp(alpha, 0, 1) : 1
+  return `rgba(${(numeric >> 16) & 255}, ${(numeric >> 8) & 255}, ${numeric & 255}, ${boundedAlpha})`
+}
+
 export const estimateDistanceKm = (origin: GeoCoord, destination: GeoCoord): number => {
   const radius = 6371
   const toRad = (value: number) => (value * Math.PI) / 180

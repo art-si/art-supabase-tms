@@ -181,6 +181,7 @@
   import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import ArtAsyncState from '@/components/core/feedback/art-async-state/index.vue'
   import { formatPercentValue } from '@/utils/ui/format'
+  import { withAlpha } from './monitor-utils'
   import type { MonitorOrder, MonitorOverview, RegionOption, TransitStatus } from './monitor-types'
 
   defineOptions({ name: 'TmsRealtimeMonitorPanel' })
@@ -204,14 +205,6 @@
     'refresh-poi': [order: MonitorOrder]
     select: [id: string]
   }>()
-
-  function withAlpha(color: string, alpha: number): string {
-    if (/^#[\da-f]{6}$/i.test(color)) {
-      const numeric = Number.parseInt(color.slice(1), 16)
-      return `rgba(${(numeric >> 16) & 255}, ${(numeric >> 8) & 255}, ${numeric & 255}, ${alpha})`
-    }
-    return color
-  }
 </script>
 
 <style scoped lang="scss">

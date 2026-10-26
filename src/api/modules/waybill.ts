@@ -230,6 +230,8 @@ function createPlanExecution(
     plannedDepartureTime: params.plannedDepartureTime,
     plannedArrivalTime: params.plannedArrivalTime,
     dispatchRemark: params.dispatchRemark,
+    certificateRiskOverride: params.certificateRiskOverride,
+    certificateRiskOverrideReason: params.certificateRiskOverrideReason,
     allocations: rows.map(createFullAllocation)
   }
 }

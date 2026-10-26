@@ -470,7 +470,7 @@ declare global {
           id?: string
           tenantId?: string
           employeeId?: string | null
-          carrierId: string
+          carrierId: string | null
           driverName: string
           phone?: string
           gender: string
@@ -495,6 +495,44 @@ declare global {
           updateTime?: string
           fieldAccess?: DriverFieldAccessMap
           isRecordOwner?: boolean
+        }
+
+        interface DriverProfile {
+          driverOwnership?: string
+          driverStatus?: string
+          portraitUrl?: string | null
+          idCardIssuer?: string
+          birthDate?: string | null
+          ethnicity?: string
+          homeRegionCode?: string
+          homeAddressDetail?: string
+          idCardValidFrom?: string | null
+          idCardValidTo?: string | null
+          idCardLongTerm?: boolean
+          licenseArchiveNo?: string
+          licenseClasses?: string[]
+          licenseIssuer?: string
+          licenseValidFrom?: string | null
+          licenseLongTerm?: boolean
+          licenseBackExtraUrl?: string | null
+          qualificationType?: string
+          qualificationNo?: string
+          qualificationValidTo?: string | null
+          qualificationFrontUrl?: string | null
+          qualificationAssessmentUrl?: string | null
+          registrationStatus?: string
+          identityAuthStatus?: string
+          licenseAuthStatus?: string
+          qualificationAuthStatus?: string
+          inviterUserId?: string | null
+          wechatOpenId?: string
+          wechatAvatarUrl?: string | null
+          financeInvoiceName?: string
+          financeTaxNo?: string
+          financeBankName?: string
+          financeBankAccount?: string
+          financeBankBranch?: string
+          financeDefaultAccount?: boolean
         }
 
         interface DriverEmployeeOption {
@@ -898,6 +936,9 @@ declare global {
           originStationId?: string | null
           destinationStationId?: string | null
           transferStationId?: string | null
+          transferStationIds?: string[]
+          transferStationNames?: string[]
+          hasReturnTrip?: boolean
           originStation: string
           destinationStation: string
           transferStation?: string | null
@@ -906,6 +947,11 @@ declare global {
           transferStationRef?: StationOption | null
           deliveryMethod: string
           shippingCustomerId?: string | null
+          contractId?: string | null
+          contract?: Pick<
+            BasicData.Contract,
+            'id' | 'contractNo' | 'contractName' | 'customerId' | 'contractStatus'
+          > | null
           receivingCustomerId?: string | null
           shippingAddressId?: string | null
           receivingAddressId?: string | null
@@ -1126,6 +1172,8 @@ declare global {
           plannedDepartureTime: string
           plannedArrivalTime: string
           dispatchRemark?: string | null
+          certificateRiskOverride?: boolean
+          certificateRiskOverrideReason?: string | null
           receivingAddressId?: string | null
           allocations: DispatchAllocation[]
         }
@@ -1387,6 +1435,8 @@ declare global {
         interface WaybillDispatchPayload {
           id?: string
           ids?: string[]
+          certificateRiskOverride?: boolean
+          certificateRiskOverrideReason?: string | null
           dispatchMode: 'carrier' | 'self_operated' | 'individual_driver'
           dispatchCarrierId?: string | null
           dispatchAgreementId?: string | null

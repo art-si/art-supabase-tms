@@ -15,6 +15,7 @@
 </template>
 
 <script setup lang="ts">
+  import { toTenantSelectOptions } from '@/utils/tenant-display'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
@@ -56,12 +57,7 @@
   const { defaultWriteTenantId, shouldExposeTenantField } = useTenantScopeFormPolicy()
   const dialogRef = ref<ArtDialogExpose<Station | undefined>>()
   const formRef = ref<DialogExposeForm>()
-  const tenantChoices = computed(() =>
-    tenantOptions.value.map((tenant) => ({
-      label: `${tenant.tenantName || tenant.tenantCode}（${tenant.tenantCode}）`,
-      value: tenant.id
-    }))
-  )
+  const tenantChoices = computed(() => toTenantSelectOptions(tenantOptions.value))
 
   const createInitialForm = (): StationForm => ({
     id: undefined,

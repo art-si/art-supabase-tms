@@ -35,16 +35,27 @@ export async function exportOrderList(
   return await fetchSecureOrders<OrderRecord>(params, 'order_export')
 }
 
-export async function fetchOrderDetail(id: string) {
+export async function fetchOrderDetail(id: string, options: { showErrorMessage?: boolean } = {}) {
   return await responseHandle<OrderRecord | null>(
     () => supabase.rpc('tms_get_order_detail_secure', { p_id: id }),
-    { showErrorMessage: true }
+    { showErrorMessage: options.showErrorMessage ?? true }
+  )
+}
+
+export async function fetchOrderContractSummary(id: string) {
+  return await responseHandle<NonNullable<OrderRecord['contract']>>(
+    () => supabase.rpc('tms_get_order_contract_summary', { p_order_id: id }),
+    { breakReturn: true, showErrorMessage: false, errorMessage: '关联合同加载失败，请重试' }
   )
 }
 
 export async function addOrder(params: OrderRecord) {
   return await responseHandle<OrderRecord>(
-    () => supabase.rpc('tms_create_order_secure', { p_payload: toOrderWritePayload(params) }),
+    () =>
+      supabase.rpc('tms_create_order_with_contract_secure', {
+        p_payload: toOrderWritePayload(params),
+        p_contract_id: params.contractId ?? null
+      }),
     { showMessage: true, breakReturn: true }
   )
 }
@@ -143,6 +154,7 @@ const ORDER_WRITE_FIELDS = [
   'origin_station_id',
   'destination_station_id',
   'transfer_station_id',
+  'transfer_station_ids',
   'shipping_address_id',
   'receiving_address_id',
   'shipping_longitude',
@@ -222,10 +234,10 @@ export async function editOrder(params: OrderRecord) {
   if (!id) throw new Error('缺少订单 ID')
   return await responseHandle<OrderRecord>(
     () =>
-      supabase.rpc('tms_update_order_secure', {
+      supabase.rpc('tms_update_order_with_contract_secure', {
         p_id: id,
         p_payload: toOrderWritePayload(params),
-        p_action: 'edit'
+        p_contract_id: params.contractId ?? null
       }),
     { showMessage: true, breakReturn: true }
   )

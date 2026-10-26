@@ -184,6 +184,39 @@ export async function fetchAvailableContractDetailList(
   return { ...result, data: details.slice(from, to + 1), total: details.length }
 }
 
+export interface OrderContractCandidate {
+  id: string
+  contractNo: string
+  contractName: string
+  customerId: string
+  effectiveDate: string | null
+  expiryDate: string | null
+}
+
+export async function fetchOrderContractCandidates(customerId: string, keyword = '') {
+  const result = await responseHandle<OrderContractCandidate[]>(
+    () =>
+      supabase.rpc('tms_list_order_contract_candidates', {
+        p_customer_id: customerId,
+        p_keyword: normalizeNullableText(keyword)
+      }),
+    { breakReturn: true, showErrorMessage: false, errorMessage: '可用合同加载失败，请重试' }
+  )
+  return result.data ?? []
+}
+
+export async function fetchOrderContractDetails(contractId: string, keyword = '') {
+  const result = await responseHandle<ContractDetailSelectorItem[]>(
+    () =>
+      supabase.rpc('tms_list_order_contract_details', {
+        p_contract_id: contractId,
+        p_keyword: normalizeNullableText(keyword)
+      }),
+    { breakReturn: true, showErrorMessage: false, errorMessage: '合同明细加载失败，请重试' }
+  )
+  return result.data ?? []
+}
+
 export async function exportContractList(
   params: ContractSearchParams & { ids?: string[]; maxRows?: number }
 ) {

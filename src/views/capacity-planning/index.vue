@@ -1,6 +1,6 @@
 <template>
   <ArtPermissionGuard permission="TmsCapacityPlanning:View">
-    <div class="capacity-planning-page business-workspace-page art-full-height">
+    <div class="capacity-planning-page business-workspace-page">
       <BusinessWorkspaceHeader
         eyebrow="CAPACITY PLANNING"
         title="运力容量中心"

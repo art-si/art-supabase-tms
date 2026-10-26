@@ -143,6 +143,7 @@
       >
     </div>
   </ArtDialog>
+  <DispatchCertificateRiskDialog ref="certificateRiskDialogRef" />
 </template>
 
 <script setup lang="ts">
@@ -157,10 +158,13 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
+  import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
+  import DispatchCertificateRiskDialog from './dispatch-certificate-risk-dialog.vue'
   import { ElMessage } from 'element-plus'
   import {
     fetchCustomerAddressOptions,
     fetchDispatchVehicleOptions,
+    checkDispatchCertificateRisk,
     submitDispatchPlan
   } from '@tms/api'
   import {
@@ -184,6 +188,7 @@
 
   const emit = defineEmits<{ success: [] }>()
   const dialogRef = ref<ArtDialogExpose<Api.Tms.Waybill.WaybillRecord>>()
+  const certificateRiskDialogRef = ref<InstanceType<typeof DispatchCertificateRiskDialog>>()
   const source = shallowRef<Api.Tms.Waybill.WaybillRecord>()
   const deliveryAddresses = ref<Api.Tms.BasicData.CustomerAddress[]>([])
   const parts = ref<SplitPart[]>([])
@@ -304,15 +309,64 @@
       ElMessage.warning('请为每个批次选择车辆、计划发车和到达时间')
       return false
     }
+    try {
+      const checks = await Promise.all(
+        parts.value.map((part) =>
+          checkDispatchCertificateRisk(
+            part.vehicleId,
+            (part.selectedVehicles[0] as Api.Tms.Waybill.DispatchVehicleOption | undefined)
+              ?.primaryDriverId
+          )
+        )
+      )
+      const blockedIndexes = checks.flatMap((check, index) => (check.blocked ? [index] : []))
+      if (blockedIndexes.length) {
+        await certificateRiskDialogRef.value?.handleOpen(
+          {
+            blocked: true,
+            risks: checks.flatMap((check) => check.risks),
+            canOverride: blockedIndexes.every((index) => checks[index].canOverride)
+          },
+          async (reason) => {
+            try {
+              await submitPlan(new Set(blockedIndexes), reason)
+              dialogRef.value?.handleClose(true)
+              emit('success')
+              return true
+            } catch (error) {
+              notifyFriendlyError(error, '强制派车失败，请核对权限和证件状态后重试')
+              return false
+            }
+          }
+        )
+        return false
+      }
+      await submitPlan()
+      emit('success')
+      return true
+    } catch (error) {
+      notifyFriendlyError(error, '证件风险检查或拆单配载失败，请重试；未完成检查前不会派车')
+      return false
+    }
+  }
+
+  async function submitPlan(
+    blockedIndexes: ReadonlySet<number> = new Set(),
+    reason?: string
+  ): Promise<void> {
+    const orderId = source.value?.id
+    if (!orderId) throw new Error('请先选择原始运输单')
     await submitDispatchPlan({
       kind: 'split',
-      executions: parts.value.map((part) => ({
+      executions: parts.value.map((part, index) => ({
         dispatchVehicleId: part.vehicleId,
         dispatchDriverId: (
           part.selectedVehicles[0] as Api.Tms.Waybill.DispatchVehicleOption | undefined
         )?.primaryDriverId,
         plannedDepartureTime: part.departure,
         plannedArrivalTime: part.arrival,
+        certificateRiskOverride: blockedIndexes.has(index),
+        certificateRiskOverrideReason: blockedIndexes.has(index) ? reason : null,
         receivingAddressId: part.receivingAddressId || null,
         allocations: [
           {
@@ -326,8 +380,6 @@
         ]
       }))
     })
-    emit('success')
-    return true
   }
 
   defineExpose({ handleOpen })

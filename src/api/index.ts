@@ -44,16 +44,38 @@ export type {
 } from '@tms/api/modules/basic-records'
 export {
   addDriver,
+  createDriverInvitation,
   deleteDriver,
   deleteDriverBatch,
   editDriver,
   exportDriverList,
   fetchDriverAssignedVehicles,
+  fetchDriverCertificates,
+  fetchDriverDetail,
   fetchDriverEmployeeOptions,
+  fetchDriverInvitation,
+  fetchDriverInvitations,
   fetchDriverList,
   fetchDriverListByCarrierId,
-  fetchDriverOptions
+  fetchDriverOptions,
+  importDrivers,
+  fetchDriverProfile
 } from '@tms/api/modules/driver'
+export type { DriverCertificateRecord } from '@tms/api/modules/driver'
+export type { DriverInvitation } from '@tms/api/modules/driver'
+export { analyzeDriverDocumentByAi } from '@tms/api/modules/driver-document-ocr'
+export type {
+  DriverDocumentImageSide,
+  DriverDocumentOcrResult
+} from '@tms/api/modules/driver-document-ocr'
+export {
+  fetchDriverCommissionRules,
+  saveDriverCommissionRule
+} from '@tms/api/modules/driver-commission'
+export type {
+  DriverCommissionRule,
+  DriverCommissionMethod
+} from '@tms/api/modules/driver-commission'
 export {
   fetchTmsVehicleOptions,
   fetchTmsVehicleReferences,
@@ -129,9 +151,12 @@ export {
   fetchAvailableContractDetailList,
   fetchContractDetail,
   fetchContractList,
+  fetchOrderContractCandidates,
+  fetchOrderContractDetails,
   importContracts,
   submitContractForApproval
 } from '@tms/api/modules/contract'
+export type { OrderContractCandidate } from '@tms/api/modules/contract'
 export {
   addStation,
   deleteStation,
@@ -154,6 +179,7 @@ export {
   editOrderFreight,
   exportOrderList,
   fetchOrderDetail,
+  fetchOrderContractSummary,
   fetchOrderList,
   fetchOrderStatusCounts,
   generateAiOrderExample,
@@ -187,7 +213,12 @@ export {
 export {
   fetchExecutionSources,
   signExecutionAllocations,
-  submitDispatchPlan
+  submitDispatchPlan,
+  checkDispatchCertificateRisk
+} from '@tms/api/modules/dispatch-execution'
+export type {
+  DispatchCertificateRisk,
+  DispatchCertificateRiskCheck
 } from '@tms/api/modules/dispatch-execution'
 export {
   fetchDispatchAgreement,

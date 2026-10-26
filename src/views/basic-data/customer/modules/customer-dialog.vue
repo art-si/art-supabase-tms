@@ -35,6 +35,7 @@
 </template>
 
 <script setup lang="ts">
+  import { toTenantSelectOptions } from '@/utils/tenant-display'
   import { replaceReactiveModel } from '@/utils/form/model'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
@@ -96,12 +97,7 @@
         }))
     )
   )
-  const tenantChoices = computed(() =>
-    tenantOptions.value.map((tenant) => ({
-      label: `${tenant.tenantName || tenant.tenantCode}（${tenant.tenantCode}）`,
-      value: tenant.id
-    }))
-  )
+  const tenantChoices = computed(() => toTenantSelectOptions(tenantOptions.value))
 
   const customerLevelOptions = computed(() => getDictMap.value.tmsCustomerLevel ?? [])
   const customerIndustryOptions = computed(() => getDictMap.value.tmsCustomerIndustry ?? [])

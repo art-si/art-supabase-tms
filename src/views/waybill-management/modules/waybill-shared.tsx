@@ -596,9 +596,15 @@ export const createWaybillColumns = (
       {
         prop: 'executionKind',
         label: '调度方式',
-        width: 100,
-        formatter: (row) =>
-          ({ single: '普通配载', merge: '合单', split: '拆单' })[row.executionKind ?? 'single']
+        minWidth: 130,
+        showOverflowTooltip: true,
+        formatter: (row) => {
+          const direction = row.hasReturnTrip ? ' · 返程配货' : ''
+          return (
+            { single: '正向货配载', merge: '合单', split: '拆单' }[row.executionKind ?? 'single'] +
+            direction
+          )
+        }
       },
       {
         prop: 'dispatchMode',

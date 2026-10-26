@@ -92,7 +92,7 @@
 </template>
 
 <script setup lang="ts">
-  import { getAverageProgress } from './monitor-utils'
+  import { getAverageProgress, withAlpha } from './monitor-utils'
   import { formatPercentValue } from '@/utils/ui/format'
   import { Search, Van } from '@element-plus/icons-vue'
   import ArtAsyncState from '@/components/core/feedback/art-async-state/index.vue'
@@ -150,14 +150,6 @@
     if (item.status === 'transporting') return 3
     if (item.status === 'pending') return 2
     return 1
-  }
-
-  function withAlpha(color: string, alpha: number): string {
-    if (/^#[\da-f]{6}$/i.test(color)) {
-      const numeric = Number.parseInt(color.slice(1), 16)
-      return `rgba(${(numeric >> 16) & 255}, ${(numeric >> 8) & 255}, ${numeric & 255}, ${alpha})`
-    }
-    return color
   }
 </script>
 

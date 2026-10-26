@@ -25,12 +25,28 @@
       </template>
       <template #meta>
         <div v-if="detail.data" class="waybill-detail__header-meta">
-          <span class="art-icon-label"
+          <RouterLink
+            v-if="detail.data.driver?.id && hasAuth('TmsDriverQuery:View')"
+            class="waybill-detail__entity-link art-icon-label"
+            :to="`/tms/driver-query/detail/${detail.data.driver.id}`"
+            ><ArtSvgIcon icon="ri:steering-2-line" aria-hidden="true" />{{
+              detail.data.driver.driverName
+            }}</RouterLink
+          >
+          <span v-else class="art-icon-label"
             ><ArtSvgIcon icon="ri:steering-2-line" aria-hidden="true" />{{
               detail.data.driver?.driverName || '未分配司机'
             }}</span
           >
-          <span class="art-icon-label"
+          <RouterLink
+            v-if="detail.data.vehicle?.id && hasAuth('VehicleQuery:View')"
+            class="waybill-detail__entity-link art-icon-label"
+            :to="`/vms/vehicle-query/detail/${detail.data.vehicle.id}`"
+            ><ArtSvgIcon icon="ri:truck-line" aria-hidden="true" />{{
+              detail.data.vehicle.plateNo
+            }}</RouterLink
+          >
+          <span v-else class="art-icon-label"
             ><ArtSvgIcon icon="ri:truck-line" aria-hidden="true" />{{
               detail.data.vehicle?.plateNo || '未分配车辆'
             }}</span
@@ -152,6 +168,7 @@
   import { fetchWaybillDetail } from '@tms/api'
   import { createDateTimeFormatter } from '@/utils/ui/format'
   import { canViewField } from '@/utils/field-permission'
+  import { useAuth } from '@/hooks/core/useAuth'
   import WaybillDocumentPanel from './modules/waybill-document-panel.vue'
   import WaybillFeePanel from './modules/waybill-fee-panel.vue'
   import WaybillInfoPanel from './modules/waybill-info-panel.vue'
@@ -192,6 +209,7 @@
 
   const route = useRoute()
   const router = useRouter()
+  const { hasAuth } = useAuth()
   const detail: UnwrapNestedRefs<DetailGroup> = reactive<DetailGroup>({
     activeTab: normalizeTab(route.query.tab),
     data: undefined,
@@ -416,7 +434,11 @@
   function openOrderDetail(orderId?: string): void {
     const sourceOrderId = orderId || detail.data?.orderId
     if (!sourceOrderId) return
-    void router.push({ name: 'TmsOrderDetail', params: { id: sourceOrderId } })
+    void router.push(
+      hasAuth('TmsOrderQuery:View')
+        ? `/tms/order-query/detail/${sourceOrderId}`
+        : { name: 'TmsOrderDetail', params: { id: sourceOrderId } }
+    )
   }
 
   function canView(field: Api.Tms.Waybill.WaybillFieldKey): boolean {
@@ -462,6 +484,20 @@
       display: inline-flex;
       gap: 5px;
       align-items: center;
+    }
+
+    &__entity-link {
+      color: var(--theme-color);
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--theme-color);
+        outline-offset: 2px;
+      }
     }
 
     &__overview {

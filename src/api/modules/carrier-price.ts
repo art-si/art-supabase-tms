@@ -1,8 +1,8 @@
 import { buildSupabaseRpcRange } from '@/utils/supabase'
 import { toDateStartTimestamp, toDateEndTimestamp } from '@/utils/time/date-boundary'
 import { normalizeNullableText } from '@/utils/form/normalize'
-import { pick, pickBy } from 'lodash-es'
 import { useSupabase } from '@/hooks/core/useSupabase'
+import { pickDefinedPayload } from './payload'
 
 type CarrierPrice = Api.Tms.BasicData.CarrierPrice
 type CarrierPriceSearchParams = Api.Tms.BasicData.CarrierPriceSearchParams
@@ -48,9 +48,6 @@ const CARRIER_PRICE_PAYLOAD_KEYS = [
   'paymentTotal',
   'remark'
 ] as const satisfies readonly (keyof CarrierPrice)[]
-
-const createPayload = (record: Partial<CarrierPrice>): Record<string, unknown> =>
-  pickBy(pick(record, CARRIER_PRICE_PAYLOAD_KEYS), (value) => value !== undefined)
 
 const toListRpcParams = (
   params: CarrierPriceSearchParams & { ids?: string[]; maxRows?: number },
@@ -119,7 +116,7 @@ export async function addCarrierPrice(params: CarrierPrice) {
   const result = await responseHandle<string>(
     () =>
       supabase.rpc('tms_create_carrier_price_secure', {
-        p_payload: keysToSnakeDeep(createPayload(params))
+        p_payload: keysToSnakeDeep(pickDefinedPayload(params, CARRIER_PRICE_PAYLOAD_KEYS))
       }),
     { showMessage: true, breakReturn: true }
   )
@@ -133,7 +130,7 @@ export async function editCarrierPrice(params: CarrierPrice) {
     () =>
       supabase.rpc('tms_update_carrier_price_secure', {
         p_id: id,
-        p_payload: keysToSnakeDeep(createPayload(data))
+        p_payload: keysToSnakeDeep(pickDefinedPayload(data, CARRIER_PRICE_PAYLOAD_KEYS))
       }),
     { showMessage: true, breakReturn: true }
   )

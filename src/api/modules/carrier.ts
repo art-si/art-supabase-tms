@@ -5,6 +5,7 @@ import { useSupabase } from '@/hooks/core/useSupabase'
 import { normalizeBooleanFilter, withRequestOptions } from '@/api/providers/supabase/query'
 import type { ApiRequestOptions } from '@/types/api/request'
 import type { QueryResult } from '@/types/api/response'
+import { pickDefinedPayload } from './payload'
 
 type Carrier = Api.Tms.BasicData.Carrier
 type CarrierSearchParams = Api.Tms.BasicData.CarrierSearchParams
@@ -60,14 +61,6 @@ const CARRIER_PAYLOAD_KEYS = [
   'contractAttachmentUrl',
   'remark'
 ] as const satisfies readonly (keyof Carrier)[]
-
-const pickPayload = <TRecord extends object, TKey extends Extract<keyof TRecord, string>>(
-  record: TRecord,
-  keys: readonly TKey[]
-): Record<string, unknown> =>
-  Object.fromEntries(
-    keys.filter((key) => record[key] !== undefined).map((key) => [key, record[key]])
-  )
 
 const toCarrierListRpcParams = (
   params: CarrierSearchParams & { ids?: string[]; maxRows?: number },
@@ -182,7 +175,7 @@ export async function addCarrier(params: Carrier) {
   const result = await responseHandle<string>(
     () =>
       supabase.rpc('tms_create_carrier_multi_secure', {
-        p_payload: keysToSnakeDeep(pickPayload(params, CARRIER_PAYLOAD_KEYS))
+        p_payload: keysToSnakeDeep(pickDefinedPayload(params, CARRIER_PAYLOAD_KEYS))
       }),
     { showMessage: true, breakReturn: true }
   )
@@ -196,7 +189,7 @@ export async function editCarrier(params: Carrier) {
     () =>
       supabase.rpc('tms_update_carrier_multi_secure', {
         p_id: id,
-        p_payload: keysToSnakeDeep(pickPayload(data, CARRIER_PAYLOAD_KEYS))
+        p_payload: keysToSnakeDeep(pickDefinedPayload(data, CARRIER_PAYLOAD_KEYS))
       }),
     { showMessage: true, breakReturn: true }
   )
@@ -220,7 +213,7 @@ export async function importCarriers(rows: Carrier[]) {
   return await responseHandle<SecureImportResult>(
     () =>
       supabase.rpc('tms_import_carriers_secure', {
-        p_rows: rows.map((row) => keysToSnakeDeep(pickPayload(row, CARRIER_PAYLOAD_KEYS)))
+        p_rows: rows.map((row) => keysToSnakeDeep(pickDefinedPayload(row, CARRIER_PAYLOAD_KEYS)))
       }),
     { breakReturn: true }
   )

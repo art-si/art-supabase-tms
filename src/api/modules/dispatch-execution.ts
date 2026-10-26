@@ -6,6 +6,20 @@ type WaybillSearchParams = Api.Tms.Waybill.WaybillSearchParams
 type DispatchPlan = Api.Tms.Waybill.DispatchPlan
 type ExecutionSource = Api.Tms.Waybill.ExecutionSource
 
+export interface DispatchCertificateRisk {
+  subjectType: 'vehicle' | 'driver'
+  subjectLabel: string
+  certificateType: string
+  certificateNo: string | null
+  expiresOn: string
+}
+
+export interface DispatchCertificateRiskCheck {
+  blocked: boolean
+  risks: DispatchCertificateRisk[]
+  canOverride: boolean
+}
+
 interface DispatchWorkbenchResponse {
   records: WaybillRecord[]
   total: number
@@ -95,6 +109,38 @@ export async function submitDispatchPlan(plan: DispatchPlan) {
       }),
     { showMessage: true, breakReturn: true }
   )
+}
+
+export async function checkDispatchCertificateRisk(
+  vehicleId?: string | null,
+  driverId?: string | null
+): Promise<DispatchCertificateRiskCheck> {
+  const result = await responseHandle<DispatchCertificateRiskCheck>(
+    () =>
+      supabase.rpc('vms_check_dispatch_certificate_risk_secure', {
+        p_vehicle_id: vehicleId || null,
+        p_driver_id: driverId || null
+      }),
+    { breakReturn: true, showErrorMessage: false }
+  )
+  if (
+    !result.data ||
+    typeof result.data.blocked !== 'boolean' ||
+    typeof result.data.canOverride !== 'boolean' ||
+    !Array.isArray(result.data.risks) ||
+    !result.data.risks.every(
+      (risk) =>
+        risk &&
+        (risk.subjectType === 'vehicle' || risk.subjectType === 'driver') &&
+        typeof risk.subjectLabel === 'string' &&
+        typeof risk.certificateType === 'string' &&
+        (risk.certificateNo == null || typeof risk.certificateNo === 'string') &&
+        typeof risk.expiresOn === 'string'
+    )
+  ) {
+    throw new Error('证件风险检查未返回有效结果，请重试后再配载')
+  }
+  return result.data
 }
 
 export async function fetchExecutionSources(waybillId: string) {

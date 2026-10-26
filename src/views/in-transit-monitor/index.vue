@@ -461,7 +461,7 @@
 
   onMounted(() => {
     updateScreenViewportSize()
-    void Promise.all([
+    void Promise.allSettled([
       userStore.ensureDictLoaded(VEHICLE_TYPE_DICT_CODE),
       userStore.ensureDictLoaded(MONITOR_STATUS_DICT_CODE)
     ])

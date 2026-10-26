@@ -1,8 +1,8 @@
 import { buildSupabaseRpcRange } from '@/utils/supabase'
 import { toDateStartTimestamp, toDateEndTimestamp } from '@/utils/time/date-boundary'
 import { normalizeNullableText } from '@/utils/form/normalize'
-import { pick, pickBy } from 'lodash-es'
 import { useSupabase } from '@/hooks/core/useSupabase'
+import { pickDefinedPayload } from './payload'
 
 type CustomerPrice = Api.Tms.BasicData.CustomerPrice
 type CustomerPriceSearchParams = Api.Tms.BasicData.CustomerPriceSearchParams
@@ -57,9 +57,6 @@ const CUSTOMER_PRICE_PAYLOAD_KEYS = [
   'paymentTotal',
   'remark'
 ] as const satisfies readonly (keyof CustomerPrice)[]
-
-const createPayload = (record: Partial<CustomerPrice>): Record<string, unknown> =>
-  pickBy(pick(record, CUSTOMER_PRICE_PAYLOAD_KEYS), (value) => value !== undefined)
 
 const toListRpcParams = (
   params: CustomerPriceSearchParams & { ids?: string[]; maxRows?: number },
@@ -129,7 +126,7 @@ export async function addCustomerPrice(params: CustomerPrice) {
   const result = await responseHandle<string>(
     () =>
       supabase.rpc('tms_create_customer_price_secure', {
-        p_payload: keysToSnakeDeep(createPayload(params))
+        p_payload: keysToSnakeDeep(pickDefinedPayload(params, CUSTOMER_PRICE_PAYLOAD_KEYS))
       }),
     { showMessage: true, breakReturn: true }
   )
@@ -143,7 +140,7 @@ export async function editCustomerPrice(params: CustomerPrice) {
     () =>
       supabase.rpc('tms_update_customer_price_secure', {
         p_id: id,
-        p_payload: keysToSnakeDeep(createPayload(data))
+        p_payload: keysToSnakeDeep(pickDefinedPayload(data, CUSTOMER_PRICE_PAYLOAD_KEYS))
       }),
     { showMessage: true, breakReturn: true }
   )

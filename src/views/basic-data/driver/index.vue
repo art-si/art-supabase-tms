@@ -40,6 +40,7 @@
     />
 
     <DriverDialog ref="dialogRef" @success="handleSaveSuccess" />
+    <DriverInviteDialog ref="inviteRef" @profile="handleInviteProfile" />
     <MasterDataDeleteGuard ref="deleteGuardRef" @cleared="handleDeleteGuardCleared" />
   </div>
 </template>
@@ -49,22 +50,29 @@
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
   import type {
     ArtTableQueryExpose,
-    ArtTableQueryHeaderAction
+    ArtTableQueryHeaderAction,
+    ArtTableQueryExcelColumn
   } from '@/components/core/tables/art-table-query/index.vue'
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
   import { ColumnOption, DialogType } from '@/types'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
+  import { normalizeNullableText } from '@/utils/form/normalize'
   import { formatWithDayjs } from '@/utils/time'
   import { useUserStore } from '@/store/modules/user'
-  import { RouterLink } from 'vue-router'
+  import { useAuth } from '@/hooks/core/useAuth'
+  import BusinessRecordLink from '@/components/business/business-record-link/index.vue'
   import {
     deleteDriver,
     deleteDriverBatch,
+    exportDriverList,
     fetchCarrierDetail,
     fetchCarrierOptions,
-    fetchDriverList
+    fetchDriverDetail,
+    fetchDriverList,
+    importDrivers
   } from '@tms/api'
   import DriverDialog from './modules/driver-dialog.vue'
+  import DriverInviteDialog from './modules/driver-invite-dialog.vue'
   import MasterDataDeleteGuard, {
     type MasterDataDeleteGuardOpenOptions
   } from '@/components/business/master-data-delete-guard/index.vue'
@@ -84,7 +92,16 @@
   type TableParams = SearchParams & Pick<Api.Common.PaginationParams, 'current' | 'size'>
 
   interface DriverDialogExpose {
-    handleOpen: (row?: Driver) => Promise<void>
+    handleOpen: (
+      row?: Driver,
+      initial?: { phone: string; driverOwnership: string; carrierId: string | null },
+      initialTab?: 'commission',
+      commissionRuleId?: string
+    ) => Promise<void>
+  }
+
+  interface DriverInviteExpose {
+    open: (targetId?: string) => Promise<void>
   }
 
   interface MasterDataDeleteGuardExpose {
@@ -92,15 +109,17 @@
   }
 
   const { getDictMap } = storeToRefs(useUserStore())
+  const { hasAuth } = useAuth()
   const route = useRoute()
   const deleteContext = useMasterDataDeleteProcessingContext()
   const tableQueryRef = ref<ArtTableQueryExpose>()
   const dialogRef = ref<DriverDialogExpose>()
+  const inviteRef = ref<DriverInviteExpose>()
   const deleteGuardRef = ref<MasterDataDeleteGuardExpose>()
   const driverFieldAccess = ref<Api.Tms.BasicData.DriverFieldAccessMap>({})
 
   const initialCarrierId = String(route.query.carrierId || '')
-  const initialRecordId = String(route.query.recordId || '')
+  const initialRecordId = String(route.query.recordId || route.query.driverId || '')
   const tableImmediate = !initialCarrierId && !initialRecordId
 
   const tableState = reactive<{ searchQuery: SearchParams }>({
@@ -119,17 +138,19 @@
     if (!initialCarrierId && !initialRecordId) return
     await nextTick()
     await tableQueryRef.value?.getData()
+    await openDeepLink()
   })
 
   watch(
     () => route.fullPath,
     async () => {
       const carrierId = String(route.query.carrierId || '')
-      const recordId = String(route.query.recordId || '')
+      const recordId = String(route.query.recordId || route.query.driverId || '')
       if (
         tableState.searchQuery.carrierId === carrierId &&
         tableState.searchQuery.recordId === recordId
       ) {
+        await openDeepLink()
         return
       }
       Object.assign(tableState.searchQuery, {
@@ -143,6 +164,7 @@
       })
       await nextTick()
       await tableQueryRef.value?.refreshCreate()
+      await openDeepLink()
     },
     { flush: 'post' }
   )
@@ -247,7 +269,17 @@
       prop: 'driverName',
       label: '姓名',
       minWidth: 120,
-      showOverflowTooltip: true
+      formatter: (row) => (
+        <BusinessRecordLink
+          label={row.driverName || '未命名司机'}
+          to={
+            row.id && hasAuth('TmsDriverQuery:View')
+              ? `/tms/driver-query/detail/${row.id}`
+              : undefined
+          }
+          compact
+        />
+      )
     },
     {
       prop: 'carrierName',
@@ -340,6 +372,80 @@
   const headerActions = computed<ArtTableQueryHeaderAction[]>(() => [
     { permission: 'TmsDriver:Add', type: 'add', onClick: () => openDialog() },
     {
+      key: 'invite',
+      label: '邀请司机',
+      permission: 'TmsDriver:Invite',
+      onClick: () => inviteRef.value?.open()
+    },
+    {
+      type: 'import',
+      permission: 'TmsDriver:Import',
+      hidden: !hasAuth('TmsDriver:Add'),
+      importColumns: [
+        { key: 'driverName', title: '司机姓名' },
+        { key: 'phone', title: '手机号码' },
+        { key: 'idCardNo', title: '身份证号' },
+        { key: 'gender', title: '性别' },
+        { key: 'licenseType', title: '准驾车型' },
+        { key: 'licenseExpireDate', title: '驾驶证有效期' },
+        { key: 'remark', title: '备注' }
+      ] satisfies ArtTableQueryExcelColumn[],
+      importApi: async (rows) => {
+        if (!rows.length) throw new Error('导入文件没有司机数据，请检查表头和内容。')
+        const genderOptions = getDictMap.value.sex ?? []
+        const payload = rows.map((row) => {
+          const genderText = String(row.gender ?? '').trim()
+          const gender =
+            genderOptions.find((option) => option.label === genderText)?.value ?? genderText
+          return {
+            driverName: String(row.driverName ?? '').trim(),
+            phone: String(row.phone ?? '').trim(),
+            idCardNo: String(row.idCardNo ?? '').trim(),
+            gender: String(gender),
+            licenseType: String(row.licenseType ?? '').trim(),
+            licenseExpireDate: normalizeNullableText(row.licenseExpireDate),
+            driverType: 'primary',
+            remark: String(row.remark ?? '').trim(),
+            profile: { driverOwnership: 'self' }
+          }
+        })
+        const response = await importDrivers(payload)
+        const result = response.data
+        await tableQueryRef.value?.refreshCreate()
+        if (!result) throw new Error('导入结果未返回，请刷新列表核对。')
+        if (result.failed) {
+          const errors = result.records.filter((record) => !record.success).slice(0, 3)
+          throw new Error(
+            `已导入 ${result.succeeded} 条，失败 ${result.failed} 条。${errors.map((item) => `第 ${item.rowNumber} 行：${item.error && /[\u4e00-\u9fff]/.test(item.error) ? item.error : '请核对必填信息、证件号和所属租户'}`).join('；')}`
+          )
+        }
+      }
+    },
+    {
+      type: 'export',
+      permission: 'TmsDriver:Export',
+      exportFilename: '司机档案',
+      exportSheetName: '司机档案',
+      exportColumns: [
+        { key: 'driverName', title: '司机姓名' },
+        { key: 'phone', title: '手机号码' },
+        { key: 'driverType', title: '司机类型' },
+        { key: 'licenseType', title: '准驾车型' },
+        { key: 'licenseExpireDate', title: '驾驶证有效期' },
+        {
+          key: 'enabled',
+          title: '启用状态',
+          formatter: (value) => (value === true ? '启用' : '停用')
+        }
+      ] satisfies ArtTableQueryExcelColumn[],
+      exportApi: ({ selectedIds, searchParams, maxRows }) =>
+        exportDriverList({
+          ...(searchParams as SearchParams),
+          ids: selectedIds.map(String),
+          maxRows
+        })
+    },
+    {
       permission: 'TmsDriver:Delete',
       type: 'delete',
       confirm: false,
@@ -362,24 +468,17 @@
     if (!vehicles.length) return <span class="tms-driver__vehicle-empty">-</span>
 
     return (
-      <div
-        class="tms-driver__vehicle-links"
-        title={vehicles
-          .map((vehicle) => vehicle.plateNo)
-          .filter(Boolean)
-          .join('、')}
-      >
+      <div class="tms-driver__vehicle-links">
         {vehicles.map((vehicle) => (
-          <RouterLink
+          <BusinessRecordLink
             key={vehicle.id}
-            class="tms-driver__vehicle-link"
-            to={{
-              path: `/vms/vehicle-archive-detail/${vehicle.id}`
-            }}
+            label={vehicle.plateNo}
+            to={
+              hasAuth('VehicleQuery:View') ? `/vms/vehicle-query/detail/${vehicle.id}` : undefined
+            }
             title={`查看车辆 ${vehicle.plateNo} 详情`}
-          >
-            {vehicle.plateNo}
-          </RouterLink>
+            compact
+          />
         ))}
       </div>
     )
@@ -387,6 +486,32 @@
 
   const openDialog = (row?: Driver): void => {
     void dialogRef.value?.handleOpen(row)
+  }
+
+  const lastDeepLink = ref('')
+  const openDeepLink = async (): Promise<void> => {
+    const commissionRuleId = String(route.query.commissionRuleId || '')
+    const invitationId = String(route.query.invitationId || '')
+    const driverId = String(route.query.driverId || route.query.recordId || '')
+    const key = [driverId, commissionRuleId, invitationId].join(':')
+    if ((!commissionRuleId && !invitationId) || key === lastDeepLink.value) return
+    lastDeepLink.value = key
+    if (invitationId) {
+      await inviteRef.value?.open(invitationId)
+      return
+    }
+    if (!driverId) return
+    const result = await fetchDriverDetail(driverId)
+    if (result.data)
+      await dialogRef.value?.handleOpen(result.data, undefined, 'commission', commissionRuleId)
+  }
+
+  const handleInviteProfile = (initial: {
+    phone: string
+    driverOwnership: string
+    carrierId: string | null
+  }): void => {
+    void dialogRef.value?.handleOpen(undefined, initial)
   }
 
   const handleSaveSuccess = (type: DialogType): void => {
@@ -429,40 +554,11 @@
   .tms-driver {
     &__vehicle-links {
       display: flex;
-      gap: 4px;
+      flex-wrap: wrap;
+      gap: 4px 8px;
       align-items: center;
       min-width: 0;
       padding: 4px 0;
-      overflow: hidden;
-      white-space: nowrap;
-    }
-
-    &__vehicle-link {
-      flex: none;
-      max-width: 112px;
-      padding: 1px 3px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      font-weight: 700;
-      line-height: 20px;
-      color: var(--el-color-primary);
-      white-space: nowrap;
-      text-decoration: none;
-      background: var(--el-color-primary-light-9);
-      border: 1px solid var(--el-color-primary-light-7);
-      border-radius: var(--el-border-radius-small);
-
-      &:hover {
-        color: var(--el-color-primary-dark-2);
-        background: var(--el-color-primary-light-8);
-        border-color: var(--el-color-primary-light-5);
-      }
-
-      &:focus-visible {
-        outline: 2px solid var(--el-color-primary);
-        outline-offset: 2px;
-        border-radius: var(--el-border-radius-small);
-      }
     }
 
     &__vehicle-empty {

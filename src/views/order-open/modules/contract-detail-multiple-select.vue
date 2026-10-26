@@ -32,7 +32,7 @@
     DataSelectFetchParams,
     DataSelectRecord
   } from '@/components/core/forms/art-data-select/types'
-  import { fetchAvailableContractDetailList } from '@tms/api'
+  import { fetchOrderContractDetails } from '@tms/api'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
 
   defineOptions({ name: 'TmsContractDetailMultipleSelect' })
@@ -45,6 +45,7 @@
   }
 
   const selectRef = ref<ArtDataSelectExpose>()
+  const contractId = ref('')
   const selector = reactive<SelectorState>({ selectedRows: [], value: [] })
   const columns: DataSelectColumn[] = [
     { prop: 'contractNo', label: '合同编号', width: 160 },
@@ -63,19 +64,22 @@
       label: '合同单价（元）',
       width: 150,
       align: 'right',
-      formatter: (row) => Number(row.transportUnitPrice ?? 0).toFixed(2)
+      formatter: (row) =>
+        row.transportUnitPrice == null ? '—' : Number(row.transportUnitPrice).toFixed(2)
     }
   ]
 
   const emit = defineEmits<{ confirm: [rows: ContractDetail[]] }>()
 
-  const open = async (): Promise<void> => {
+  const open = async (id: string): Promise<void> => {
+    contractId.value = id
     await selectRef.value?.open()
   }
 
   const fetchSelectorData = async (params: DataSelectFetchParams) => {
     const { from, to } = buildSupabasePageRange({ current: params.page, size: params.pageSize })
-    return await fetchAvailableContractDetailList({ keyword: params.keyword, from, to })
+    const details = await fetchOrderContractDetails(contractId.value, params.keyword)
+    return { data: details.slice(from, to + 1), total: details.length }
   }
 
   const getDescription = (row: DataSelectRecord): string =>

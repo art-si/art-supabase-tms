@@ -11,7 +11,7 @@ export interface MergeOrderContractDetailsResult {
 
 export interface ContractCargoFreightResult {
   hasContractCargo: boolean
-  transportFee: number
+  transportFee: number | null
 }
 
 export const createCargoItemFromContractDetail = (detail: ContractDetail): CargoItem => ({
@@ -23,7 +23,10 @@ export const createCargoItemFromContractDetail = (detail: ContractDetail): Cargo
   quantity: 1,
   unit: detail.unit,
   unitPrice: detail.transportUnitPrice,
-  freight: round(normalizeNullableNumber(detail.transportUnitPrice) ?? 0, 2),
+  freight:
+    detail.transportUnitPrice == null
+      ? null
+      : round(normalizeNullableNumber(detail.transportUnitPrice) ?? 0, 2),
   sourceContractId: detail.contractId,
   sourceContractNo: detail.contractNo,
   sourceContractName: detail.contractName,
@@ -58,21 +61,22 @@ export const calculateContractCargoFreight = (item: CargoItem): number =>
     2
   )
 
-export const calculateContractTransportFee = (items: readonly CargoItem[]): number =>
-  round(
-    items.reduce(
-      (sum, item) => sum + (item.sourceContractId ? calculateContractCargoFreight(item) : 0),
-      0
-    ),
+export const calculateContractTransportFee = (items: readonly CargoItem[]): number | null => {
+  const contractItems = items.filter((item) => item.sourceContractId)
+  if (contractItems.some((item) => normalizeNullableNumber(item.unitPrice) == null)) return null
+  return round(
+    contractItems.reduce((sum, item) => sum + calculateContractCargoFreight(item), 0),
     2
   )
+}
 
 export const synchronizeContractCargoFreight = (
   items: readonly CargoItem[]
 ): ContractCargoFreightResult => {
   const contractItems = items.filter((item) => item.sourceContractId)
   contractItems.forEach((item) => {
-    item.freight = calculateContractCargoFreight(item)
+    if (normalizeNullableNumber(item.unitPrice) != null)
+      item.freight = calculateContractCargoFreight(item)
   })
 
   return {

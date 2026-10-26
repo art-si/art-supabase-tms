@@ -314,6 +314,7 @@
       </div>
     </template>
   </ArtDialog>
+  <DispatchCertificateRiskDialog ref="certificateRiskDialogRef" />
 </template>
 
 <script setup lang="ts">
@@ -339,6 +340,7 @@
   import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
   import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
   import TmsDataSourceEmptyActions from '../../components/tms-data-source-empty-actions.vue'
+  import DispatchCertificateRiskDialog from './dispatch-certificate-risk-dialog.vue'
   import type {
     DataSelectColumn,
     DataSelectFetchParams,
@@ -347,6 +349,7 @@
   import {
     dispatchWaybill,
     dispatchWaybillBatch,
+    checkDispatchCertificateRisk,
     recommendDispatchResourcesByAi,
     mergeWaybills
   } from '@tms/api'
@@ -430,6 +433,7 @@
       .join('、') || '—'
   const dialogRef = ref<ArtDialogExpose<DialogOpenData>>()
   const agreementDialogRef = ref<ArtDialogExpose<DispatchAgreementDetail>>()
+  const certificateRiskDialogRef = ref<InstanceType<typeof DispatchCertificateRiskDialog>>()
   const agreementDetail = ref<DispatchAgreementDetail | null>(null)
   const safeAgreementContent = computed(() =>
     DOMPurify.sanitize(agreementDetail.value?.contentHtml || '')
@@ -707,18 +711,46 @@
         return false
       }
       const payload = normalizePayload()
-      if (dialog.mode === 'batch') {
-        await dispatchWaybillBatch(dialog.rows, payload)
-      } else if (dialog.mode === 'merge') {
-        await mergeWaybills(dialog.rows, payload)
-      } else {
-        await dispatchWaybill(dialog.rows[0], payload)
+      if (payload.dispatchMode !== 'carrier') {
+        const check = await checkDispatchCertificateRisk(
+          payload.dispatchMode === 'self_operated' ? payload.dispatchVehicleId : null,
+          payload.dispatchDriverId
+        )
+        if (check.blocked) {
+          await certificateRiskDialogRef.value?.handleOpen(check, async (reason) => {
+            try {
+              await submitPayload({
+                ...payload,
+                certificateRiskOverride: true,
+                certificateRiskOverrideReason: reason
+              })
+              dialogRef.value?.handleClose(true)
+              emit('success')
+              return true
+            } catch (error) {
+              notifyFriendlyError(error, '强制派车失败，请核对权限和证件状态后重试')
+              return false
+            }
+          })
+          return false
+        }
       }
+      await submitPayload(payload)
       emit('success')
       return true
     } catch (error) {
-      notifyFriendlyError(error, '运单调度失败，请检查承运资源和网络后重试')
+      notifyFriendlyError(error, '证件风险检查或运单调度失败，请重试；未完成检查前不会派车')
       return false
+    }
+  }
+
+  async function submitPayload(payload: DispatchPayload): Promise<void> {
+    if (dialog.mode === 'batch') {
+      await dispatchWaybillBatch(dialog.rows, payload)
+    } else if (dialog.mode === 'merge') {
+      await mergeWaybills(dialog.rows, payload)
+    } else {
+      await dispatchWaybill(dialog.rows[0], payload)
     }
   }
 

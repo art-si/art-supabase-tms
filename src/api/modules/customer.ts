@@ -4,6 +4,7 @@ import { normalizeNullableText } from '@/utils/form/normalize'
 import { useSupabase } from '@/hooks/core/useSupabase'
 import { normalizeBooleanFilter, withRequestOptions } from '@/api/providers/supabase/query'
 import type { ApiRequestOptions } from '@/types/api/request'
+import { pickDefinedPayload } from './payload'
 
 type Customer = Api.Tms.BasicData.Customer
 type CustomerSearchParams = Api.Tms.BasicData.CustomerSearchParams
@@ -143,14 +144,6 @@ const CUSTOMER_ADDRESS_PAYLOAD_KEYS = [
   'geofenceUpdatedAt'
 ] as const satisfies readonly (keyof CustomerAddress)[]
 
-const pickPayload = <TRecord extends object, TKey extends Extract<keyof TRecord, string>>(
-  record: TRecord,
-  keys: readonly TKey[]
-): Record<string, unknown> =>
-  Object.fromEntries(
-    keys.filter((key) => record[key] !== undefined).map((key) => [key, record[key]])
-  )
-
 const toCustomerListRpcParams = (
   params: CustomerSearchParams & { ids?: string[]; maxRows?: number },
   purpose: 'list' | 'export'
@@ -252,7 +245,7 @@ export async function addCustomer(params: Customer, options: WriteOptions = {}) 
   const result = await responseHandle<string>(
     () =>
       supabase.rpc('tms_create_customer_secure', {
-        p_payload: keysToSnakeDeep(pickPayload(params, CUSTOMER_PAYLOAD_KEYS))
+        p_payload: keysToSnakeDeep(pickDefinedPayload(params, CUSTOMER_PAYLOAD_KEYS))
       }),
     { showMessage: options.showMessage ?? true, breakReturn: true }
   )
@@ -266,7 +259,7 @@ export async function editCustomer(params: Customer) {
     () =>
       supabase.rpc('tms_update_customer_secure', {
         p_id: id,
-        p_payload: keysToSnakeDeep(pickPayload(data, CUSTOMER_PAYLOAD_KEYS))
+        p_payload: keysToSnakeDeep(pickDefinedPayload(data, CUSTOMER_PAYLOAD_KEYS))
       }),
     { showMessage: true, breakReturn: true }
   )
@@ -358,7 +351,7 @@ export async function importCustomers(rows: Customer[]) {
   return await responseHandle<SecureImportResult>(
     () =>
       supabase.rpc('tms_import_customers_secure', {
-        p_rows: rows.map((row) => keysToSnakeDeep(pickPayload(row, CUSTOMER_PAYLOAD_KEYS)))
+        p_rows: rows.map((row) => keysToSnakeDeep(pickDefinedPayload(row, CUSTOMER_PAYLOAD_KEYS)))
       }),
     { showMessage: true, breakReturn: true }
   )
@@ -412,7 +405,7 @@ export async function addCustomerAddress(params: CustomerAddress, options: Write
   const result = await responseHandle<string>(
     () =>
       supabase.rpc('tms_create_customer_address_secure', {
-        p_payload: keysToSnakeDeep(pickPayload(params, CUSTOMER_ADDRESS_PAYLOAD_KEYS))
+        p_payload: keysToSnakeDeep(pickDefinedPayload(params, CUSTOMER_ADDRESS_PAYLOAD_KEYS))
       }),
     { showMessage: options.showMessage ?? true, breakReturn: true }
   )
@@ -426,7 +419,7 @@ export async function editCustomerAddress(params: CustomerAddress) {
     () =>
       supabase.rpc('tms_update_customer_address_secure', {
         p_id: id,
-        p_payload: keysToSnakeDeep(pickPayload(params, CUSTOMER_ADDRESS_PAYLOAD_KEYS))
+        p_payload: keysToSnakeDeep(pickDefinedPayload(params, CUSTOMER_ADDRESS_PAYLOAD_KEYS))
       }),
     { showMessage: true, breakReturn: true }
   )

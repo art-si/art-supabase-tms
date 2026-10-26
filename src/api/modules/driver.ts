@@ -3,15 +3,48 @@ import { toDateStartTimestamp, toDateEndTimestamp } from '@/utils/time/date-boun
 import { normalizeNullableText } from '@/utils/form/normalize'
 import { useSupabase } from '@/hooks/core/useSupabase'
 import { normalizeBooleanFilter, withRequestOptions } from '@/api/providers/supabase/query'
-import type { ApiRequestOptions } from '@/types/api/request'
+import type { ApiFeedbackOptions, ApiRequestOptions } from '@/types/api/request'
 import type { QueryResult } from '@/types/api/response'
 import { loadAllDocumentPages } from '@/utils/business/document-detail-list'
+import { pickDefinedPayload } from './payload'
 
 type Driver = Api.Tms.BasicData.Driver
+type DriverProfile = Api.Tms.BasicData.DriverProfile
+type DriverWritePayload = Omit<Driver, 'carrierId'> & {
+  carrierId: string | null
+  profile?: DriverProfile
+}
 type DriverSearchParams = Api.Tms.BasicData.DriverSearchParams
 type DriverOption = Api.Tms.BasicData.DriverOption
 type DriverAssignedVehicle = Api.Tms.BasicData.DriverAssignedVehicle
 type DriverEmployeeOption = Api.Tms.BasicData.DriverEmployeeOption
+
+export interface DriverCertificateRecord {
+  id: string
+  certificateType: string
+  certificateNo: string
+  expiresOn: string
+  responsibleName: string
+  status: string
+  attachments: { name: string; url: string }[]
+}
+
+export interface DriverInvitation {
+  id: string
+  phone: string
+  driverOwnership: string
+  carrierId: string | null
+  status: 'pending' | 'profile_created'
+  linkedDriverId: string | null
+  requestedAt: string
+}
+
+export interface DriverImportResult {
+  processed: number
+  succeeded: number
+  failed: number
+  records: { rowNumber: number; success: boolean; id: string | null; error: string | null }[]
+}
 
 interface DriverOptionParams extends Partial<
   Pick<DriverOption, 'carrierId' | 'driverName' | 'driverType'>
@@ -87,14 +120,6 @@ export async function fetchDriverEmployeeOptions(
   }
 }
 
-const pickPayload = <TRecord extends object, TKey extends Extract<keyof TRecord, string>>(
-  record: TRecord,
-  keys: readonly TKey[]
-): Record<string, unknown> =>
-  Object.fromEntries(
-    keys.filter((key) => record[key] !== undefined).map((key) => [key, record[key]])
-  )
-
 const toDriverListRpcParams = (
   params: DriverSearchParams & { ids?: string[]; maxRows?: number },
   purpose: 'list' | 'export'
@@ -155,10 +180,68 @@ export async function exportDriverList(
   }
 }
 
-export async function fetchDriverDetail(id: string) {
+export async function fetchDriverDetail(id: string, options: ApiFeedbackOptions = {}) {
   return await responseHandle<Driver | null>(
     () => supabase.rpc('tms_get_driver_secure', { p_id: id }),
+    { showErrorMessage: options.showErrorMessage ?? true }
+  )
+}
+
+export async function fetchDriverProfile(driverId: string) {
+  return await responseHandle<DriverProfile | null>(
+    () => supabase.rpc('tms_get_driver_profile_secure', { p_driver_id: driverId }),
     { showErrorMessage: true }
+  )
+}
+
+export async function fetchDriverCertificates(driverId: string) {
+  const result = await responseHandle<{ records: DriverCertificateRecord[]; total: number }>(
+    () => supabase.rpc('tms_list_driver_certificates_secure', { p_driver_id: driverId }),
+    { showErrorMessage: true }
+  )
+  return { data: result.data?.records ?? [], total: result.data?.total ?? 0, error: result.error }
+}
+
+export async function fetchDriverInvitations() {
+  const result = await responseHandle<{ records: DriverInvitation[]; total: number }>(
+    () => supabase.rpc('tms_list_driver_invitations_secure', { p_from: 0, p_to: 19 }),
+    { showErrorMessage: true }
+  )
+  return { data: result.data?.records ?? [], total: result.data?.total ?? 0, error: result.error }
+}
+
+export async function fetchDriverInvitation(id: string) {
+  return await responseHandle<DriverInvitation | null>(
+    () => supabase.rpc('tms_get_driver_invitation_secure', { p_id: id }),
+    { showErrorMessage: true }
+  )
+}
+
+export async function createDriverInvitation(input: {
+  phone: string
+  driverOwnership: string
+  carrierId: string | null
+}) {
+  return await responseHandle<DriverInvitation>(
+    () =>
+      supabase.rpc('tms_create_driver_invitation_secure', {
+        p_phone: input.phone,
+        p_driver_ownership: input.driverOwnership,
+        p_carrier_id: input.carrierId,
+        p_target_tenant_id: null
+      }),
+    { showMessage: true, breakReturn: true }
+  )
+}
+
+export async function importDrivers(rows: Array<Record<string, unknown>>) {
+  return await responseHandle<DriverImportResult>(
+    () =>
+      supabase.rpc('tms_import_drivers_secure', {
+        p_rows: keysToSnakeDeep(rows),
+        p_target_tenant_id: null
+      }),
+    { showErrorMessage: true, breakReturn: true }
   )
 }
 
@@ -226,25 +309,32 @@ export async function fetchDriverAssignedVehicles(
   }
 }
 
-export async function addDriver(params: Driver) {
+export async function addDriver(params: DriverWritePayload) {
   const result = await responseHandle<string>(
     () =>
       supabase.rpc('tms_create_driver_secure', {
-        p_payload: keysToSnakeDeep(pickPayload(params, DRIVER_PAYLOAD_KEYS))
+        p_payload: keysToSnakeDeep({
+          ...pickDefinedPayload(params, DRIVER_PAYLOAD_KEYS),
+          ...(params.tenantId ? { targetTenantId: params.tenantId } : {}),
+          ...(params.profile ? { profile: params.profile } : {})
+        })
       }),
     { showMessage: true, breakReturn: true }
   )
   return { ...result, data: result.data ? { id: result.data } : null }
 }
 
-export async function editDriver(params: Driver) {
+export async function editDriver(params: DriverWritePayload) {
   const { id, ...data } = params
   if (!id) throw new Error('司机 ID 不能为空')
   return await responseHandle<Driver>(
     () =>
       supabase.rpc('tms_update_driver_secure', {
         p_id: id,
-        p_payload: keysToSnakeDeep(pickPayload(data, DRIVER_PAYLOAD_KEYS))
+        p_payload: keysToSnakeDeep({
+          ...pickDefinedPayload(data, DRIVER_PAYLOAD_KEYS),
+          ...(data.profile ? { profile: data.profile } : {})
+        })
       }),
     { showMessage: true, breakReturn: true }
   )
