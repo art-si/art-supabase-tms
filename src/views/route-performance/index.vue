@@ -208,7 +208,7 @@
       align-items: center;
       padding: 14px;
       border: 1px solid var(--art-border-color);
-      border-radius: calc(var(--el-border-radius-base) + 4px);
+      border-radius: var(--art-surface-radius);
     }
 
     &__rank {

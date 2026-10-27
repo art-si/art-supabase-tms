@@ -45,7 +45,11 @@
       }}</p>
     </section>
     <section v-else-if="activeTab === 'commission'" class="driver-dialog__records">
-      <DriverCommissionRules :driver-id="form.id" :selected-rule-id="selectedCommissionRuleId" />
+      <DriverCommissionRules
+        :driver-id="form.id"
+        :tenant-id="form.tenantId"
+        :selected-rule-id="selectedCommissionRuleId"
+      />
     </section>
     <div
       v-else
@@ -94,16 +98,41 @@
           title="历史影像未在此处展示；请上传到私有存储以替换。"
           :closable="false"
         />
-        <ElButton
-          v-if="activeImage !== 'portraitUrl'"
-          v-auth="'TmsDriver:Ocr'"
-          type="primary"
-          plain
-          :loading="ocrBusy"
-          :disabled="!activeOcrImageUrl || !canRecognizeDocument"
-          @click="recognizeDocument"
-          >智能识别当前影像</ElButton
+        <div v-if="activeImage !== 'portraitUrl'" class="driver-dialog__ocr-actions">
+          <ElButton
+            v-auth="'TmsDriver:Ocr'"
+            type="primary"
+            plain
+            :loading="ocrBusy && ocrMode === 'ai'"
+            :disabled="!activeOcrImageUrl || !canRecognizeDocument || ocrBusy"
+            @click="recognizeDocument"
+            >智能识别</ElButton
+          >
+          <ElButton
+            v-auth="'TmsDriver:Ocr'"
+            plain
+            :loading="ocrBusy && ocrMode === 'local'"
+            :disabled="!activeOcrImageUrl || !canRecognizeDocument || ocrBusy"
+            @click="recognizeLocally"
+            >本地离线识别</ElButton
+          >
+        </div>
+        <p v-if="ocrBusy" role="status">
+          {{
+            ocrMode === 'local'
+              ? '正在本机提取文字，图片不会发送给模型服务。'
+              : '正在识别证件影像，可能需要几十秒。'
+          }}
+        </p>
+        <div
+          v-if="ocrError && activeImage === ocrErrorSide"
+          class="driver-dialog__ocr-error"
+          role="alert"
         >
+          <strong>本次识别未完成</strong>
+          <p>{{ ocrError }}</p>
+          <span>可以选择本地离线识别，或直接在右侧表单手工填写。</span>
+        </div>
         <p>影像保存在租户私有存储；识别结果需核对，字段也可手工填写。</p>
       </section>
       <div class="driver-dialog__form-area">
@@ -215,6 +244,7 @@
     signPrivateAttachmentPaths,
     uploadPrivateAttachment
   } from '@/utils/supabase/private-attachment'
+  import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
   import {
     addDriver,
     editDriver,
@@ -224,7 +254,8 @@
     fetchDriverDetail,
     fetchDriverEmployeeOptions,
     fetchDriverProfile,
-    analyzeDriverDocumentByAi
+    analyzeDriverDocumentByAi,
+    analyzeDriverDocumentLocally
   } from '@tms/api'
   import type {
     DriverCertificateRecord,
@@ -242,6 +273,7 @@
     getFieldAccess
   } from '@/utils/field-permission'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
+  import { fetchRegionOptions } from '@/api/region-options'
 
   defineOptions({ name: 'TmsDriverDialog' })
 
@@ -360,16 +392,28 @@
     {
       prop: 'certificateType',
       label: '证件类型',
-      minWidth: 140,
+      minWidth: 110,
       formatter: (row) => certificateTypeLabels[row.certificateType] ?? row.certificateType
     },
-    { prop: 'certificateNo', label: '证件编号', minWidth: 170 },
-    { prop: 'expiresOn', label: '有效期截止', width: 135 },
-    { prop: 'responsibleName', label: '责任人', minWidth: 115 },
+    { prop: 'certificateNo', label: '证件编号', minWidth: 150, showOverflowTooltip: true },
+    {
+      prop: 'issueDate',
+      label: '发证日期',
+      width: 115,
+      formatter: (row) => row.issueDate || '—'
+    },
+    {
+      prop: 'validFrom',
+      label: '有效期起始',
+      width: 120,
+      formatter: (row) => row.validFrom || '—'
+    },
+    { prop: 'expiresOn', label: '有效期截止', width: 120 },
+    { prop: 'responsibleName', label: '责任人', minWidth: 100 },
     {
       prop: 'status',
       label: '到期状态',
-      width: 125,
+      width: 110,
       formatter: (row) =>
         h(
           ElTag,
@@ -390,7 +434,7 @@
     {
       prop: 'attachments',
       label: '附件',
-      width: 90,
+      width: 78,
       formatter: (row) => `${row.attachments.length} 份`
     }
   ]
@@ -449,7 +493,21 @@
     ]
   })
 
-  const genderOptions = computed(() => getDictMap.value.sex ?? [])
+  const legacyGenderLabels: Record<string, string> = {
+    male: '男',
+    female: '女',
+    '1': '男',
+    '2': '女',
+    男: '男',
+    女: '女'
+  }
+  const genderOptions = computed(() => {
+    const options = getDictMap.value.sex ?? []
+    const value = form.gender
+    if (!value || options.some((option) => String(option.value) === value)) return options
+    const label = legacyGenderLabels[value]
+    return label ? [...options, { label, value }] : options
+  })
   const licenseTypeOptions = computed(() => getDictMap.value.tmsDriverLicenseType ?? [])
   const driverTypeOptions = computed(() => getDictMap.value.tmsDriverType ?? [])
   const ownershipOptions = computed(() => getDictMap.value.tmsDriverOwnership ?? [])
@@ -557,23 +615,33 @@
   const form = reactive<DriverForm>(createInitialForm())
   const privateBucket = 'tms-driver-private'
   const imageKeys: readonly DriverImageKey[] = [
-    'portraitUrl', 'idCardFrontUrl', 'idCardBackUrl', 'driverLicenseFrontUrl',
-    'driverLicenseBackUrl', 'licenseBackExtraUrl', 'qualificationFrontUrl',
+    'portraitUrl',
+    'idCardFrontUrl',
+    'idCardBackUrl',
+    'driverLicenseFrontUrl',
+    'driverLicenseBackUrl',
+    'licenseBackExtraUrl',
+    'qualificationFrontUrl',
     'qualificationAssessmentUrl'
   ]
   const originalImageReferences = reactive<Partial<Record<DriverImageKey, string>>>({})
   const hiddenLegacyImages = reactive(new Set<DriverImageKey>())
-  const uploadDriverDocument = (file: File) => uploadPrivateAttachment(file, {
-    bucket: privateBucket,
-    tenantId: form.tenantId || '',
-    allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp'],
-    maxBytes: 8 * 1024 * 1024
-  })
+  const uploadDriverDocument = (file: File) =>
+    uploadPrivateAttachment(file, {
+      bucket: privateBucket,
+      tenantId: form.tenantId || '',
+      allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp'],
+      maxBytes: 8 * 1024 * 1024
+    })
   const ocrReviewDialogRef = ref<ArtDialogExpose<DriverDocumentOcrResult>>()
   const ocrBusy = ref(false)
+  const ocrMode = ref<'ai' | 'local' | null>(null)
+  const ocrError = ref('')
+  const ocrErrorSide = ref<DriverImageKey | ''>('')
+  let ocrRequestId = 0
   const ocrResult = ref<DriverDocumentOcrResult | null>(null)
   const ocrReplaceExisting = ref(false)
-  const activeOcrImageUrl = computed(() => activeImage.value ? form[activeImage.value] : '')
+  const activeOcrImageUrl = computed(() => (activeImage.value ? form[activeImage.value] : ''))
   const ocrFieldLabels: Record<string, string> = {
     driverName: '姓名',
     idCardNo: '身份证号',
@@ -663,7 +731,11 @@
       return
     const imageUrl = form[imageSide]
     if (!imageUrl || !form.tenantId) return
+    const requestId = ++ocrRequestId
+    ocrError.value = ''
+    ocrErrorSide.value = imageSide
     ocrBusy.value = true
+    ocrMode.value = 'ai'
     try {
       const imagePath = isPrivateAttachmentPath(imageUrl)
         ? imageUrl
@@ -676,13 +748,60 @@
       })
       if (error) throw error
       if (!data) throw new Error('未获取到证件识别结果')
+      if (requestId !== ocrRequestId || activeImage.value !== imageSide) return
       ocrResult.value = data
       ocrReplaceExisting.value = false
       await ocrReviewDialogRef.value?.handleOpen(data, { title: '司机证件识别结果' })
     } catch (error) {
-      notifyFriendlyError(error, '证件识别失败，请核对图片并重试')
+      if (requestId === ocrRequestId) {
+        ocrError.value = getFriendlySupabaseErrorMessage(
+          error,
+          '识别服务暂不可用，请稍后重试或联系管理员检查模型配置'
+        )
+      }
     } finally {
-      ocrBusy.value = false
+      if (requestId === ocrRequestId) {
+        ocrBusy.value = false
+        ocrMode.value = null
+      }
+    }
+  }
+
+  const recognizeLocally = async (): Promise<void> => {
+    const imageSide = activeImage.value
+    if (!imageSide || imageSide === 'portraitUrl' || !canRecognizeDocument.value || ocrBusy.value)
+      return
+    const imageUrl = form[imageSide]
+    if (!imageUrl) return
+    const requestId = ++ocrRequestId
+    ocrError.value = ''
+    ocrErrorSide.value = imageSide
+    ocrBusy.value = true
+    ocrMode.value = 'local'
+    try {
+      const imagePath = isPrivateAttachmentPath(imageUrl)
+        ? imageUrl
+        : privateAttachmentPathFromSignedUrl(imageUrl, privateBucket)
+      const result = await analyzeDriverDocumentLocally({
+        imagePath,
+        imageSide: imageSide as DriverDocumentImageSide
+      })
+      if (requestId !== ocrRequestId || activeImage.value !== imageSide) return
+      ocrResult.value = result
+      ocrReplaceExisting.value = false
+      await ocrReviewDialogRef.value?.handleOpen(result, { title: '本地证件文字识别结果' })
+    } catch (error) {
+      if (requestId === ocrRequestId) {
+        ocrError.value = getFriendlySupabaseErrorMessage(
+          error,
+          '本地识别失败，请使用清晰照片重试或手工填写'
+        )
+      }
+    } finally {
+      if (requestId === ocrRequestId) {
+        ocrBusy.value = false
+        ocrMode.value = null
+      }
     }
   }
 
@@ -1026,6 +1145,29 @@
       props: { type: 'date', valueFormat: 'YYYY-MM-DD', class: '!w-full' }
     },
     { label: '民族', key: 'ethnicity', type: 'input', props: { maxlength: 30 } },
+    {
+      label: '住址',
+      key: 'homeRegionCode',
+      type: 'cascader',
+      span: 24,
+      api: fetchRegionOptions,
+      labelField: 'name',
+      valueField: 'code',
+      childrenField: 'children',
+      props: {
+        class: '!w-full',
+        clearable: true,
+        filterable: true,
+        placeholder: '请选择省 / 市 / 区',
+        props: {
+          label: 'name',
+          value: 'code',
+          children: 'children',
+          emitPath: false,
+          checkStrictly: true
+        }
+      }
+    },
     { label: '发证机关', key: 'idCardIssuer', type: 'input', span: 24, props: { maxlength: 100 } },
     {
       label: '身份证起始日',
@@ -1151,6 +1293,7 @@
       'gender',
       'birthDate',
       'ethnicity',
+      'homeRegionCode',
       'homeAddress',
       'homeAddressDetail',
       'idCardIssuer',
@@ -1210,6 +1353,11 @@
   }
 
   const resetForm = async (): Promise<void> => {
+    ocrRequestId += 1
+    ocrBusy.value = false
+    ocrMode.value = null
+    ocrError.value = ''
+    ocrErrorSide.value = ''
     vehicleState.requestId += 1
     vehicleState.loading = false
     vehicleState.error = ''
@@ -1623,6 +1771,17 @@
       }
     }
 
+    &__ocr-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+
+      :deep(.el-button) {
+        margin-left: 0;
+      }
+    }
+
     &__records {
       min-width: 0;
     }
@@ -1652,6 +1811,40 @@
       gap: 8px;
       align-items: center;
       color: var(--el-color-danger);
+    }
+
+    &__ocr-review {
+      display: grid;
+      gap: 14px;
+
+      p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--art-gray-700);
+      }
+    }
+
+    &__ocr-error {
+      display: grid;
+      gap: 4px;
+      padding: 12px;
+      margin-top: 12px;
+      color: var(--el-color-danger);
+      background: var(--el-color-danger-light-9);
+      border: 1px solid var(--el-color-danger-light-7);
+      border-radius: var(--art-control-radius);
+
+      strong {
+        font-size: 13px;
+      }
+
+      p,
+      span {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.5;
+      }
     }
   }
 

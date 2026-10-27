@@ -87,6 +87,7 @@
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { normalizeNullableNumber, normalizeNullableText } from '@/utils/form/normalize'
+  import { normalizeCoordinatePair } from '@/utils/geo'
 
   import type { FormRules } from 'element-plus'
   import { ElMessage } from 'element-plus'
@@ -438,7 +439,7 @@
 
     const longitude = normalizeNullableNumber(rest.longitude)
     const latitude = normalizeNullableNumber(rest.latitude)
-    const hasCoordinate = longitude !== null && latitude !== null
+    const hasCoordinate = normalizeCoordinatePair(longitude, latitude) !== null
 
     const payload: Partial<CustomerAddress> = {
       ...rest,
@@ -455,9 +456,12 @@
         ? rest.coordinateSystem || 'gcj02'
         : normalizeNullableText(rest.coordinateSystem),
       coordinateSource: normalizeNullableText(rest.coordinateSource),
-      coordinateStatus: hasCoordinate
-        ? rest.coordinateStatus || 'located'
-        : rest.coordinateStatus || 'pending',
+      coordinateStatus:
+        !hasCoordinate && rest.coordinateStatus === 'located'
+          ? 'unconfirmed'
+          : hasCoordinate && (!rest.coordinateStatus || rest.coordinateStatus === 'pending')
+            ? 'located'
+            : rest.coordinateStatus || 'pending',
       geocodeProvider: normalizeNullableText(rest.geocodeProvider),
       geocodedAt: normalizeNullableText(rest.geocodedAt)
     }
@@ -589,7 +593,7 @@
       height: 36px;
       color: var(--el-color-primary);
       background: var(--el-bg-color-overlay);
-      border-radius: 10px;
+      border-radius: var(--art-surface-radius);
     }
 
     &__composer {
@@ -604,7 +608,7 @@
         min-height: 148px;
         padding: 12px 13px 52px;
         line-height: 1.65;
-        border-radius: 10px;
+        border-radius: var(--art-surface-radius);
       }
     }
 

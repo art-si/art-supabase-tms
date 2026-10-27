@@ -61,6 +61,14 @@
         <ArtSvgIcon icon="ri:file-list-3-line" aria-hidden="true" />
         查看订单
       </ElButton>
+      <ElButton
+        v-if="detail.data?.driver?.id && !['cancelled', 'completed'].includes(detail.data.status)"
+        v-auth="'TmsWaybillDetail:OverrideCommission'"
+        @click="commissionDialogRef?.handleOpen(detail.data.id)"
+      >
+        <ArtSvgIcon icon="ri:money-cny-circle-line" aria-hidden="true" />
+        核对司机提成
+      </ElButton>
     </ArtPageHeader>
 
     <section v-if="detail.data" class="waybill-detail__overview art-card-xs">
@@ -113,6 +121,11 @@
       <ElTabs v-model="detail.activeTab" class="waybill-detail__tabs">
         <ElTabPane label="业务总览" name="overview">
           <WaybillInfoPanel :waybill="detail.data" @open-order="openOrderDetail" />
+          <WaybillReturnLegPanel
+            class="mt-4"
+            :waybill="detail.data"
+            @open-fees="detail.activeTab = 'fees'"
+          />
         </ElTabPane>
         <ElTabPane name="tracking">
           <template #label>
@@ -157,6 +170,7 @@
         </ElTabPane>
       </ElTabs>
     </section>
+    <WaybillCommissionDialog ref="commissionDialogRef" @success="loadDetail" />
   </ArtPageShell>
 </template>
 
@@ -175,8 +189,12 @@
   import WaybillOperationPanel from './modules/waybill-operation-panel.vue'
   import WaybillRoutePanel from './modules/waybill-route-panel.vue'
   import WaybillTrackingPanel from './modules/waybill-tracking-panel.vue'
+  import WaybillCommissionDialog from './modules/waybill-commission-dialog.vue'
+  import WaybillReturnLegPanel from './modules/waybill-return-leg-panel.vue'
 
   defineOptions({ name: 'TmsWaybillDetail' })
+
+  const commissionDialogRef = ref<{ handleOpen: (waybillId: string) => Promise<void> }>()
 
   type DetailTab = 'overview' | 'tracking' | 'operations' | 'documents' | 'route' | 'fees'
 

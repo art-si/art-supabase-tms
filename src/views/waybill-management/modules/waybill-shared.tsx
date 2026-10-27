@@ -18,6 +18,7 @@ import { canViewField, formatSensitiveNumber, mergeFieldAccessMaps } from '@/uti
 import { useUserStore } from '@/store/modules/user'
 import { useWebsiteConfig } from '@/hooks/core/useWebsiteConfig'
 import { useArtFeedback } from '@/hooks/core/useArtFeedback'
+import { formatTransferStationRoute } from '@tms/views/modules/transfer-station-route'
 import { printLoadedWaybill } from '../../modules/waybill-print'
 import {
   cancelAssignedWaybill,
@@ -185,7 +186,11 @@ const createWaybillExcelColumns = (context: WaybillListContext): ArtTableQueryEx
     : []),
   { key: 'originStation', title: '发货站' },
   { key: 'destinationStation', title: '到货站' },
-  { key: 'transferStation', title: '中转站' },
+  {
+    key: 'transferStation',
+    title: '中转站',
+    formatter: (value, row) => formatTransferStationRoute(row.transferStationNames, value)
+  },
   { key: 'dispatchPlateNo', title: '配载车辆' },
   { key: 'dispatchDriverName', title: '司机' },
   ...(canViewField(context.fieldAccess.value, 'driverPhone')
@@ -456,8 +461,9 @@ export const createWaybillColumns = (
     {
       prop: 'transferStation',
       label: '中转站',
-      width: 110,
-      formatter: (row) => row.transferStation || '-'
+      minWidth: 170,
+      showOverflowTooltip: true,
+      formatter: (row) => formatTransferStationRoute(row.transferStationNames, row.transferStation)
     },
     { prop: 'destinationStation', label: '到达站', width: 110, showOverflowTooltip: true },
     { prop: 'receivingContactName', label: '收货人', width: 110, showOverflowTooltip: true },
@@ -559,7 +565,7 @@ export const createWaybillColumns = (
           }
         ]
       : []),
-    { prop: 'createBy', label: '开单人', width: 110, showOverflowTooltip: true },
+    { prop: 'createdByName', label: '开单人', width: 110, showOverflowTooltip: true },
     {
       prop: 'createTime',
       label: '开单时间',
@@ -950,5 +956,11 @@ function handlePrint(context: WaybillListContext, row: WaybillRecord): void {
 }
 
 function formatRoute(row: WaybillRecord): string {
-  return [row.originStation, row.transferStation, row.destinationStation].filter(Boolean).join('-')
+  return [
+    row.originStation,
+    formatTransferStationRoute(row.transferStationNames, row.transferStation, ''),
+    row.destinationStation
+  ]
+    .filter(Boolean)
+    .join(' → ')
 }

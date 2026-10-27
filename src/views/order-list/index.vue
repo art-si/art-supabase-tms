@@ -86,6 +86,7 @@
   } from '@/utils/field-permission'
   import { useUserStore } from '@/store/modules/user'
   import { financeRouteNames } from '@/router/business-paths'
+  import { formatTransferStationRoute } from '@tms/views/modules/transfer-station-route'
   import {
     deleteOrder,
     deleteOrderBatch,
@@ -179,7 +180,11 @@
       : []),
     { key: 'originStation', title: '发货站' },
     { key: 'destinationStation', title: '到货站' },
-    { key: 'transferStation', title: '中转站' },
+    {
+      key: 'transferStation',
+      title: '中转站',
+      formatter: (value, row) => formatTransferStationRoute(row.transferStationNames, value)
+    },
     { key: 'orderStatus', title: '订单状态' },
     { key: 'paymentMethod', title: '付款方式' },
     ...(canViewOrderField('freightAmounts') ? [{ key: 'totalFee', title: '总运费' }] : []),
@@ -416,7 +421,8 @@
         prop: 'transferStation',
         label: '中转站',
         minWidth: 160,
-        formatter: (row) => row.transferStationNames?.join(' → ') || row.transferStation || '-'
+        formatter: (row) =>
+          formatTransferStationRoute(row.transferStationNames, row.transferStation)
       },
 
       {
@@ -500,7 +506,7 @@
   ])
 
   onActivated(() => {
-    void tableQueryRef.value?.getData()
+    void tableQueryRef.value?.refreshUpdate()
   })
 
   watch(

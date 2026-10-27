@@ -1,5 +1,5 @@
 <template>
-  <ArtDialog ref="dialogRef" size="lg" :loading="opening" :show-fullscreen-button="false">
+  <ArtDialog ref="dialogRef" size="lg" :loading="opening">
     <ArtAsyncState :error="loadError" @retry="loadOptions">
       <ArtForm
         ref="formRef"

@@ -1,14 +1,17 @@
 import { useSupabase } from '@/hooks/core/useSupabase'
+import { normalizeNullableText } from '@/utils/form/normalize'
 
 export interface ReturnTripCandidate {
   id: string
   waybillNo: string
   status: string
   orderId: string
+  tenantId: string
   hasReturnLeg: boolean
 }
 
 export interface ReturnTripInput {
+  returnCustomerId: string
   originStation: string
   destinationStation: string
   plannedDepartureAt: string | null
@@ -27,17 +30,91 @@ export interface ReturnTripInput {
 export interface ReturnTripSummary {
   waybillId: string
   waybillNo: string
-  forwardRevenue: number
-  returnRevenue: number
-  tripPlannedRevenue: number
-  returnDirectPlannedExpense: number
-  sharedApprovedToll: number
-  returnAllocatedToll: number
-  returnProjectedGrossProfit: number
-  returnProjectedMargin: number
+  forwardOriginStation: string | null
+  forwardDestinationStation: string | null
+  returnOriginStation: string | null
+  returnDestinationStation: string | null
+  returnCustomerName: string | null
+  returnLegId: string | null
+  forwardRevenue?: number | string | null
+  returnRevenue?: number | string | null
+  tripPlannedRevenue?: number | string | null
+  returnDirectPlannedExpense?: number | string | null
+  sharedApprovedToll?: number | string | null
+  returnAllocatedToll?: number | string | null
+  returnProjectedGrossProfit?: number | string | null
+  returnProjectedMargin?: number | string | null
+  returnActualRevenue?: number | string | null
+  returnActualCost?: number | string | null
+  returnActualGrossProfit?: number | string | null
+  actualAccountingStatus:
+    'pending_receivable' | 'approved_to_date' | 'partial_cost' | 'ambiguous_receivable'
   forwardCommissionEstimate: { amount?: number | null; matched?: boolean } | null
   returnCommissionEstimate: { amount?: number | null; matched?: boolean } | null
   accountingStatus: 'planned_only'
+}
+
+export interface ReturnProfitReportRow {
+  legId: string
+  waybillId: string
+  waybillNo: string
+  waybillStatus: string
+  tenantId: string
+  tenantName: string
+  returnCustomerName: string | null
+  originStation: string
+  destinationStation: string
+  departureAt: string
+  plateNo: string | null
+  driverName: string | null
+  sharedCostAllocationPct: number
+  plannedRevenue: number | string | null
+  plannedExpense: number | string | null
+  allocatedSharedToll: number | string | null
+  projectedGrossProfit: number | string | null
+  actualRevenue: number | string | null
+  actualCost: number | string | null
+  actualGrossProfit: number | string | null
+  accountingStatus: ReturnTripSummary['actualAccountingStatus']
+}
+
+export interface ReturnProfitReportResult {
+  records: ReturnProfitReportRow[]
+  total: number
+  summary: {
+    returnCount: number
+    approvedCount: number
+    pendingCount: number
+    projectedRevenue: number | null
+    projectedGrossProfit: number | null
+    approvedRevenueToDate: number | null
+    approvedCostToDate: number | null
+    approvedGrossProfitToDate: number | null
+    moneyVisible: boolean
+  }
+}
+
+export async function fetchReturnProfitReport(params: {
+  current?: number
+  size?: number
+  dates?: string[]
+  keyword?: string
+}): Promise<ReturnProfitReportResult> {
+  const current = Math.max(params.current ?? 1, 1)
+  const size = Math.max(params.size ?? 20, 1)
+  const result = await responseHandle<ReturnProfitReportResult>(
+    () =>
+      supabase.rpc('tms_return_profit_report_secure', {
+        p_offset: (current - 1) * size,
+        p_limit: size,
+        p_start_date: params.dates?.[0] || null,
+        p_end_date: params.dates?.[1] || null,
+        p_keyword: normalizeNullableText(params.keyword)
+      }),
+    { showErrorMessage: true }
+  )
+  if (result.error || !result.data) throw result.error ?? new Error('返程毛利报表不可用')
+  return result.data
 }
 
 const { supabase, responseHandle, keysToSnakeDeep } = useSupabase()

@@ -42,6 +42,19 @@
         </template>
       </ArtPageHeader>
 
+      <ElAlert
+        v-if="saveError"
+        class="mb-4"
+        :title="saveError"
+        type="error"
+        show-icon
+        :closable="false"
+      >
+        <ElButton type="danger" link :loading="page.saving" @click="handleSaveOnly">
+          重新保存
+        </ElButton>
+      </ElAlert>
+
       <div class="order-open__workflow" aria-label="填单模式">
         <div>
           <strong>{{ fillMode === 'guided' ? '按步骤填写' : '完整表单' }}</strong>
@@ -698,6 +711,7 @@
 
 <script setup lang="tsx">
   import { normalizeNullableNumber } from '@/utils/form/normalize'
+  import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
   import { normalizeCoordinatePair } from '@/utils/geo'
 
   import { getScrollBehavior } from '@/utils/ui/scroll'
@@ -1025,6 +1039,7 @@
     ),
     error: null
   })
+  const saveError = ref<string | null>(null)
 
   const form: UnwrapNestedRefs<FormGroup> = reactive<FormGroup>({
     data: createInitialForm(),
@@ -2352,6 +2367,7 @@
     const valid = await validateForms()
     if (!valid) return
 
+    saveError.value = null
     page.saving = true
     try {
       const payload = normalizePayload()
@@ -2368,8 +2384,11 @@
       }
       await recordAiOrderReview(savedOrderId)
       await router.push({ name: 'TmsPendingWaybillList' })
-    } catch {
-      // API 层已提示错误，页面保留当前输入。
+    } catch (error) {
+      saveError.value = getFriendlySupabaseErrorMessage(
+        error,
+        '开单未保存，请检查当前租户和关联资料后重试。'
+      )
     } finally {
       page.saving = false
     }

@@ -194,6 +194,7 @@
   import { formatCompactNumberValue } from '@/utils/ui/format'
   import { useUserStore } from '@/store/modules/user'
   import { fetchOrderDetail } from '@tms/api'
+  import { formatTransferStationRoute } from '@tms/views/modules/transfer-station-route'
   import OrderStatusSteps from '../modules/order-status-steps.vue'
 
   defineOptions({ name: 'TmsOrderDetail' })
@@ -413,7 +414,11 @@
   })
   const basicItems: ArtDescriptionItem<Partial<OrderRecord>>[] = [
     { key: 'orderNo', label: '订单号', field: 'orderNo', copyable: true },
-    { key: 'createBy', label: '开单人', field: 'createBy' },
+    {
+      key: 'createdByName',
+      label: '开单人',
+      value: (record: Partial<OrderRecord>) => record.createdByName || '—'
+    },
     { key: 'createTime', label: '开单时间', field: 'createTime', format: 'datetime' },
     { key: 'originStation', label: '发货站', field: 'originStation' },
     { key: 'destinationStation', label: '到货站', field: 'destinationStation' },
@@ -429,7 +434,12 @@
           }
         ]
       : []),
-    { key: 'transferStation', label: '中转站', field: 'transferStation' },
+    {
+      key: 'transferStation',
+      label: '中转站',
+      value: (record: Partial<OrderRecord>) =>
+        formatTransferStationRoute(record.transferStationNames, record.transferStation)
+    },
     {
       key: 'deliveryMethod',
       label: '配送方式',

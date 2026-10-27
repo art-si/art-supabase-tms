@@ -17,266 +17,318 @@
     />
 
     <template v-if="driver">
-      <div class="mt-4 grid min-w-0 gap-4">
-        <ArtSectionCard title="司机档案" subtitle="档案归属与驾驶资质">
-          <ArtDescriptions :data="driver" :items="profileItems" :columns="3" />
-        </ArtSectionCard>
+      <ElTabs v-model="activeTab" class="mt-4 min-w-0">
+        <ElTabPane label="总览" name="overview">
+          <div class="grid min-w-0 gap-4 pt-3">
+            <ArtSectionCard title="司机档案" subtitle="档案归属与驾驶资质">
+              <ArtDescriptions :data="driver" :items="profileItems" :columns="3" />
+            </ArtSectionCard>
 
-        <ArtSectionCard
-          title="风险关注"
-          subtitle="根据驾照有效期、当前页可见资质和待处理记录生成提醒"
-          :empty="!riskSignals.length"
-          empty-title="当前可见记录暂无提醒"
-          empty-description="无权限或尚未关联的数据不计入判断；请结合各区块的权限与分页状态核对。"
-        >
-          <div class="flex flex-wrap gap-2">
-            <ElTag
-              v-for="signal in riskSignals"
-              :key="signal.label"
-              :type="signal.type"
-              effect="light"
+            <ArtSectionCard
+              title="风险关注"
+              subtitle="根据驾照有效期、当前页可见资质和待处理记录生成提醒"
+              :empty="!riskSignals.length"
+              empty-title="当前可见记录暂无提醒"
+              empty-description="无权限或尚未关联的数据不计入判断；请结合各区块的权限与分页状态核对。"
             >
-              {{ signal.label }}
-            </ElTag>
+              <div class="flex flex-wrap gap-2">
+                <ElTag
+                  v-for="signal in riskSignals"
+                  :key="signal.label"
+                  :type="signal.type"
+                  effect="light"
+                >
+                  {{ signal.label }}
+                </ElTag>
+              </div>
+            </ArtSectionCard>
+
+            <ArtSectionCard
+              title="当前出车"
+              subtitle="已发车且尚未完成的车辆与订单，独立于下方历史记录分页"
+              :loading="currentRelationsLoading"
+              :error="currentRelationsError"
+              :empty="!currentRelations.length"
+              empty-title="当前暂无在运记录"
+              empty-description="新运单发车后，会在这里显示对应订单和车辆。"
+              @retry="loadCurrentRelations"
+            >
+              <div class="grid gap-3 lg:grid-cols-2">
+                <div
+                  v-for="relation in currentRelations"
+                  :key="relation.waybillId || relation.orderId"
+                  class="grid min-w-0 gap-3 rounded-[var(--el-border-radius-base)] bg-[var(--el-fill-color-light)] p-4 sm:grid-cols-2"
+                >
+                  <div class="min-w-0">
+                    <span class="text-xs text-[var(--el-text-color-secondary)]">运输订单</span>
+                    <BusinessRecordLink
+                      :label="relation.orderNo"
+                      :to="
+                        hasAuth('TmsOrderQuery:View')
+                          ? `/tms/order-query/detail/${relation.orderId}`
+                          : undefined
+                      "
+                      compact
+                    />
+                  </div>
+                  <div class="min-w-0">
+                    <span class="text-xs text-[var(--el-text-color-secondary)]">承运车辆</span>
+                    <BusinessRecordLink
+                      :label="relation.plateNo || '待分配'"
+                      :to="
+                        relation.vehicleId && hasAuth('VehicleQuery:View')
+                          ? `/vms/vehicle-query/detail/${relation.vehicleId}`
+                          : undefined
+                      "
+                      compact
+                    />
+                  </div>
+                </div>
+              </div>
+              <div
+                v-if="currentRelationTotal > currentRelationPageSize"
+                class="mt-4 flex justify-end"
+              >
+                <ElPagination
+                  v-model:current-page="currentRelationPage"
+                  :page-size="currentRelationPageSize"
+                  :total="currentRelationTotal"
+                  layout="total, prev, pager, next"
+                  @current-change="loadCurrentRelations"
+                />
+              </div>
+            </ArtSectionCard>
           </div>
-        </ArtSectionCard>
+        </ElTabPane>
 
-        <ArtSectionCard
-          title="当前出车"
-          subtitle="已发车且尚未完成的车辆与订单，独立于下方历史记录分页"
-          :loading="currentRelationsLoading"
-          :error="currentRelationsError"
-          :empty="!currentRelations.length"
-          empty-title="当前暂无在运记录"
-          empty-description="新运单发车后，会在这里显示对应订单和车辆。"
-          @retry="loadCurrentRelations"
-        >
-          <div class="grid gap-3 lg:grid-cols-2">
-            <div
-              v-for="relation in currentRelations"
-              :key="relation.waybillId || relation.orderId"
-              class="grid min-w-0 gap-3 rounded-[var(--el-border-radius-base)] bg-[var(--el-fill-color-light)] p-4 sm:grid-cols-2"
+        <ElTabPane label="档案与资质" name="profile" lazy>
+          <div class="grid min-w-0 gap-4 pt-3">
+            <ArtSectionCard
+              v-if="canViewField(driver.fieldAccess, 'identityDocuments')"
+              title="司机证件"
+              subtitle="仅展示有权查看的身份证和驾驶证影像"
+              :loading="documentPreviewLoading"
+              :error="documentPreviewError"
+              :empty="!documentImages.length"
+              empty-title="暂无证件影像"
+              :empty-description="documentEmptyDescription"
+              @retry="loadDocumentPreviews"
             >
-              <div class="min-w-0">
-                <span class="text-xs text-[var(--el-text-color-secondary)]">运输订单</span>
-                <BusinessRecordLink
-                  :label="relation.orderNo"
-                  :to="
-                    hasAuth('TmsOrderQuery:View')
-                      ? `/tms/order-query/detail/${relation.orderId}`
-                      : undefined
-                  "
-                  compact
-                />
+              <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div v-for="document in documentImages" :key="document.title" class="min-w-0">
+                  <div class="mb-2 text-sm font-medium">{{ document.title }}</div>
+                  <ArtUploadImage
+                    :model-value="document.url"
+                    :resource-tenant-id="driver.tenantId || ''"
+                    :title="document.title"
+                    :limit="1"
+                    readonly
+                  />
+                </div>
               </div>
-              <div class="min-w-0">
-                <span class="text-xs text-[var(--el-text-color-secondary)]">承运车辆</span>
-                <BusinessRecordLink
-                  :label="relation.plateNo || '待分配'"
-                  :to="
-                    relation.vehicleId && hasAuth('VehicleQuery:View')
-                      ? `/vms/vehicle-query/detail/${relation.vehicleId}`
-                      : undefined
-                  "
-                  compact
+            </ArtSectionCard>
+
+            <div class="grid min-w-0 gap-4 xl:grid-cols-2">
+              <ArtSectionCard
+                title="驾驶资质"
+                subtitle="关联员工档案中的资质与到期信息"
+                :loading="qualification.loading"
+                :error="qualification.error"
+                :empty="!qualification.records.length"
+                :empty-title="qualificationEmptyTitle"
+                :empty-description="qualificationEmptyDescription"
+                @retry="loadQualifications"
+              >
+                <ArtTable
+                  :data="qualification.records"
+                  :columns="qualificationColumns"
+                  :pagination="false"
+                  row-key="id"
                 />
-              </div>
+                <ElPagination
+                  v-if="qualification.total > qualificationPageSize"
+                  v-model:current-page="qualification.page"
+                  class="mt-4 flex justify-end"
+                  :page-size="qualificationPageSize"
+                  :total="qualification.total"
+                  layout="total, prev, pager, next"
+                  @current-change="loadQualifications"
+                />
+              </ArtSectionCard>
+
+              <ArtSectionCard
+                title="培训记录"
+                subtitle="关联员工档案中有权查看的职业培训"
+                :loading="training.loading"
+                :error="training.error"
+                :empty="!training.records.length"
+                :empty-title="trainingEmptyTitle"
+                :empty-description="trainingEmptyDescription"
+                @retry="loadTraining"
+              >
+                <ArtTable
+                  :data="training.records"
+                  :columns="trainingColumns"
+                  :pagination="false"
+                  row-key="id"
+                />
+              </ArtSectionCard>
             </div>
-          </div>
-          <div v-if="currentRelationTotal > currentRelationPageSize" class="mt-4 flex justify-end">
-            <ElPagination
-              v-model:current-page="currentRelationPage"
-              :page-size="currentRelationPageSize"
-              :total="currentRelationTotal"
-              layout="total, prev, pager, next"
-              @current-change="loadCurrentRelations"
-            />
-          </div>
-        </ArtSectionCard>
 
-        <ArtSectionCard
-          v-if="canViewField(driver.fieldAccess, 'identityDocuments')"
-          title="司机证件"
-          subtitle="仅展示有权查看的身份证和驾驶证影像"
-          :empty="!documentImages.length"
-          empty-title="暂无证件影像"
-          empty-description="请在司机资料中补充身份证或驾驶证影像。"
-        >
-          <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <div v-for="document in documentImages" :key="document.title" class="min-w-0">
-              <div class="mb-2 text-sm font-medium">{{ document.title }}</div>
-              <ArtUploadImage
-                :model-value="document.url"
-                :resource-tenant-id="driver.tenantId || ''"
-                :title="document.title"
-                :limit="1"
-                readonly
+            <DriverCompensationPanel v-if="driver.id" :driver-id="driver.id" />
+          </div>
+        </ElTabPane>
+
+        <ElTabPane label="承运订单与车辆明细" name="orders" lazy>
+          <div class="grid min-w-0 gap-4 pt-3">
+            <ArtSectionCard
+              title="关联车辆"
+              subtitle="档案分配关系；实际承运车辆以执行记录为准"
+              :empty="!driver.assignedVehicles?.length"
+              empty-title="暂无关联车辆"
+              empty-description="请在司机资料中维护车辆分配。"
+            >
+              <div class="flex flex-wrap gap-2">
+                <BusinessRecordLink
+                  v-for="vehicle in driver.assignedVehicles"
+                  :key="vehicle.id"
+                  :label="vehicle.plateNo"
+                  :to="
+                    hasAuth('VehicleQuery:View')
+                      ? `/vms/vehicle-query/detail/${vehicle.id}`
+                      : undefined
+                  "
+                />
+              </div>
+            </ArtSectionCard>
+
+            <ArtSectionCard
+              title="承运订单与车辆明细"
+              subtitle="按执行运单逐行展示，横向滚动查看全部字段。总运费取本车本司机的明确分配金额；未分配显示 —。订单总运费仅作参考，多车行不可求和。"
+              :loading="relationsLoading"
+              :error="relationsError"
+              :empty="!relations.length"
+              empty-title="暂无承运记录"
+              empty-description="该司机尚无可查看的执行运单。"
+              @retry="loadRelations"
+            >
+              <ElAlert
+                v-if="relations[0]?.detailsAvailable === false"
+                class="mb-3"
+                type="info"
+                show-icon
+                :closable="false"
+                title="当前仅可查看订单、车辆与司机的基础关联；地址、货物和金额需要运输订单详情或已配载运单查看权限。"
               />
-            </div>
+              <ArtTable
+                :data="relations"
+                :columns="visibleRelationColumns"
+                :pagination="false"
+                :row-key="relationRowKey"
+              />
+              <div v-if="relationTotal > relationPageSize" class="mt-4 flex justify-end">
+                <ElPagination
+                  v-model:current-page="relationPage"
+                  :page-size="relationPageSize"
+                  :total="relationTotal"
+                  layout="total, prev, pager, next"
+                  @current-change="loadRelations"
+                />
+              </div>
+            </ArtSectionCard>
           </div>
-        </ArtSectionCard>
+        </ElTabPane>
 
-        <div class="grid min-w-0 gap-4 xl:grid-cols-2">
-          <ArtSectionCard
-            title="驾驶资质"
-            subtitle="关联员工档案中的资质与到期信息"
-            :loading="qualification.loading"
-            :error="qualification.error"
-            :empty="!qualification.records.length"
-            :empty-title="qualificationEmptyTitle"
-            :empty-description="qualificationEmptyDescription"
-            @retry="loadQualifications"
-          >
-            <ArtTable
-              :data="qualification.records"
-              :columns="qualificationColumns"
-              :pagination="false"
-              row-key="id"
-            />
-            <ElPagination
-              v-if="qualification.total > qualificationPageSize"
-              v-model:current-page="qualification.page"
-              class="mt-4 flex justify-end"
-              :page-size="qualificationPageSize"
-              :total="qualification.total"
-              layout="total, prev, pager, next"
-              @current-change="loadQualifications"
-            />
-          </ArtSectionCard>
-
-          <ArtSectionCard
-            title="培训记录"
-            subtitle="关联员工档案中有权查看的职业培训"
-            :loading="training.loading"
-            :error="training.error"
-            :empty="!training.records.length"
-            :empty-title="trainingEmptyTitle"
-            :empty-description="trainingEmptyDescription"
-            @retry="loadTraining"
-          >
-            <ArtTable
-              :data="training.records"
-              :columns="trainingColumns"
-              :pagination="false"
-              row-key="id"
-            />
-          </ArtSectionCard>
-        </div>
-
-        <DriverCompensationPanel v-if="driver.id" :driver-id="driver.id" />
-
-        <ArtSectionCard
-          title="关联车辆"
-          subtitle="档案分配关系；实际承运车辆以执行记录为准"
-          :empty="!driver.assignedVehicles?.length"
-          empty-title="暂无关联车辆"
-          empty-description="请在司机资料中维护车辆分配。"
-        >
-          <div class="flex flex-wrap gap-2">
-            <BusinessRecordLink
-              v-for="vehicle in driver.assignedVehicles"
-              :key="vehicle.id"
-              :label="vehicle.plateNo"
-              :to="
-                hasAuth('VehicleQuery:View') ? `/vms/vehicle-query/detail/${vehicle.id}` : undefined
+        <ElTabPane label="风控记录" name="risk" lazy>
+          <div class="grid min-w-0 gap-4 pt-3 2xl:grid-cols-2">
+            <ArtSectionCard
+              title="违章扣分"
+              subtitle="仅统计已关联该司机且有权核对身份的车辆违章"
+              :loading="safety.violation.loading"
+              :error="safety.violation.error"
+              :empty="!safety.violation.records.length"
+              :empty-title="safety.violation.available ? '暂无关联违章' : '暂无查看权限'"
+              :empty-description="
+                safety.violation.available
+                  ? '关联司机身份的违章记录会显示在这里。'
+                  : '需获得车辆违章查看及司机身份字段权限。'
               "
+              @retry="loadSafety('violation')"
+            >
+              <ArtTable
+                :data="safety.violation.records"
+                :columns="violationColumns"
+                :pagination="false"
+                row-key="id"
+              />
+              <ElPagination
+                v-if="safety.violation.total > safetyPageSize"
+                v-model:current-page="safety.violation.page"
+                class="mt-4 flex justify-end"
+                :page-size="safetyPageSize"
+                :total="safety.violation.total"
+                layout="total, prev, pager, next"
+                @current-change="loadSafety('violation')"
+              />
+            </ArtSectionCard>
+
+            <ArtSectionCard
+              title="事故记录"
+              subtitle="仅统计已关联该司机且有权核对身份的车辆事故"
+              :loading="safety.accident.loading"
+              :error="safety.accident.error"
+              :empty="!safety.accident.records.length"
+              :empty-title="safety.accident.available ? '暂无关联事故' : '暂无查看权限'"
+              :empty-description="
+                safety.accident.available
+                  ? '关联司机身份的事故记录会显示在这里。'
+                  : '需获得车辆事故查看及司机信息字段权限。'
+              "
+              @retry="loadSafety('accident')"
+            >
+              <ArtTable
+                :data="safety.accident.records"
+                :columns="accidentColumns"
+                :pagination="false"
+                row-key="id"
+              />
+              <ElPagination
+                v-if="safety.accident.total > safetyPageSize"
+                v-model:current-page="safety.accident.page"
+                class="mt-4 flex justify-end"
+                :page-size="safetyPageSize"
+                :total="safety.accident.total"
+                layout="total, prev, pager, next"
+                @current-change="loadSafety('accident')"
+              />
+            </ArtSectionCard>
+          </div>
+        </ElTabPane>
+
+        <ElTabPane label="费用明细" name="costs" lazy>
+          <div class="grid min-w-0 gap-4 pt-3">
+            <MainlineCostsPanel v-if="driver.id" scope="driver" :record-id="driver.id" />
+            <DriverFinancePanel
+              v-if="driver.id"
+              :driver-id="driver.id"
+              :employee-linked="!!driver.employeeId"
+              kind="loan"
+            />
+            <DriverFinancePanel
+              v-if="driver.id"
+              :driver-id="driver.id"
+              :employee-linked="!!driver.employeeId"
+              kind="repayment"
+            />
+            <DriverFinancePanel
+              v-if="driver.id"
+              :driver-id="driver.id"
+              :employee-linked="!!driver.employeeId"
+              kind="reimbursement"
             />
           </div>
-        </ArtSectionCard>
-
-        <ArtSectionCard
-          title="承运订单与车辆"
-          subtitle="按执行运单关联；同一订单可有多车、多司机"
-          :loading="relationsLoading"
-          :error="relationsError"
-          :empty="!relations.length"
-          empty-title="暂无承运记录"
-          empty-description="该司机尚无可查看的执行运单。"
-          @retry="loadRelations"
-        >
-          <ArtTable
-            :data="relations"
-            :columns="relationColumns"
-            :pagination="false"
-            :row-key="relationRowKey"
-          />
-          <div v-if="relationTotal > relationPageSize" class="mt-4 flex justify-end">
-            <ElPagination
-              v-model:current-page="relationPage"
-              :page-size="relationPageSize"
-              :total="relationTotal"
-              layout="total, prev, pager, next"
-              @current-change="loadRelations"
-            />
-          </div>
-        </ArtSectionCard>
-
-        <div class="grid min-w-0 gap-4 2xl:grid-cols-2">
-          <ArtSectionCard
-            title="违章扣分"
-            subtitle="仅统计已关联该司机且有权核对身份的车辆违章"
-            :loading="safety.violation.loading"
-            :error="safety.violation.error"
-            :empty="!safety.violation.records.length"
-            :empty-title="safety.violation.available ? '暂无关联违章' : '暂无查看权限'"
-            :empty-description="
-              safety.violation.available
-                ? '关联司机身份的违章记录会显示在这里。'
-                : '需获得车辆违章查看及司机身份字段权限。'
-            "
-            @retry="loadSafety('violation')"
-          >
-            <ArtTable
-              :data="safety.violation.records"
-              :columns="violationColumns"
-              :pagination="false"
-              row-key="id"
-            />
-            <ElPagination
-              v-if="safety.violation.total > safetyPageSize"
-              v-model:current-page="safety.violation.page"
-              class="mt-4 flex justify-end"
-              :page-size="safetyPageSize"
-              :total="safety.violation.total"
-              layout="total, prev, pager, next"
-              @current-change="loadSafety('violation')"
-            />
-          </ArtSectionCard>
-
-          <ArtSectionCard
-            title="事故记录"
-            subtitle="仅统计已关联该司机且有权核对身份的车辆事故"
-            :loading="safety.accident.loading"
-            :error="safety.accident.error"
-            :empty="!safety.accident.records.length"
-            :empty-title="safety.accident.available ? '暂无关联事故' : '暂无查看权限'"
-            :empty-description="
-              safety.accident.available
-                ? '关联司机身份的事故记录会显示在这里。'
-                : '需获得车辆事故查看及司机信息字段权限。'
-            "
-            @retry="loadSafety('accident')"
-          >
-            <ArtTable
-              :data="safety.accident.records"
-              :columns="accidentColumns"
-              :pagination="false"
-              row-key="id"
-            />
-            <ElPagination
-              v-if="safety.accident.total > safetyPageSize"
-              v-model:current-page="safety.accident.page"
-              class="mt-4 flex justify-end"
-              :page-size="safetyPageSize"
-              :total="safety.accident.total"
-              layout="total, prev, pager, next"
-              @current-change="loadSafety('accident')"
-            />
-          </ArtSectionCard>
-        </div>
-
-        <MainlineCostsPanel v-if="driver.id" scope="driver" :record-id="driver.id" />
-      </div>
+        </ElTabPane>
+      </ElTabs>
     </template>
 
     <template #empty-action>
@@ -290,13 +342,19 @@
   import type { ColumnOption } from '@/types'
   import type { ArtDescriptionItem } from '@/components/core/base/art-descriptions/types'
   import ArtTable from '@/components/core/tables/art-table/index.vue'
+  import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import BusinessRecordLink from '@/components/business/business-record-link/index.vue'
   import MainlineCostsPanel from '@/components/business/mainline-costs-panel/index.vue'
   import DriverCompensationPanel from '../modules/driver-compensation-panel.vue'
+  import DriverFinancePanel from './modules/driver-finance-panel.vue'
   import { useAuth } from '@/hooks/core/useAuth'
-  import { canViewField } from '@/utils/field-permission'
+  import { canViewField, formatSensitiveNumberWithAffix } from '@/utils/field-permission'
+  import {
+    isPrivateAttachmentPath,
+    signPrivateAttachmentPaths
+  } from '@/utils/supabase/private-attachment'
   import { formatWithDayjs } from '@/utils/time'
   import {
     fetchDriverQualificationPage,
@@ -320,9 +378,13 @@
   const route = useRoute()
   const router = useRouter()
   const { hasAuth } = useAuth()
+  const activeTab = ref('overview')
   const driver = ref<Driver>()
   const driverLoading = ref(false)
   const driverError = ref<string | null>(null)
+  const documentPreviewUrls = ref<Map<string, string>>(new Map())
+  const documentPreviewLoading = ref(false)
+  const documentPreviewError = ref<string | null>(null)
   const relations = ref<TransportMainlineRelation[]>([])
   const currentRelations = ref<TransportMainlineRelation[]>([])
   const currentRelationTotal = ref(0)
@@ -382,12 +444,57 @@
     const current = driver.value
     if (!current || !canViewField(current.fieldAccess, 'identityDocuments')) return []
     return [
-      { title: '身份证正面', url: current.idCardFrontUrl },
-      { title: '身份证反面', url: current.idCardBackUrl },
-      { title: '驾驶证正面', url: current.driverLicenseFrontUrl },
-      { title: '驾驶证反面', url: current.driverLicenseBackUrl }
-    ].filter((item): item is { title: string; url: string } => Boolean(item.url))
+      { title: '身份证正面', path: current.idCardFrontUrl },
+      { title: '身份证反面', path: current.idCardBackUrl },
+      { title: '驾驶证正面', path: current.driverLicenseFrontUrl },
+      { title: '驾驶证反面', path: current.driverLicenseBackUrl }
+    ].flatMap((item) => {
+      const url =
+        item.path && isPrivateAttachmentPath(item.path)
+          ? documentPreviewUrls.value.get(item.path)
+          : null
+      return url ? [{ title: item.title, url }] : []
+    })
   })
+  const documentEmptyDescription = computed(() => {
+    const current = driver.value
+    if (!current) return '请在司机资料中补充身份证或驾驶证影像。'
+    const references = [
+      current.idCardFrontUrl,
+      current.idCardBackUrl,
+      current.driverLicenseFrontUrl,
+      current.driverLicenseBackUrl
+    ].filter(Boolean)
+    return references.some((value) => value && !isPrivateAttachmentPath(value))
+      ? '历史影像已隐藏，请在司机管理中上传私有影像替换。'
+      : '请在司机资料中补充身份证或驾驶证影像。'
+  })
+
+  const loadDocumentPreviews = async (): Promise<void> => {
+    const current = driver.value
+    documentPreviewUrls.value = new Map()
+    documentPreviewError.value = null
+    if (!current || !canViewField(current.fieldAccess, 'identityDocuments')) return
+    const paths = [
+      current.idCardFrontUrl,
+      current.idCardBackUrl,
+      current.driverLicenseFrontUrl,
+      current.driverLicenseBackUrl
+    ].filter((value): value is string => Boolean(value && isPrivateAttachmentPath(value)))
+    if (!paths.length) return
+    documentPreviewLoading.value = true
+    try {
+      const signed = await signPrivateAttachmentPaths('tms-driver-private', paths)
+      if (driver.value?.id !== current.id) return
+      documentPreviewUrls.value = signed
+      if (signed.size !== paths.length)
+        documentPreviewError.value = '部分证件影像预览不可用，请重试。'
+    } catch {
+      if (driver.value?.id === current.id) documentPreviewError.value = '证件影像预览失败，请重试。'
+    } finally {
+      if (driver.value?.id === current.id) documentPreviewLoading.value = false
+    }
+  }
 
   const qualificationEmptyTitle = computed(() => {
     if (!qualification.available) return '暂无查看权限'
@@ -478,10 +585,15 @@
     ]
   })
 
+  const executionKindLabels: Record<string, string> = {
+    single: '正向货配载',
+    merge: '合单',
+    split: '拆单'
+  }
   const relationColumns: ColumnOption<TransportMainlineRelation>[] = [
     {
       prop: 'orderNo',
-      label: '运输订单',
+      label: '运输订单号',
       minWidth: 180,
       fixed: 'left',
       formatter: (row) => (
@@ -498,7 +610,7 @@
     },
     {
       prop: 'waybillNo',
-      label: '执行运单',
+      label: '调度运单号',
       minWidth: 170,
       formatter: (row) => (
         <BusinessRecordLink
@@ -514,7 +626,7 @@
     },
     {
       prop: 'plateNo',
-      label: '承运车辆',
+      label: '车牌号',
       minWidth: 150,
       formatter: (row) => (
         <BusinessRecordLink
@@ -527,6 +639,55 @@
           compact
         />
       )
+    },
+    { prop: 'driverName', label: '司机', minWidth: 120, formatter: (row) => row.driverName || '—' },
+    {
+      prop: 'originStation',
+      label: '线路',
+      minWidth: 180,
+      formatter: (row) =>
+        row.originStation || row.destinationStation
+          ? `${row.originStation || '—'} → ${row.destinationStation || '—'}`
+          : '—'
+    },
+    {
+      prop: 'executionKind',
+      label: '调度方式',
+      minWidth: 130,
+      formatter: (row) =>
+        row.executionKind ? executionKindLabels[row.executionKind] || row.executionKind : '—'
+    },
+    {
+      prop: 'dispatchMode',
+      label: '调度对象',
+      minWidth: 150,
+      formatter: (row) =>
+        row.dispatchMode ? (
+          <span class="inline-flex items-center gap-1">
+            <ArtDictDisplay dictCode="tmsDispatchOperatorMode" value={row.dispatchMode} />
+            {row.dispatchTargetName ? <span>· {row.dispatchTargetName}</span> : null}
+          </span>
+        ) : (
+          row.dispatchTargetName || '—'
+        )
+    },
+    {
+      prop: 'shippingAddress',
+      label: '发货地址',
+      minWidth: 220,
+      formatter: (row) => row.shippingAddress || '—'
+    },
+    {
+      prop: 'receivingAddress',
+      label: '收货地址',
+      minWidth: 220,
+      formatter: (row) => row.receivingAddress || '—'
+    },
+    {
+      prop: 'orderCreatedAt',
+      label: '开单时间',
+      minWidth: 175,
+      formatter: (row) => (row.orderCreatedAt ? formatWithDayjs(row.orderCreatedAt) : '—')
     },
     {
       prop: 'waybillStatus',
@@ -541,12 +702,103 @@
       formatter: (row) => (row.departedAt ? formatWithDayjs(row.departedAt) : '—')
     },
     {
+      prop: 'arrivedAt',
+      label: '到达时间',
+      width: 175,
+      formatter: (row) => (row.arrivedAt ? formatWithDayjs(row.arrivedAt) : '—')
+    },
+    {
+      prop: 'signedAt',
+      label: '签收时间',
+      width: 175,
+      formatter: (row) => (row.signedAt ? formatWithDayjs(row.signedAt) : '—')
+    },
+    {
+      prop: 'receiptAt',
+      label: '回单时间',
+      width: 175,
+      formatter: (row) => (row.receiptAt ? formatWithDayjs(row.receiptAt) : '—')
+    },
+    {
+      prop: 'cargoType',
+      label: '货物类型',
+      minWidth: 140,
+      formatter: (row) => row.cargoType || '—'
+    },
+    {
+      prop: 'cargoQuantity',
+      label: '总数量',
+      width: 105,
+      formatter: (row) => row.cargoQuantity ?? '—'
+    },
+    {
+      prop: 'cargoVolumeM3',
+      label: '总体积(方)',
+      width: 120,
+      formatter: (row) => row.cargoVolumeM3 ?? '—'
+    },
+    {
+      prop: 'cargoWeightKg',
+      label: '总重量(KG)',
+      width: 130,
+      formatter: (row) => row.cargoWeightKg ?? '—'
+    },
+    {
+      prop: 'insuranceFee',
+      label: '保费',
+      width: 120,
+      formatter: (row) =>
+        formatSensitiveNumberWithAffix(row.insuranceFee, { prefix: '¥', emptyText: '—' })
+    },
+    {
+      prop: 'deliveryFee',
+      label: '配送费',
+      width: 120,
+      formatter: (row) =>
+        formatSensitiveNumberWithAffix(row.deliveryFee, { prefix: '¥', emptyText: '—' })
+    },
+    {
+      prop: 'unloadingFee',
+      label: '卸货费',
+      width: 120,
+      formatter: (row) =>
+        formatSensitiveNumberWithAffix(row.unloadingFee, { prefix: '¥', emptyText: '—' })
+    },
+    {
+      prop: 'orderTotalFee',
+      label: '订单总运费',
+      width: 140,
+      formatter: (row) =>
+        formatSensitiveNumberWithAffix(row.orderTotalFee, { prefix: '¥', emptyText: '—' })
+    },
+    {
+      prop: 'relationFreightAmount',
+      label: '总运费',
+      width: 130,
+      formatter: (row) =>
+        formatSensitiveNumberWithAffix(row.relationFreightAmount, { prefix: '¥', emptyText: '—' })
+    },
+    {
       prop: 'completedAt',
       label: '完成时间',
       width: 175,
       formatter: (row) => (row.completedAt ? formatWithDayjs(row.completedAt) : '—')
     }
   ]
+  const baseRelationColumnKeys = new Set([
+    'orderNo',
+    'waybillNo',
+    'plateNo',
+    'driverName',
+    'waybillStatus',
+    'departedAt',
+    'completedAt'
+  ])
+  const visibleRelationColumns = computed(() =>
+    relations.value[0]?.detailsAvailable === false
+      ? relationColumns.filter((column) => baseRelationColumnKeys.has(String(column.prop)))
+      : relationColumns
+  )
 
   const safetyVehicleColumn: ColumnOption<DriverSafetyRecord> = {
     prop: 'plateNo',
@@ -652,6 +904,7 @@
       if (result.error) throw result.error
       driver.value = result.data ?? undefined
       if (driver.value) {
+        void loadDocumentPreviews()
         void Promise.all([
           loadCurrentRelations(),
           loadRelations(),
@@ -792,6 +1045,7 @@
   watch(
     () => route.params.id,
     () => {
+      activeTab.value = 'overview'
       currentRelationPage.value = 1
       currentRelations.value = []
       currentRelationTotal.value = 0

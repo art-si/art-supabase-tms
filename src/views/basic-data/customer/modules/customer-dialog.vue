@@ -40,6 +40,7 @@
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { normalizeNullableNumber, normalizeNullableText } from '@/utils/form/normalize'
+  import { normalizeCoordinatePair } from '@/utils/geo'
 
   import type { FormRules } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
@@ -437,7 +438,7 @@
 
     const longitude = normalizeNullableNumber(rawPayload.longitude)
     const latitude = normalizeNullableNumber(rawPayload.latitude)
-    const hasCoordinate = longitude !== null && latitude !== null
+    const hasCoordinate = normalizeCoordinatePair(longitude, latitude) !== null
 
     const payload: Customer = {
       ...rawPayload,
@@ -451,9 +452,13 @@
         ? rawPayload.coordinateSystem || 'gcj02'
         : normalizeNullableText(rawPayload.coordinateSystem),
       coordinateSource: normalizeNullableText(rawPayload.coordinateSource),
-      coordinateStatus: hasCoordinate
-        ? rawPayload.coordinateStatus || 'located'
-        : rawPayload.coordinateStatus || 'pending',
+      coordinateStatus:
+        !hasCoordinate && rawPayload.coordinateStatus === 'located'
+          ? 'unconfirmed'
+          : hasCoordinate &&
+              (!rawPayload.coordinateStatus || rawPayload.coordinateStatus === 'pending')
+            ? 'located'
+            : rawPayload.coordinateStatus || 'pending',
       geocodeProvider: normalizeNullableText(rawPayload.geocodeProvider),
       geocodedAt: normalizeNullableText(rawPayload.geocodedAt)
     }

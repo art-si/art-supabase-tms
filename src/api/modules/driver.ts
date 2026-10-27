@@ -5,7 +5,6 @@ import { useSupabase } from '@/hooks/core/useSupabase'
 import { normalizeBooleanFilter, withRequestOptions } from '@/api/providers/supabase/query'
 import type { ApiFeedbackOptions, ApiRequestOptions } from '@/types/api/request'
 import type { QueryResult } from '@/types/api/response'
-import { loadAllDocumentPages } from '@/utils/business/document-detail-list'
 import { pickDefinedPayload } from './payload'
 
 type Driver = Api.Tms.BasicData.Driver
@@ -23,6 +22,8 @@ export interface DriverCertificateRecord {
   id: string
   certificateType: string
   certificateNo: string
+  issueDate: string | null
+  validFrom: string | null
   expiresOn: string
   responsibleName: string
   status: string
@@ -284,25 +285,18 @@ export async function fetchDriverAssignedVehicles(
   }
 
   try {
-    const data = await loadAllDocumentPages<DriverAssignedVehicle, { from?: number; to?: number }>(
-      ({ from = 0, to = 499 }) =>
-        responseHandle<DriverAssignedVehicle[]>(
-          () =>
-            withRequestOptions(
-              supabase
-                .from('mdm_vehicle')
-                .select('id, carrier_id, plate_no', { count: 'exact' })
-                .eq('carrier_id', carrierId)
-                .or(`primary_driver_id.eq.${driverId},secondary_driver_id.eq.${driverId}`)
-                .order('plate_no', { ascending: true })
-                .order('id')
-                .range(from, to),
-              options
-            ),
-          { showErrorMessage: true }
+    const result = await responseHandle<DriverAssignedVehicle[]>(
+      () =>
+        withRequestOptions(
+          supabase.rpc('vms_list_driver_assigned_vehicles_secure', {
+            p_driver_id: driverId,
+            p_carrier_id: carrierId || null
+          }),
+          options
         ),
-      {}
+      { showErrorMessage: false, breakReturn: true }
     )
+    const data = result.data ?? []
     return { data, total: data.length, error: null } satisfies QueryResult<DriverAssignedVehicle[]>
   } catch (error) {
     return { data: null, error } satisfies QueryResult<DriverAssignedVehicle[]>

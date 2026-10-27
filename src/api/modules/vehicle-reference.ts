@@ -22,6 +22,7 @@ export interface TmsVehicleOption {
   vin?: string
   selfNo?: string
   vehicleType?: string
+  vehicleTypeProfileId?: string | null
 }
 
 export interface TmsVehicleTypeProfile {
@@ -42,11 +43,11 @@ interface VehicleReferenceListPayload {
 const { supabase, responseHandle } = useSupabase()
 
 /** Tenant-scoped VMS catalog used for order vehicle specifications. */
-export async function fetchTmsVehicleTypeProfiles() {
+export async function fetchTmsVehicleTypeProfiles(tenantId?: string) {
   return await responseHandle<TmsVehicleTypeProfile[]>(
     () =>
       supabase.rpc('vms_list_vehicle_type_profiles_secure', {
-        p_tenant_id: null,
+        p_tenant_id: tenantId || null,
         p_vehicle_id: null,
         p_carrier_id: null,
         p_include_disabled: false
@@ -111,6 +112,20 @@ export async function fetchTmsVehicleOptions(
         }),
         options
       ),
+    { showErrorMessage: true }
+  )
+}
+
+/** Vehicle choices for one driver's tenant, including platform-all editing. */
+export async function fetchTmsDriverCommissionVehicleOptions(tenantId: string, ids?: string[]) {
+  return await responseHandle<TmsVehicleOption[]>(
+    () =>
+      supabase.rpc('vms_list_vehicle_archive_options_for_tenant_secure', {
+        p_tenant_id: tenantId,
+        p_plate_no: null,
+        p_ids: ids?.length ? ids : null,
+        p_max_rows: 1000
+      }),
     { showErrorMessage: true }
   )
 }

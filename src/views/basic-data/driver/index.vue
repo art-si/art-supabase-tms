@@ -268,7 +268,7 @@
     {
       prop: 'driverName',
       label: '姓名',
-      minWidth: 120,
+      minWidth: 180,
       formatter: (row) => (
         <BusinessRecordLink
           label={row.driverName || '未命名司机'}
@@ -314,7 +314,15 @@
       prop: 'gender',
       label: '性别',
       width: 90,
-      dict: { code: 'sex', display: 'text' }
+      formatter: (row) => {
+        const value = String(row.gender ?? '').trim()
+        if (value === 'male') return '男'
+        if (value === 'female') return '女'
+        return (
+          (genderOptions.value.find((option) => String(option.value) === value)?.label ?? value) ||
+          '-'
+        )
+      }
     },
     {
       prop: 'licenseType',

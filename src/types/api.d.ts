@@ -930,6 +930,7 @@ declare global {
         interface OrderRecord {
           id?: string
           tenantId?: string
+          createdByName?: string | null
           orderNo: string
           waybillNo?: string | null
           orderStatus?: string

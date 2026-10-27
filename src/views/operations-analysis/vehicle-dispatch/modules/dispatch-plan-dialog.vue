@@ -2,7 +2,6 @@
   <ArtDialog
     ref="dialogRef"
     size="md"
-    :show-fullscreen-button="false"
     :loading="loading"
     confirm-text="保存计划"
     @close="invalidate"

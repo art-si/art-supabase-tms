@@ -63,20 +63,26 @@ export {
 } from '@tms/api/modules/driver'
 export type { DriverCertificateRecord } from '@tms/api/modules/driver'
 export type { DriverInvitation } from '@tms/api/modules/driver'
-export { analyzeDriverDocumentByAi } from '@tms/api/modules/driver-document-ocr'
+export {
+  analyzeDriverDocumentByAi,
+  analyzeDriverDocumentLocally
+} from '@tms/api/modules/driver-document-ocr'
 export type {
   DriverDocumentImageSide,
   DriverDocumentOcrResult
 } from '@tms/api/modules/driver-document-ocr'
 export {
+  fetchDriverCommissionRevisions,
   fetchDriverCommissionRules,
   saveDriverCommissionRule
 } from '@tms/api/modules/driver-commission'
 export type {
+  DriverCommissionRevision,
   DriverCommissionRule,
   DriverCommissionMethod
 } from '@tms/api/modules/driver-commission'
 export {
+  fetchTmsDriverCommissionVehicleOptions,
   fetchTmsVehicleOptions,
   fetchTmsVehicleReferences,
   fetchTmsVehicleTypeProfiles

@@ -6,6 +6,7 @@
     :on-confirm="submit"
     confirm-text="保存返程配货"
     :confirm-loading="saving"
+    :confirm-disabled="!selectedWaybillId"
   >
     <div class="space-y-4">
       <div
@@ -28,9 +29,18 @@
         subtitle="选择本趟出车的运单；已有返程配货的任务不能重复添加。"
         preserve-content-structure
       >
-        <ElEmpty
+        <ArtEmptyState
           v-if="!candidates.length"
-          description="该订单暂无可关联的运输任务，请先完成调度。"
+          title="暂无可关联的运输任务"
+          description="请先完成该订单的调度。"
+          size="compact"
+        />
+        <ArtEmptyState
+          v-else-if="!eligibleCandidates.length"
+          title="暂无可新增返程的任务"
+          description="关联任务均已配返程或结束，不能重复添加。"
+          size="compact"
+          :visual-size="64"
         />
         <div v-else class="grid gap-2 sm:grid-cols-2">
           <button
@@ -43,9 +53,7 @@
                 ? 'border-[var(--el-color-primary)] bg-[var(--el-color-primary-light-9)]'
                 : 'border-[var(--el-border-color-light)] hover:border-[var(--el-color-primary-light-5)]'
             "
-            :disabled="
-              candidate.hasReturnLeg || ['cancelled', 'completed'].includes(candidate.status)
-            "
+            :disabled="!isCandidateEligible(candidate)"
             @click="selectedWaybillId = candidate.id"
           >
             <span class="block font-medium text-[var(--el-text-color-primary)]">
@@ -60,9 +68,17 @@
 
       <ArtSectionCard
         title="返程路线"
-        subtitle="从正向目的地接货，填写返程目的地、计划时间和单独里程。"
+        subtitle="选择返程结算客户，从正向目的地接货，填写返程目的地、计划时间和单独里程。"
         preserve-content-structure
       >
+        <ElAlert
+          v-if="!customerOptions.length"
+          title="当前租户暂无可用客户，请先在客户档案中新增或启用客户。"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="mb-4"
+        />
         <ArtForm
           ref="formRef"
           :model-value="form"
@@ -159,10 +175,12 @@
   import ArtDrawer from '@/components/core/drawers/art-drawer/index.vue'
   import type { ArtDrawerExpose } from '@/components/core/drawers/art-drawer/types'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
+  import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import { replaceReactiveModel } from '@/utils/form/model'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { normalizeNullableText } from '@/utils/form/normalize'
+  import { fetchCustomerOptions } from '@tms/api/modules/customer'
   import {
     createReturnTrip,
     fetchReturnSharedToll,
@@ -184,7 +202,10 @@
   const allocationMode = ref<'master' | 'allocate'>('master')
   const saving = ref(false)
   const sharedToll = ref(0)
+  const customerOptions = ref<Api.Tms.BasicData.CustomerOption[]>([])
+  const eligibleCandidates = computed(() => candidates.value.filter(isCandidateEligible))
   const form = reactive<ReturnTripInput>({
+    returnCustomerId: '',
     originStation: '',
     destinationStation: '',
     plannedDepartureAt: null,
@@ -206,7 +227,22 @@
     { key: 'directTollFee', label: '返程专属路桥费（元）' },
     { key: 'directMiscFee', label: '返程其他费用（元）' }
   ]
-  const routeFormItems: FormItem[] = [
+  const routeFormItems = computed<FormItem[]>(() => [
+    {
+      label: '返程结算客户',
+      key: 'returnCustomerId',
+      type: 'select',
+      span: 24,
+      props: {
+        options: customerOptions.value.map((customer) => ({
+          label: customer.customerName,
+          value: customer.id
+        })),
+        filterable: true,
+        placeholder: '请选择承担返程运费的客户',
+        class: '!w-full'
+      }
+    },
     {
       label: '始发地',
       key: 'originStation',
@@ -248,8 +284,9 @@
       type: 'number',
       props: { min: 0, precision: 3, controls: false, class: '!w-full' }
     }
-  ]
+  ])
   const rules: FormRules<ReturnTripInput> = {
+    returnCustomerId: [{ required: true, message: '请选择返程结算客户', trigger: 'change' }],
     originStation: [{ required: true, message: '请填写返程始发地', trigger: 'blur' }],
     destinationStation: [{ required: true, message: '请填写返程目的地', trigger: 'blur' }]
   }
@@ -264,6 +301,12 @@
   const projectedGrossProfit = computed(
     () => form.freightIncome - directExpense.value - allocatedToll.value
   )
+
+  function isCandidateEligible(candidate: ReturnTripCandidate): boolean {
+    return (
+      !candidate.hasReturnLeg && !['signed', 'cancelled', 'completed'].includes(candidate.status)
+    )
+  }
 
   watch(selectedWaybillId, async (waybillId) => {
     sharedToll.value = 0
@@ -284,6 +327,7 @@
     if (!row.id) return
     order.value = row
     Object.assign(form, {
+      returnCustomerId: '',
       originStation: row.destinationStation || '',
       destinationStation: row.originStation || '',
       plannedDepartureAt: null,
@@ -299,12 +343,20 @@
       remark: null
     })
     allocationMode.value = 'master'
-    candidates.value = await fetchReturnTripCandidates(String(row.id))
-    selectedWaybillId.value =
-      candidates.value.find(
-        (candidate) =>
-          !candidate.hasReturnLeg && !['cancelled', 'completed'].includes(candidate.status)
-      )?.id ?? ''
+    try {
+      candidates.value = await fetchReturnTripCandidates(String(row.id))
+      const targetTenantId = candidates.value[0]?.tenantId
+      if (!targetTenantId) {
+        customerOptions.value = []
+      } else {
+        const customers = await fetchCustomerOptions({ tenantId: targetTenantId })
+        if (customers.error) return
+        customerOptions.value = customers.data ?? []
+      }
+    } catch {
+      return
+    }
+    selectedWaybillId.value = eligibleCandidates.value[0]?.id ?? ''
     await drawerRef.value?.handleOpen(null, {
       title: '新增返程配货',
       subtitle: '一趟出车 · 正向货与返程货共用主运输任务'

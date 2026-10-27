@@ -11,9 +11,8 @@
       title="认证工作区"
       subtitle="资料变更保留独立申请记录，审核结果以服务端状态为准。"
       :loading="loading"
-      :error="loadError ? '认证资料加载失败' : null"
+      :error="loadError ? '请检查网络或权限后重试。' : null"
       error-title="认证资料加载失败"
-      error-description="请检查网络或权限后重试。"
       @retry="loadRecords"
     >
       <div v-if="canView" class="min-w-0">
@@ -110,7 +109,7 @@
           <ElAlert
             v-else-if="currentRecord.status === 'pending'"
             class="mt-4"
-            title="申请已提交，正在等待审核。资料变更将生成新的待审核申请。"
+            title="申请已提交，正在等待审核。审核完成后可发起资料变更。"
             type="info"
             show-icon
             :closable="false"
@@ -159,6 +158,12 @@
               </div>
             </div>
           </div>
+          <p
+            v-else-if="!canViewSensitive && activeSection !== 'e_signature'"
+            class="mt-5 text-xs text-[var(--el-text-color-secondary)]"
+          >
+            敏感证照附件仅供待审核申请的提交人和授权查看人员访问。
+          </p>
         </template>
         <ArtEmptyState
           v-else
@@ -487,6 +492,7 @@
   const { hasAuth } = useAuth()
   const canView = computed(() => hasAuth('TmsCompanyCertification:View'))
   const canSubmit = computed(() => canView.value && hasAuth('TmsCompanyCertification:Submit'))
+  const canViewSensitive = computed(() => hasAuth('TmsCompanyCertification:ViewSensitive'))
   const selectedTenantId = ref<string | null>(null)
   const records = ref<CertificationRequest[]>([])
   const loading = ref(false)

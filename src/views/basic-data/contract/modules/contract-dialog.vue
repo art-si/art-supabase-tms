@@ -104,7 +104,7 @@
     submitContractForApproval
   } from '@tms/api'
   import { useUserStore } from '@/store/modules/user'
-  import { getFileExtension } from '@/utils/file'
+  import { getFileExtension, removeAttachmentRow } from '@/utils/file'
   import { canEditField, canViewField, getFieldAccess } from '@/utils/field-permission'
   import { usesCarrierParty } from './contract-business-type'
   import ContractTransportDetails from './contract-transport-details.vue'
@@ -879,9 +879,7 @@
         type: 'warning',
         confirmButtonType: 'danger'
       })
-      form.data.attachments = (form.data.attachments ?? []).filter(
-        (item) => item.url !== row.url || item.name !== row.name
-      )
+      form.data.attachments = removeAttachmentRow(form.data.attachments ?? [], row)
     } catch {
       // 用户取消删除时无需提示。
     }

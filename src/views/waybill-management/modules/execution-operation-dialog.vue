@@ -645,7 +645,7 @@
       font-size: 24px;
       color: var(--el-color-primary);
       background: var(--el-color-primary-light-9);
-      border-radius: 16px;
+      border-radius: var(--art-surface-radius);
 
       &.is-signature {
         color: var(--el-color-success);

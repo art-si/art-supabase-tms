@@ -118,6 +118,6 @@
   }
 
   onActivated(() => {
-    void tableQueryRef.value?.getData()
+    void tableQueryRef.value?.refreshUpdate()
   })
 </script>
