@@ -25,6 +25,7 @@ export interface DriverCommissionRule {
   enabled: boolean
   remark: string
   versionNo?: number
+  notificationStatus?: 'unlinked' | 'notified' | 'confirmed'
 }
 
 export interface DriverCommissionRevision {
@@ -35,6 +36,10 @@ export interface DriverCommissionRevision {
   recordedAt: string
   actorName: string
   snapshot: Partial<DriverCommissionRule>
+  notificationStatus: 'unlinked' | 'notified' | 'confirmed'
+  notifiedAt: string | null
+  confirmedAt: string | null
+  canConfirm: boolean
 }
 
 const { supabase, keysToSnakeDeep, responseHandle } = useSupabase()
@@ -76,6 +81,29 @@ export async function fetchDriverCommissionRevisions(ruleId: string) {
     total: result.data?.total ?? 0,
     error: result.error
   }
+}
+
+export async function confirmDriverCommissionRevision(revisionId: string) {
+  return await responseHandle<{ revisionId: string; versionNo: number; confirmedAt: string }>(
+    () =>
+      supabase.rpc('tms_confirm_driver_commission_revision_secure', { p_revision_id: revisionId }),
+    { breakReturn: true }
+  )
+}
+
+export interface DriverCommissionNotificationResult {
+  total: number
+  notified: number
+  confirmed: number
+  unlinked: number
+  missingRevision: number
+}
+
+export async function notifyDriverCommissionRules(driverId: string) {
+  return await responseHandle<DriverCommissionNotificationResult>(
+    () => supabase.rpc('tms_notify_driver_commission_rules_secure', { p_driver_id: driverId }),
+    { breakReturn: true }
+  )
 }
 
 export async function saveDriverCommissionRule(id: string | null, payload: DriverCommissionRule) {

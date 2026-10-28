@@ -285,7 +285,7 @@
         title="关联与审计"
       >
         <div
-          v-if="waybill.order && waybill.sources?.length === 1"
+          v-if="waybill.order && (waybill.sources?.length ?? 0) <= 1"
           class="waybill-info-panel__order"
         >
           <div>
@@ -341,11 +341,11 @@
             <span>运单备注</span>
             <p>{{ waybill.remark || '无' }}</p>
           </div>
-          <div v-if="waybill.sources?.length === 1">
+          <div v-if="waybill.order && (waybill.sources?.length ?? 0) <= 1">
             <span>订单备注</span>
             <p>{{ waybill.order?.orderRemark || '无' }}</p>
           </div>
-          <div v-if="waybill.sources?.length === 1">
+          <div v-if="waybill.order && (waybill.sources?.length ?? 0) <= 1">
             <span>调度备注</span>
             <p>{{ waybill.order?.dispatchRemark || '无' }}</p>
           </div>
@@ -412,9 +412,12 @@
   const cargoQuantity = computed(
     () => props.waybill.cargoQuantity ?? props.waybill.order?.cargoQuantityTotal ?? '-'
   )
-  const cargoWeight = computed(() =>
-    formatUnit(props.waybill.cargoWeightTon ?? props.waybill.order?.cargoWeightTotal, 't')
-  )
+  const cargoWeight = computed(() => {
+    const weightTon = props.waybill.cargoWeightTon
+    if (weightTon != null) return formatUnit(weightTon, 't')
+    const weightKg = props.waybill.order?.cargoWeightTotal
+    return formatUnit(weightKg == null ? null : weightKg / 1000, 't')
+  })
   const cargoVolume = computed(() =>
     formatUnit(props.waybill.cargoVolumeM3 ?? props.waybill.order?.cargoVolumeTotal, 'm³')
   )

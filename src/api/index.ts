@@ -59,10 +59,13 @@ export {
   fetchDriverListByCarrierId,
   fetchDriverOptions,
   importDrivers,
-  fetchDriverProfile
+  fetchDriverProfile,
+  fetchDriverCertification,
+  reviewDriverCertification
 } from '@tms/api/modules/driver'
 export type { DriverCertificateRecord } from '@tms/api/modules/driver'
 export type { DriverInvitation } from '@tms/api/modules/driver'
+export type { DriverCertificationStatus } from '@tms/api/modules/driver'
 export {
   analyzeDriverDocumentByAi,
   analyzeDriverDocumentLocally
@@ -72,8 +75,10 @@ export type {
   DriverDocumentOcrResult
 } from '@tms/api/modules/driver-document-ocr'
 export {
+  confirmDriverCommissionRevision,
   fetchDriverCommissionRevisions,
   fetchDriverCommissionRules,
+  notifyDriverCommissionRules,
   saveDriverCommissionRule
 } from '@tms/api/modules/driver-commission'
 export type {

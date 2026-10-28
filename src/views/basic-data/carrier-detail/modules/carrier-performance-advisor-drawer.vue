@@ -451,6 +451,8 @@
 </script>
 
 <style scoped lang="scss">
+  @use '@/assets/styles/core/ai-surface-mixins' as ai;
+
   .carrier-advisor {
     min-width: 0;
 
@@ -692,14 +694,7 @@
     }
 
     &__metric-icon {
-      display: grid !important;
-      flex: 0 0 38px;
-      place-items: center;
-      width: 38px;
-      height: 38px;
-      color: var(--el-color-primary) !important;
-      background: var(--el-color-primary-light-9);
-      border-radius: var(--el-border-radius-base);
+      @include ai.metric-icon-badge;
 
       &.is-success {
         color: var(--el-color-success) !important;
@@ -853,15 +848,7 @@
     }
 
     &__risk-score {
-      display: grid;
-      flex: 0 0 36px;
-      place-items: center;
-      width: 36px;
-      height: 36px;
-      font-weight: 700;
-      color: var(--el-color-danger);
-      background: var(--el-color-danger-light-9);
-      border-radius: 50%;
+      @include ai.risk-score-badge;
     }
 
     &__waybill-meta {
@@ -916,14 +903,7 @@
         }
 
         > span {
-          display: grid;
-          place-items: center;
-          width: 28px;
-          height: 28px;
-          font-weight: 700;
-          color: var(--el-color-primary);
-          background: var(--el-color-primary-light-9);
-          border-radius: 50%;
+          @include ai.numbered-step-marker;
         }
 
         p {

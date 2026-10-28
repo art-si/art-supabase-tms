@@ -72,11 +72,12 @@ export function parseLocalDriverDocumentOcr(
 ): DriverDocumentOcrResult {
   const lines = linesFromOcr(rawText)
   const document: DriverDocumentOcrResult['document'] = {}
-  const identity = side === 'idCardFrontUrl' || side === 'idCardBackUrl'
+  const identityFront = side === 'idCardFrontUrl'
+  const identityBack = side === 'idCardBackUrl'
   const license = side.startsWith('driverLicense') || side === 'licenseBackExtraUrl'
   const qualification = side.startsWith('qualification')
 
-  if (identity) {
+  if (identityFront) {
     document.driverName = labeledValue(lines, '姓名')
     document.idCardNo =
       labeledValue(lines, '身份证号', '公民身份号码')?.match(/\d{17}[\dXx]/)?.[0] ?? null
@@ -84,6 +85,8 @@ export function parseLocalDriverDocumentOcr(
     document.ethnicity = labeledValue(lines, '民族')
     document.birthDate = normalizeDate(labeledValue(lines, '出生日期', '出生'))
     document.homeAddress = labeledValue(lines, '住址', '地址')
+  }
+  if (identityBack) {
     document.idCardIssuer = labeledValue(lines, '签发机关', '发证机关')
     const validPeriod = labeledValue(lines, '有效期限', '有效期')
     document.idCardValidFrom =

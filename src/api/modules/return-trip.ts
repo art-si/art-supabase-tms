@@ -8,6 +8,8 @@ export interface ReturnTripCandidate {
   orderId: string
   tenantId: string
   hasReturnLeg: boolean
+  hasForwardAllocation: boolean
+  canAddReturn: boolean
 }
 
 export interface ReturnTripInput {
@@ -142,7 +144,7 @@ export async function createReturnTrip(waybillId: string, input: ReturnTripInput
 export async function fetchReturnSharedToll(waybillId: string): Promise<number> {
   const result = await responseHandle<number>(
     () => supabase.rpc('tms_get_return_shared_toll_secure', { p_waybill_id: waybillId }),
-    { showErrorMessage: true }
+    { showErrorMessage: false }
   )
   if (result.error) throw result.error
   return Number(result.data ?? 0)

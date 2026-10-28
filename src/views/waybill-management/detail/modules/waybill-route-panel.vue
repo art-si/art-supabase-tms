@@ -579,9 +579,9 @@
     color: var(--el-text-color-primary);
     white-space: nowrap;
     background: var(--el-bg-color);
-    border: 1px solid var(--el-border-color-light);
+    border: 1px solid var(--art-floating-border);
     border-radius: var(--el-border-radius-small);
-    box-shadow: 0 4px 12px rgb(31 45 61 / 12%);
+    box-shadow: var(--art-floating-shadow);
   }
 
   :global(.waybill-route-marker b) {

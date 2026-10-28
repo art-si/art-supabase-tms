@@ -504,11 +504,14 @@
     {
       prop: 'executionKind',
       label: '调度方式',
-      minWidth: 125,
+      minWidth: 190,
+      showOverflowTooltip: true,
       formatter: (row) =>
         row.executionKind
-          ? ({ single: '正向货配载', merge: '合单', split: '拆单' }[row.executionKind] ??
-            '其他调度')
+          ? `${
+              { single: '正向货配载', merge: '合单', split: '拆单' }[row.executionKind] ??
+              '其他调度'
+            }${row.hasReturnLeg ? ' · 含返程配货' : ''}`
           : '—'
     },
     {

@@ -135,7 +135,7 @@
   })
 
   onMounted(async () => {
-    if (!initialCarrierId && !initialRecordId) return
+    if (!initialCarrierId && !initialRecordId && !route.query.invitationId) return
     await nextTick()
     await tableQueryRef.value?.getData()
     await openDeepLink()

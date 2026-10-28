@@ -140,6 +140,56 @@
           ><strong>{{ activeTabLabel }}</strong
           ><span>请核对后保存</span></div
         >
+        <div v-if="activeTab === 'other' && form.id" class="mb-4 flex flex-wrap items-center gap-3">
+          <ElAlert
+            v-if="certificationError"
+            class="min-w-0 flex-1"
+            type="error"
+            title="认证结果加载失败"
+            description="请重新加载审核状态后再操作。"
+            :closable="false"
+            show-icon
+          />
+          <ElAlert
+            v-else
+            class="min-w-0 flex-1"
+            :type="certification?.certified ? 'success' : 'warning'"
+            :title="
+              certificationLoading
+                ? '正在核对认证状态'
+                : certification?.required
+                  ? certification.certified
+                    ? '司机证件已审核通过'
+                    : '司机证件尚未通过审核'
+                  : '自营司机按现有流程管理'
+            "
+            :description="
+              certification?.reason ||
+              (certification?.required
+                ? '身份证、驾驶证和从业资格证均须通过审核后才能派单或接单。'
+                : '此司机不需要外部司机证件认证。')
+            "
+            :closable="false"
+            show-icon
+          />
+          <ElButton v-if="certificationError" @click="loadCertification">重新加载</ElButton>
+          <div v-else-if="canReviewCertification" class="flex shrink-0 items-center gap-2">
+            <ElButton
+              v-auth="'TmsDriver:Audit'"
+              type="primary"
+              plain
+              :disabled="certificationLoading || certification?.certified"
+              @click="openReviewDialog('approved')"
+              >审核通过</ElButton
+            >
+            <ElButton
+              v-auth="'TmsDriver:Audit'"
+              :disabled="certificationLoading || !hasVerifiedCertificate"
+              @click="openReviewDialog('revoked')"
+              >撤销认证</ElButton
+            >
+          </div>
+        </div>
         <ArtForm
           ref="formRef"
           :model-value="form"
@@ -182,6 +232,28 @@
       </div>
     </div>
   </ArtDialog>
+  <ArtDialog ref="certificationDialogRef" size="md" aria-label="司机证件审核">
+    <ElAlert
+      :type="reviewDecision === 'approved' ? 'info' : 'warning'"
+      :title="reviewDecision === 'approved' ? '核对原件后确认审核' : '撤销后司机不能再派单或接单'"
+      :description="
+        reviewDecision === 'approved'
+          ? '系统将核验证件影像、编号、有效期与在岗状态；资料变更后需重新审核。'
+          : '请说明撤销原因，审核记录将保留。'
+      "
+      :closable="false"
+      show-icon
+    />
+    <ElInput
+      v-model="reviewReason"
+      class="mt-4"
+      type="textarea"
+      :rows="3"
+      maxlength="500"
+      show-word-limit
+      :placeholder="reviewDecision === 'approved' ? '审核备注（可选）' : '填写撤销原因，至少六个字'"
+    />
+  </ArtDialog>
   <ArtDialog ref="ocrReviewDialogRef" size="lg" aria-label="司机证件识别结果">
     <div class="driver-dialog__ocr-review">
       <p>{{ ocrResult?.summary }}</p>
@@ -216,6 +288,7 @@
     ElAlert,
     ElButton,
     ElCheckbox,
+    ElInput,
     ElMessage,
     ElTabPane,
     ElTabs,
@@ -254,6 +327,8 @@
     fetchDriverDetail,
     fetchDriverEmployeeOptions,
     fetchDriverProfile,
+    fetchDriverCertification,
+    reviewDriverCertification,
     analyzeDriverDocumentByAi,
     analyzeDriverDocumentLocally
   } from '@tms/api'
@@ -262,6 +337,7 @@
     DriverDocumentImageSide,
     DriverDocumentOcrResult
   } from '@tms/api'
+  import type { DriverCertificationStatus } from '@tms/api'
   import DriverCommissionRules from './driver-commission-rules.vue'
   import { useUserStore } from '@/store/modules/user'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
@@ -329,8 +405,80 @@
       .map((tenant) => ({ label: tenant.tenantName, value: tenant.id }))
   ])
   const dialogRef = ref<ArtDialogExpose<Driver | undefined>>()
+  const certificationDialogRef = ref<ArtDialogExpose>()
+  const certification = ref<DriverCertificationStatus | null>(null)
+  const certificationLoading = ref(false)
+  const certificationError = ref(false)
+  const reviewDecision = ref<'approved' | 'revoked'>('approved')
+  const reviewReason = ref('')
   const router = useRouter()
   const { hasAuth } = useAuth()
+  const canReviewCertification = computed(
+    () =>
+      Boolean(form.id) &&
+      Boolean(certification.value?.required) &&
+      Boolean(certification.value?.canReview) &&
+      hasAuth('TmsDriver:Audit')
+  )
+  const hasVerifiedCertificate = computed(
+    () =>
+      certification.value?.identityStatus === 'verified' ||
+      certification.value?.licenseStatus === 'verified' ||
+      certification.value?.qualificationStatus === 'verified'
+  )
+  const loadCertification = async (): Promise<void> => {
+    if (!form.id) return
+    certificationLoading.value = true
+    certificationError.value = false
+    try {
+      const result = await fetchDriverCertification(String(form.id))
+      if (result.error || !result.data) throw result.error ?? new Error('认证结果为空')
+      certification.value = result.data
+    } catch (error) {
+      certification.value = null
+      certificationError.value = true
+      notifyFriendlyError(error, '司机认证结果加载失败，请重试')
+    } finally {
+      certificationLoading.value = false
+    }
+  }
+  const openReviewDialog = (decision: 'approved' | 'revoked'): void => {
+    if (!canReviewCertification.value) return
+    reviewDecision.value = decision
+    reviewReason.value = ''
+    void certificationDialogRef.value?.handleOpen(undefined, {
+      title: decision === 'approved' ? '审核司机证件' : '撤销司机认证',
+      subtitle: form.driverName,
+      confirmText: decision === 'approved' ? '确认审核通过' : '确认撤销',
+      onConfirm: async () => {
+        if (decision === 'revoked' && reviewReason.value.trim().length < 6) {
+          ElMessage.warning('请填写至少六个字的撤销原因')
+          return false
+        }
+        try {
+          const result = await reviewDriverCertification(
+            String(form.id),
+            decision,
+            reviewReason.value
+          )
+          if (result.error) throw result.error
+          const profile = await fetchDriverProfile(String(form.id))
+          if (profile.data) {
+            form.identityAuthStatus = profile.data.identityAuthStatus
+            form.licenseAuthStatus = profile.data.licenseAuthStatus
+            form.qualificationAuthStatus = profile.data.qualificationAuthStatus
+          }
+          await loadCertification()
+          emit('success', 'edit')
+          ElMessage.success(decision === 'approved' ? '司机证件审核通过' : '司机认证已撤销')
+          return true
+        } catch (error) {
+          notifyFriendlyError(error, '司机证件审核失败，请检查资料后重试')
+          return false
+        }
+      }
+    })
+  }
   const canViewCertificates = computed(
     () => hasAuth('TmsDriver:View') || hasAuth('TmsDriverQuery:View')
   )
@@ -382,6 +530,7 @@
   }
   const certificateStatusLabels: Record<string, string> = {
     valid: '有效',
+    due_3_months: '3 个月内到期',
     due_30: '30 天内到期',
     due_15: '15 天内到期',
     due_today: '今天到期',
@@ -421,7 +570,7 @@
             type:
               row.status === 'expired'
                 ? 'danger'
-                : ['due_30', 'due_15', 'due_today'].includes(row.status)
+                : ['due_3_months', 'due_30', 'due_15', 'due_today'].includes(row.status)
                   ? 'warning'
                   : row.status === 'handled'
                     ? 'info'
@@ -507,6 +656,12 @@
     if (!value || options.some((option) => String(option.value) === value)) return options
     const label = legacyGenderLabels[value]
     return label ? [...options, { label, value }] : options
+  })
+  const ethnicityOptions = computed(() => {
+    const options = getDictMap.value.hrEthnicity ?? []
+    const value = form.ethnicity
+    if (!value || options.some((option) => String(option.value) === value)) return options
+    return [...options, { label: value, value }]
   })
   const licenseTypeOptions = computed(() => getDictMap.value.tmsDriverLicenseType ?? [])
   const driverTypeOptions = computed(() => getDictMap.value.tmsDriverType ?? [])
@@ -887,6 +1042,7 @@
         ]
       : [],
     gender: [{ required: true, message: '请选择性别', trigger: 'change' }],
+    birthDate: [{ required: true, message: '请选择出生年月', trigger: 'change' }],
     licenseClasses: [
       { required: true, type: 'array', min: 1, message: '请选择准驾车型', trigger: 'change' }
     ],
@@ -1144,7 +1300,17 @@
       type: 'date',
       props: { type: 'date', valueFormat: 'YYYY-MM-DD', class: '!w-full' }
     },
-    { label: '民族', key: 'ethnicity', type: 'input', props: { maxlength: 30 } },
+    {
+      label: '民族',
+      key: 'ethnicity',
+      type: 'select',
+      props: {
+        options: ethnicityOptions.value,
+        clearable: true,
+        filterable: true,
+        placeholder: '请选择民族'
+      }
+    },
     {
       label: '住址',
       key: 'homeRegionCode',
@@ -1536,6 +1702,17 @@
     commissionRuleId?: string
   ): Promise<void> => {
     await resetForm()
+    try {
+      await userStore.ensureDictLoaded('hrEthnicity')
+    } catch (error) {
+      notifyFriendlyError(
+        error,
+        '民族选项暂不可用，可继续维护其他资料；稍后重开表单重试',
+        'warning'
+      )
+    }
+    certification.value = null
+    certificationError.value = false
     hiddenLegacyImages.clear()
     for (const key of imageKeys) delete originalImageReferences[key]
     const isEdit = Boolean(row?.id)
@@ -1605,6 +1782,7 @@
         notifyFriendlyError(error, '证件影像预览失败，仍可修改其他资料')
       }
       replaceForm(editForm)
+      await loadCertification()
     }
 
     if (initialTab) activeTab.value = initialTab

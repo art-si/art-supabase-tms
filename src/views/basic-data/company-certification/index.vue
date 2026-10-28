@@ -69,12 +69,17 @@
               >
             </p>
           </div>
-          <ElButton
-            v-if="canSubmit && currentRecord?.status !== 'pending'"
-            type="primary"
-            @click="openApplication"
-            >{{ currentRecord ? '变更申请' : '申请认证' }}</ElButton
-          >
+          <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <ElButton v-if="canReview && currentRecord?.status === 'pending'" @click="openReview"
+              >审核申请</ElButton
+            >
+            <ElButton
+              v-if="canSubmit && currentRecord?.status !== 'pending'"
+              type="primary"
+              @click="openApplication"
+              >{{ currentRecord ? '变更申请' : '申请认证' }}</ElButton
+            >
+          </div>
         </div>
 
         <div
@@ -110,6 +115,14 @@
             v-else-if="currentRecord.status === 'pending'"
             class="mt-4"
             title="申请已提交，正在等待审核。审核完成后可发起资料变更。"
+            type="info"
+            show-icon
+            :closable="false"
+          />
+          <ElAlert
+            v-else-if="currentRecord.status === 'approved' && isProviderSection"
+            class="mt-4"
+            title="申请资料已完成内部审核。钱包开户、身份验证或正式签章仍需等待外部服务结果；当前不代表认证已完成。"
             type="info"
             show-icon
             :closable="false"
@@ -164,6 +177,34 @@
           >
             敏感证照附件仅供待审核申请的提交人和授权查看人员访问。
           </p>
+          <div class="mt-6 border-t border-[var(--el-border-color-lighter)] pt-5">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h3 class="text-sm font-semibold text-[var(--el-text-color-primary)]">申请记录</h3>
+              <ElButton v-if="historyError" link type="primary" @click="loadHistory">重试</ElButton>
+            </div>
+            <p v-if="historyLoading" class="mt-3 text-sm text-[var(--el-text-color-secondary)]"
+              >正在读取申请记录…</p
+            >
+            <p v-else-if="historyError" class="mt-3 text-sm text-[var(--el-color-danger)]"
+              >申请记录加载失败，请重试。</p
+            >
+            <ol v-else class="mt-3 grid gap-2">
+              <li
+                v-for="entry in history"
+                :key="entry.id"
+                class="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--el-border-color-lighter)] px-3 py-2"
+              >
+                <span class="text-sm text-[var(--el-text-color-primary)]"
+                  >{{ formatWithDayjs(entry.submittedAt) }} ·
+                  {{ statusLabel(entry.status, false, entry.section) }}</span
+                >
+                <span class="text-xs text-[var(--el-text-color-secondary)]">{{
+                  entry.reviewNote ||
+                  (entry.reviewedAt ? `审核于 ${formatWithDayjs(entry.reviewedAt)}` : '待审核')
+                }}</span>
+              </li>
+            </ol>
+          </div>
         </template>
         <ArtEmptyState
           v-else
@@ -203,7 +244,12 @@
         :show-submit="false"
         class="certification-form"
       >
-        <ElFormItem v-if="tenantScope.isAllTenants" label="目标租户" required class="max-w-80">
+        <ElFormItem
+          v-if="tenantScope.isAllTenants && !currentRecord"
+          label="目标租户"
+          required
+          class="max-w-80"
+        >
           <ElSelect v-model="formTenantId" placeholder="请选择目标租户" filterable>
             <ElOption
               v-for="tenant in tenantScope.tenantOptions"
@@ -212,6 +258,9 @@
               :value="tenant.id"
             />
           </ElSelect>
+        </ElFormItem>
+        <ElFormItem v-else-if="tenantScope.isAllTenants" label="目标租户" class="max-w-80">
+          <ElInput :model-value="tenantLabel(formTenantId)" disabled />
         </ElFormItem>
 
         <template v-if="activeSection === 'enterprise'">
@@ -441,7 +490,45 @@
           <p class="text-xs text-[var(--el-text-color-secondary)]"
             >短信验证码与人脸认证需由签章服务提供；本页提交后状态仅为待审核。</p
           >
+          <ElCheckbox v-model="esigAcknowledged" class="mt-3! whitespace-normal!"
+            >我已知悉此处仅提交申请资料，正式电子签协议、身份核验和签章须在服务接入后另行完成。</ElCheckbox
+          >
         </template>
+      </ArtForm>
+    </ArtDialog>
+
+    <ArtDialog ref="reviewDialogRef" width="580px" :on-confirm="submitReview">
+      <ElAlert
+        class="mb-5"
+        title="本次操作只审核所选申请资料。开户与电子签的服务认证结果须由外部服务返回。"
+        type="info"
+        show-icon
+        :closable="false"
+      />
+      <ArtForm
+        :model-value="reviewForm"
+        :items="[]"
+        custom-layout
+        label-position="top"
+        :show-reset="false"
+        :show-submit="false"
+      >
+        <ElFormItem label="审核结果" required>
+          <ElRadioGroup v-model="reviewForm.decision">
+            <ElRadio value="approved">资料通过</ElRadio>
+            <ElRadio value="rejected">驳回申请</ElRadio>
+          </ElRadioGroup>
+        </ElFormItem>
+        <ElFormItem label="审核说明" :required="reviewForm.decision === 'rejected'">
+          <ElInput
+            v-model="reviewForm.note"
+            type="textarea"
+            :rows="3"
+            maxlength="500"
+            show-word-limit
+            placeholder="驳回时请写明需要补正的资料"
+          />
+        </ElFormItem>
       </ArtForm>
     </ArtDialog>
   </div>
@@ -465,9 +552,12 @@
   import BusinessWorkspaceHeader from '@/components/business/business-workspace-header/index.vue'
   import {
     fetchCompanyCertification,
+    fetchCompanyCertificationHistory,
+    reviewCompanyCertification,
     submitCompanyCertification,
     uploadCompanyCertificationAttachment,
     type CertificationPayloadBySection,
+    type CertificationHistoryEntry,
     type CertificationRequest,
     type CertificationSection,
     type CertificationStatus
@@ -492,14 +582,29 @@
   const { hasAuth } = useAuth()
   const canView = computed(() => hasAuth('TmsCompanyCertification:View'))
   const canSubmit = computed(() => canView.value && hasAuth('TmsCompanyCertification:Submit'))
+  const canReview = computed(
+    () => userStore.isPlatformSuper && hasAuth('TmsCompanyCertification:Review')
+  )
   const canViewSensitive = computed(() => hasAuth('TmsCompanyCertification:ViewSensitive'))
   const selectedTenantId = ref<string | null>(null)
   const records = ref<CertificationRequest[]>([])
   const loading = ref(false)
   const loadError = ref(false)
   const dialogRef = ref<ArtDialogExpose>()
+  const reviewDialogRef = ref<ArtDialogExpose>()
   const formTenantId = ref('')
   const submitting = ref(false)
+  const reviewing = ref(false)
+  const reviewRequestId = ref('')
+  const reviewForm = reactive<{ decision: 'approved' | 'rejected'; note: string }>({
+    decision: 'approved',
+    note: ''
+  })
+  const esigAcknowledged = ref(false)
+  const history = ref<CertificationHistoryEntry[]>([])
+  const historyLoading = ref(false)
+  const historyError = ref(false)
+  let historySequence = 0
 
   const uploadImage = (file: File) =>
     uploadCompanyCertificationAttachment(file, formTenantId.value, 'image')
@@ -562,14 +667,24 @@
       ? sectionRecords.value.find((item) => item.tenantId === readTenantId.value)
       : undefined
   )
+  const isProviderSection = computed(
+    () => activeSection.value === 'account' || activeSection.value === 'e_signature'
+  )
   const tenantLabel = (tenantId: string): string =>
     tenantScope.tenantOptions.find((item) => item.id === tenantId)?.tenantName || tenantId
 
-  function statusLabel(status?: CertificationStatus, effectiveCertified?: boolean): string {
+  function statusLabel(
+    status?: CertificationStatus,
+    effectiveCertified?: boolean,
+    section: CertificationSection = activeSection.value
+  ): string {
     if (effectiveCertified && status === 'pending') return '已认证 · 变更审核中'
     if (effectiveCertified && status === 'rejected') return '已认证 · 变更未通过'
     if (effectiveCertified) return '已认证'
-    if (status === 'approved') return '已认证'
+    if (status === 'approved')
+      return section === 'account' || section === 'e_signature'
+        ? '资料审核通过 · 待服务认证'
+        : '已认证'
     if (status === 'pending') return '审核中'
     if (status === 'rejected') return '未通过'
     return '未认证'
@@ -579,7 +694,7 @@
     effectiveCertified?: boolean
   ): 'success' | 'warning' | 'danger' | 'info' {
     if (effectiveCertified) return 'success'
-    if (status === 'approved') return 'success'
+    if (status === 'approved') return isProviderSection.value ? 'warning' : 'success'
     if (status === 'pending') return 'warning'
     if (status === 'rejected') return 'danger'
     return 'info'
@@ -599,7 +714,32 @@
       loading.value = false
     }
   }
+  async function loadHistory(): Promise<void> {
+    const sequence = ++historySequence
+    const tenantId = readTenantId.value
+    if (!tenantId || !canView.value) {
+      history.value = []
+      historyError.value = false
+      historyLoading.value = false
+      return
+    }
+    historyLoading.value = true
+    historyError.value = false
+    try {
+      const result = await fetchCompanyCertificationHistory(tenantId, activeSection.value)
+      if (result.error) throw result.error
+      if (sequence === historySequence) history.value = result.data ?? []
+    } catch (error) {
+      if (sequence === historySequence) {
+        historyError.value = true
+        notifyFriendlyError(error, '申请记录加载失败，请重试。')
+      }
+    } finally {
+      if (sequence === historySequence) historyLoading.value = false
+    }
+  }
   onMounted(() => void loadRecords())
+  watch([readTenantId, activeSection, canView], () => void loadHistory(), { immediate: true })
   watch(
     () => tenantScope.effectiveTenantId,
     () => {
@@ -693,15 +833,48 @@
 
   function openApplication(): void {
     Object.assign(forms, emptyForms())
+    esigAcknowledged.value = false
     // Sensitive identifiers may be masked by the read RPC; never resubmit them as if complete.
     const payload = currentRecord.value?.payload
     if (payload && activeSection.value === 'enterprise') {
       forms.enterprise.companyName = payload.companyName ?? ''
       forms.enterprise.shortName = payload.shortName ?? ''
       forms.enterprise.socialCreditCode = payload.socialCreditCode ?? ''
+      forms.enterprise.registeredCapital = payload.registeredCapital ?? ''
       forms.enterprise.legalRepresentative = payload.legalRepresentative ?? ''
+      forms.enterprise.businessLicenseExpiresOn = payload.businessLicenseExpiresOn ?? null
+      forms.enterprise.businessLicenseLongTerm = payload.businessLicenseLongTerm ?? false
+      forms.enterprise.legalIdExpiresOn = payload.legalIdExpiresOn ?? null
+      forms.enterprise.legalIdLongTerm = payload.legalIdLongTerm ?? false
+      forms.enterprise.invitationCode = payload.invitationCode ?? ''
+      forms.enterprise.legalAddress = payload.legalAddress ?? ''
+      forms.enterprise.businessLicenseUrl = payload.businessLicenseUrl ?? ''
+      forms.enterprise.idFrontUrl = payload.idFrontUrl ?? ''
+      forms.enterprise.idBackUrl = payload.idBackUrl ?? ''
+    } else if (payload && activeSection.value === 'authorization') {
+      forms.authorization.authorizerName = payload.authorizerName ?? ''
+      forms.authorization.authorizationUrl = payload.authorizationUrl ?? ''
+      forms.authorization.idFrontUrl = payload.idFrontUrl ?? ''
+      forms.authorization.idBackUrl = payload.idBackUrl ?? ''
+    } else if (payload && activeSection.value === 'account') {
+      forms.account.email = payload.email ?? ''
+      forms.account.openingPermitUrls = payload.openingPermitUrls ?? []
+      forms.account.agreementUrls = payload.agreementUrls ?? []
+    } else if (payload && activeSection.value === 'road_permit') {
+      forms.road_permit.operatorName = payload.operatorName ?? ''
+      forms.road_permit.permitNo = payload.permitNo ?? ''
+      forms.road_permit.expiresOn = payload.expiresOn ?? null
+      forms.road_permit.longTerm = payload.longTerm ?? false
+      forms.road_permit.permitImageUrl = payload.permitImageUrl ?? ''
+    } else if (payload && activeSection.value === 'e_signature') {
+      forms.e_signature.legalIsDelegate = payload.legalIsDelegate ?? true
+      forms.e_signature.companyName = payload.companyName ?? ''
+      forms.e_signature.socialCreditCode = payload.socialCreditCode ?? ''
+      forms.e_signature.legalName = payload.legalName ?? ''
+      forms.e_signature.authMethod = payload.authMethod ?? 'phone'
     }
     formTenantId.value =
+      currentRecord.value?.tenantId ||
       selectedTenantId.value ||
       tenantScope.effectiveTenantId ||
       userStore.getUserInfo.tenantId ||
@@ -710,6 +883,44 @@
       title: `${currentRecord.value ? '变更申请' : '申请认证'} · ${activeMeta.value.label}`,
       subtitle: '提交后进入待审核状态，原有审核结果不会被直接改写。'
     })
+  }
+
+  function openReview(): void {
+    if (!canReview.value || !currentRecord.value || currentRecord.value.status !== 'pending') return
+    reviewRequestId.value = currentRecord.value.id
+    reviewForm.decision = 'approved'
+    reviewForm.note = ''
+    void reviewDialogRef.value?.handleOpen(undefined, {
+      title: `审核申请 · ${activeMeta.value.label}`,
+      subtitle: currentRecord.value.tenantName || tenantLabel(currentRecord.value.tenantId),
+      confirmText: '确认审核'
+    })
+  }
+
+  async function submitReview(): Promise<boolean> {
+    if (reviewing.value || !canReview.value || !reviewRequestId.value) return false
+    if (reviewForm.decision === 'rejected' && reviewForm.note.trim().length < 5) {
+      ElMessage.warning('驳回时请填写至少5字的补正原因')
+      return false
+    }
+    reviewing.value = true
+    try {
+      const result = await reviewCompanyCertification(
+        reviewRequestId.value,
+        reviewForm.decision,
+        reviewForm.note.trim()
+      )
+      if (result.error) throw result.error
+      ElMessage.success(reviewForm.decision === 'approved' ? '申请资料审核通过' : '申请已驳回')
+      await loadRecords()
+      await loadHistory()
+      return true
+    } catch (error) {
+      notifyFriendlyError(error, '审核失败，请刷新申请状态后重试。')
+      return false
+    } finally {
+      reviewing.value = false
+    }
   }
 
   function valid(): boolean {
@@ -730,6 +941,18 @@
         !value.idBackUrl
       ) {
         ElMessage.warning('请填写企业信息并上传必需证件')
+        return false
+      }
+      if (!value.registeredCapital.trim() || !value.legalAddress.trim()) {
+        ElMessage.warning('请填写注册资本和法定代表人详细地址')
+        return false
+      }
+      if (!value.businessLicenseLongTerm && !value.businessLicenseExpiresOn) {
+        ElMessage.warning('请选择营业执照有效期或勾选长期有效')
+        return false
+      }
+      if (!value.legalIdLongTerm && !value.legalIdExpiresOn) {
+        ElMessage.warning('请选择法人身份证有效期或勾选长期有效')
         return false
       }
     } else if (activeSection.value === 'authorization') {
@@ -763,6 +986,10 @@
       }
     } else {
       const value = forms.e_signature
+      if (!esigAcknowledged.value) {
+        ElMessage.warning('请先确认已知悉电子签服务接入说明')
+        return false
+      }
       if (
         !value.companyName ||
         !value.socialCreditCode ||
@@ -786,6 +1013,7 @@
       if (result.error) throw result.error
       ElMessage.success('认证申请已提交，等待审核')
       await loadRecords()
+      await loadHistory()
       return true
     } catch (error) {
       notifyFriendlyError(error, '认证申请提交失败，请检查资料后重试。')

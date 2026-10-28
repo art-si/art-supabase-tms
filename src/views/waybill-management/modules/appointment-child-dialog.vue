@@ -1,5 +1,5 @@
 <template>
-  <ArtDialog ref="dialogRef" width="720px" :show-fullscreen-button="false">
+  <ArtDialog ref="dialogRef" width="720px">
     <div class="space-y-3">
       <p class="text-sm text-[var(--el-text-color-secondary)]">
         勾选本次预约对应的调度子单。已取消的运单不可选择。

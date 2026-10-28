@@ -2,6 +2,7 @@ import { buildSupabaseRpcRange } from '@/utils/supabase'
 import { toDateStartTimestamp, toDateEndTimestamp } from '@/utils/time/date-boundary'
 import { normalizeNullableText } from '@/utils/form/normalize'
 import { useSupabase } from '@/hooks/core/useSupabase'
+import { useTenantScopeStore } from '@/store/modules/tenant-scope'
 import { normalizeBooleanFilter, withRequestOptions } from '@/api/providers/supabase/query'
 import type { ApiFeedbackOptions, ApiRequestOptions } from '@/types/api/request'
 import type { QueryResult } from '@/types/api/response'
@@ -37,7 +38,19 @@ export interface DriverInvitation {
   carrierId: string | null
   status: 'pending' | 'profile_created'
   linkedDriverId: string | null
+  requestedByName: string | null
   requestedAt: string
+}
+
+export interface DriverCertificationStatus {
+  required: boolean
+  certified: boolean
+  reason: string | null
+  reviewedAt: string | null
+  identityStatus: string
+  licenseStatus: string
+  qualificationStatus: string
+  canReview: boolean
 }
 
 export interface DriverImportResult {
@@ -96,6 +109,11 @@ const DRIVER_PAYLOAD_KEYS = [
   'driverLicenseBackUrl',
   'remark'
 ] as const satisfies readonly (keyof Driver)[]
+
+const normalizeDriverProfileWrite = (profile: DriverProfile): DriverProfile => ({
+  ...profile,
+  qualificationType: normalizeNullableText(profile.qualificationType)
+})
 
 export async function fetchDriverEmployeeOptions(
   params: DriverEmployeeOptionParams,
@@ -195,6 +213,29 @@ export async function fetchDriverProfile(driverId: string) {
   )
 }
 
+export async function fetchDriverCertification(driverId: string) {
+  return await responseHandle<DriverCertificationStatus>(
+    () => supabase.rpc('tms_get_driver_certification_secure', { p_driver_id: driverId }),
+    { showErrorMessage: false }
+  )
+}
+
+export async function reviewDriverCertification(
+  driverId: string,
+  decision: 'approved' | 'revoked',
+  reason: string | null
+) {
+  return await responseHandle<{ driverId: string; decision: string }>(
+    () =>
+      supabase.rpc('tms_review_driver_certification_secure', {
+        p_driver_id: driverId,
+        p_decision: decision,
+        p_reason: normalizeNullableText(reason)
+      }),
+    { showErrorMessage: false, breakReturn: true }
+  )
+}
+
 export async function fetchDriverCertificates(driverId: string) {
   const result = await responseHandle<{ records: DriverCertificateRecord[]; total: number }>(
     () => supabase.rpc('tms_list_driver_certificates_secure', { p_driver_id: driverId }),
@@ -229,7 +270,7 @@ export async function createDriverInvitation(input: {
         p_phone: input.phone,
         p_driver_ownership: input.driverOwnership,
         p_carrier_id: input.carrierId,
-        p_target_tenant_id: null
+        p_target_tenant_id: useTenantScopeStore().effectiveTenantId
       }),
     { showMessage: true, breakReturn: true }
   )
@@ -310,7 +351,7 @@ export async function addDriver(params: DriverWritePayload) {
         p_payload: keysToSnakeDeep({
           ...pickDefinedPayload(params, DRIVER_PAYLOAD_KEYS),
           ...(params.tenantId ? { targetTenantId: params.tenantId } : {}),
-          ...(params.profile ? { profile: params.profile } : {})
+          ...(params.profile ? { profile: normalizeDriverProfileWrite(params.profile) } : {})
         })
       }),
     { showMessage: true, breakReturn: true }
@@ -327,7 +368,7 @@ export async function editDriver(params: DriverWritePayload) {
         p_id: id,
         p_payload: keysToSnakeDeep({
           ...pickDefinedPayload(data, DRIVER_PAYLOAD_KEYS),
-          ...(data.profile ? { profile: data.profile } : {})
+          ...(data.profile ? { profile: normalizeDriverProfileWrite(data.profile) } : {})
         })
       }),
     { showMessage: true, breakReturn: true }

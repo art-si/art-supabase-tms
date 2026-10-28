@@ -1197,6 +1197,8 @@
 </script>
 
 <style scoped lang="scss">
+  @use '../modules/price-edit-workflow' as priceWorkflow;
+
   .carrier-price-edit {
     min-height: 100%;
     padding: 8px;
@@ -1217,15 +1219,7 @@
     }
 
     &__workflow {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      padding: 0;
-      margin: 16px 0 24px;
-      overflow: hidden;
-      list-style: none;
-      background: var(--el-fill-color-extra-light);
-      border: 1px solid var(--el-border-color-lighter);
-      border-radius: var(--el-border-radius-base);
+      @include priceWorkflow.container;
     }
 
     &__workflow-step {
@@ -1241,16 +1235,16 @@
       }
 
       &.is-active {
-        background: var(--el-color-primary-light-9);
+        background: color-mix(in srgb, var(--theme-color) 10%, var(--default-box-color));
 
         .carrier-price-edit__workflow-index {
-          color: var(--theme-color);
+          color: color-mix(in srgb, var(--theme-color) 80%, var(--el-text-color-primary));
           background: var(--el-bg-color);
           border-color: var(--theme-color);
         }
 
         .carrier-price-edit__workflow-status {
-          color: var(--theme-color);
+          color: color-mix(in srgb, var(--theme-color) 80%, var(--el-text-color-primary));
         }
       }
 
@@ -1264,18 +1258,7 @@
     }
 
     &__workflow-index {
-      display: inline-flex;
-      grid-row: 1 / 3;
-      align-items: center;
-      justify-content: center;
-      width: 30px;
-      height: 30px;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--el-text-color-secondary);
-      background: var(--el-bg-color);
-      border: 1px solid var(--el-border-color);
-      border-radius: 50%;
+      @include priceWorkflow.index;
     }
 
     &__workflow-copy {
@@ -1309,7 +1292,7 @@
       align-self: start;
       font-size: 12px;
       line-height: 20px;
-      color: var(--el-text-color-placeholder);
+      color: var(--el-text-color-secondary);
       white-space: nowrap;
     }
 

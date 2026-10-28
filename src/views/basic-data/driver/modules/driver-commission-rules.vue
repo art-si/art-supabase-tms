@@ -3,9 +3,19 @@
     <div class="driver-commission__heading">
       <div>
         <strong>司机提成方案</strong>
-        <p>按车型、线路、方向和生效日期维护规则。每次调整会留下版本。</p>
+        <p>按车型、线路、方向和生效日期维护规则。每次调整会留下版本及司机确认状态。</p>
       </div>
-      <ElButton v-if="driverId && canEdit" type="primary" @click="openEditor()">新增方案</ElButton>
+      <div v-if="driverId" class="flex flex-wrap items-center justify-end gap-2">
+        <ElButton
+          v-if="canNotify"
+          :disabled="!rules.length || loading"
+          :loading="notifying"
+          @click="notifyRules"
+        >
+          批量通知司机
+        </ElButton>
+        <ElButton v-if="canEdit" type="primary" @click="openEditor()">新增方案</ElButton>
+      </div>
     </div>
     <div
       v-if="driverId && loadError"
@@ -83,6 +93,8 @@
   import {
     fetchDriverCommissionRevisions,
     fetchDriverCommissionRules,
+    confirmDriverCommissionRevision,
+    notifyDriverCommissionRules,
     fetchTmsDriverCommissionVehicleOptions,
     fetchTmsVehicleTypeProfiles,
     saveDriverCommissionRule,
@@ -95,11 +107,15 @@
   const { hasAuth } = useAuth()
   const canEdit = computed(() => hasAuth('TmsDriver:Edit'))
   const canView = computed(() => hasAuth('TmsDriver:View'))
+  const canConfirm = computed(() => hasAuth('TmsDriver:ConfirmCommission'))
+  const canNotify = computed(() => hasAuth('TmsDriver:NotifyCommission'))
   const rules = ref<DriverCommissionRule[]>([])
   const history = ref<DriverCommissionRevision[]>([])
   const historyRule = ref<DriverCommissionRule | null>(null)
   const historyLoading = ref(false)
   const historyError = ref(false)
+  const confirmingRevisionId = ref('')
+  const notifying = ref(false)
   const selectedHandled = ref('')
   const loading = ref(false)
   const loadError = ref(false)
@@ -340,6 +356,16 @@
     },
     { prop: 'versionNo', label: '版本', width: 70, formatter: (row) => `V${row.versionNo ?? 1}` },
     {
+      prop: 'notificationStatus',
+      label: '司机确认',
+      width: 105,
+      formatter: (row) => (
+        <ElTag type={confirmationTag(row.notificationStatus).type} effect="light">
+          {confirmationTag(row.notificationStatus).label}
+        </ElTag>
+      )
+    },
+    {
       prop: 'operation',
       label: '操作',
       width: 100,
@@ -403,12 +429,87 @@
     },
     { prop: 'actorName', label: '经办人', minWidth: 95 },
     {
+      prop: 'notificationStatus',
+      label: '司机确认',
+      width: 105,
+      formatter: (row) => (
+        <ElTag type={confirmationTag(row.notificationStatus).type} effect="light">
+          {confirmationTag(row.notificationStatus).label}
+        </ElTag>
+      )
+    },
+    {
+      prop: 'confirmedAt',
+      label: '确认时间',
+      minWidth: 165,
+      formatter: (row) => (row.confirmedAt ? formatDateTimeValue(row.confirmedAt) : '—')
+    },
+    {
+      prop: 'confirm',
+      label: '操作',
+      width: 112,
+      fixed: 'right',
+      formatter: (row) =>
+        row.canConfirm && canConfirm.value ? (
+          <ElButton
+            link
+            type="primary"
+            loading={confirmingRevisionId.value === row.id}
+            onClick={() => confirmRevision(row)}
+          >
+            确认本人方案
+          </ElButton>
+        ) : (
+          '—'
+        )
+    },
+    {
       prop: 'recordedAt',
       label: '记录时间',
       minWidth: 165,
       formatter: (row) => formatDateTimeValue(row.recordedAt)
     }
   ]
+
+  function confirmationTag(status?: DriverCommissionRevision['notificationStatus']): {
+    label: string
+    type: 'info' | 'warning' | 'success'
+  } {
+    if (status === 'confirmed') return { label: '已确认', type: 'success' }
+    if (status === 'notified') return { label: '待确认', type: 'warning' }
+    return { label: '待关联账号', type: 'info' }
+  }
+
+  async function confirmRevision(row: DriverCommissionRevision): Promise<void> {
+    if (!row.canConfirm || !canConfirm.value || confirmingRevisionId.value) return
+    confirmingRevisionId.value = row.id
+    try {
+      await confirmDriverCommissionRevision(row.id)
+      ElMessage.success('已确认本版提成方案')
+      await Promise.all([reloadHistory(), load()])
+    } catch (error) {
+      notifyFriendlyError(error, '提成方案确认失败，请刷新版本记录后重试')
+    } finally {
+      confirmingRevisionId.value = ''
+    }
+  }
+
+  async function notifyRules(): Promise<void> {
+    if (!props.driverId || !canNotify.value || notifying.value || !rules.value.length) return
+    notifying.value = true
+    try {
+      const result = await notifyDriverCommissionRules(props.driverId)
+      if (!result.data) throw new Error('通知结果未返回，请稍后重试')
+      const summary = `共 ${result.data.total} 条：已通知 ${result.data.notified} 条，已确认 ${result.data.confirmed} 条，待关联账号 ${result.data.unlinked} 条${result.data.missingRevision ? `，缺少版本记录 ${result.data.missingRevision} 条` : ''}。`
+      if (result.data.notified > 0) ElMessage.success(summary)
+      else ElMessage.warning(summary)
+      await load()
+    } catch (error) {
+      notifyFriendlyError(error, '司机提成通知失败，请稍后重试')
+    } finally {
+      notifying.value = false
+    }
+  }
 
   async function loadReferences(selectedVehicleId?: string | null): Promise<void> {
     const tenantId = props.tenantId
@@ -458,7 +559,7 @@
         const selected = rules.value.find((rule) => rule.id === props.selectedRuleId)
         if (selected) {
           selectedHandled.value = props.selectedRuleId
-          void openEditor(selected)
+          void openHistory(selected)
         }
       }
     } catch (error) {

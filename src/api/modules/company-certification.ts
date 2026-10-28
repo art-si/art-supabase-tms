@@ -95,6 +95,11 @@ export interface CertificationRequest {
   reviewNote: string | null
 }
 
+export type CertificationHistoryEntry = Omit<
+  CertificationRequest,
+  'effectiveCertified' | 'tenantName'
+>
+
 const { supabase, responseHandle } = useSupabase()
 
 export async function uploadCompanyCertificationAttachment(
@@ -199,6 +204,36 @@ export async function fetchCompanyCertification(tenantId: string | null) {
   )
   if (response.error || !response.data) return response
   return { ...response, data: await signReadableAttachments(response.data) }
+}
+
+export async function fetchCompanyCertificationHistory(
+  tenantId: string,
+  section: CertificationSection
+) {
+  return responseHandle<CertificationHistoryEntry[]>(
+    () =>
+      supabase.rpc('tms_list_company_certification_history_secure', {
+        p_tenant_id: tenantId,
+        p_section: section
+      }),
+    { showErrorMessage: false }
+  )
+}
+
+export async function reviewCompanyCertification(
+  requestId: string,
+  decision: 'approved' | 'rejected',
+  note: string
+) {
+  return responseHandle<CertificationRequest>(
+    () =>
+      supabase.rpc('tms_review_company_certification_secure', {
+        p_request_id: requestId,
+        p_decision: decision,
+        p_note: note
+      }),
+    { breakReturn: true }
+  )
 }
 
 export async function submitCompanyCertification<K extends CertificationSection>(

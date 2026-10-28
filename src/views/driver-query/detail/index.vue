@@ -439,6 +439,9 @@
   let requestId = 0
   let relationRequestId = 0
   let currentRelationRequestId = 0
+  const safetyRequestIds: Record<DriverSafetyKind, number> = { violation: 0, accident: 0 }
+  let qualificationRequestId = 0
+  let trainingRequestId = 0
 
   const documentImages = computed(() => {
     const current = driver.value
@@ -653,9 +656,14 @@
     {
       prop: 'executionKind',
       label: '调度方式',
-      minWidth: 130,
+      minWidth: 190,
+      showOverflowTooltip: true,
       formatter: (row) =>
-        row.executionKind ? executionKindLabels[row.executionKind] || row.executionKind : '—'
+        row.executionKind
+          ? `${executionKindLabels[row.executionKind] || row.executionKind}${
+              row.hasReturnLeg ? ' · 含返程配货' : ''
+            }`
+          : '—'
     },
     {
       prop: 'dispatchMode',
@@ -981,26 +989,29 @@
   const loadSafety = async (kind: DriverSafetyKind): Promise<void> => {
     const driverId = driver.value?.id
     if (!driverId) return
+    const current = ++safetyRequestIds[kind]
     const state = safety[kind]
     state.loading = true
     state.error = null
     try {
       const from = (state.page - 1) * safetyPageSize
       const result = await fetchDriverSafetyPage(driverId, kind, from, from + safetyPageSize - 1)
-      if (driver.value?.id !== driverId) return
+      if (current !== safetyRequestIds[kind] || driver.value?.id !== driverId) return
       state.records = result.data
       state.total = result.total
       state.available = result.available
     } catch {
-      if (driver.value?.id === driverId) state.error = '安全记录加载失败，请重试。'
+      if (current === safetyRequestIds[kind] && driver.value?.id === driverId)
+        state.error = '安全记录加载失败，请重试。'
     } finally {
-      if (driver.value?.id === driverId) state.loading = false
+      if (current === safetyRequestIds[kind] && driver.value?.id === driverId) state.loading = false
     }
   }
 
   const loadQualifications = async (): Promise<void> => {
     const driverId = driver.value?.id
     if (!driverId) return
+    const current = ++qualificationRequestId
     qualification.loading = true
     qualification.error = null
     try {
@@ -1010,32 +1021,37 @@
         from,
         from + qualificationPageSize - 1
       )
-      if (driver.value?.id !== driverId) return
+      if (current !== qualificationRequestId || driver.value?.id !== driverId) return
       qualification.records = result.data
       qualification.total = result.total
       qualification.available = result.available
       qualification.linkedEmployee = result.linkedEmployee
     } catch {
-      if (driver.value?.id === driverId) qualification.error = '司机资质加载失败，请重试。'
+      if (current === qualificationRequestId && driver.value?.id === driverId)
+        qualification.error = '司机资质加载失败，请重试。'
     } finally {
-      if (driver.value?.id === driverId) qualification.loading = false
+      if (current === qualificationRequestId && driver.value?.id === driverId)
+        qualification.loading = false
     }
   }
 
   const loadTraining = async (): Promise<void> => {
     const employeeId = driver.value?.employeeId
     if (!employeeId || !hasAuth('Hr:Employee:View')) return
+    const current = ++trainingRequestId
     training.loading = true
     training.error = null
     try {
       const result = await fetchDriverTrainingResult(employeeId)
-      if (driver.value?.employeeId !== employeeId) return
+      if (current !== trainingRequestId || driver.value?.employeeId !== employeeId) return
       training.records = result.data
       training.available = result.available
     } catch {
-      if (driver.value?.employeeId === employeeId) training.error = '培训记录加载失败，请重试。'
+      if (current === trainingRequestId && driver.value?.employeeId === employeeId)
+        training.error = '培训记录加载失败，请重试。'
     } finally {
-      if (driver.value?.employeeId === employeeId) training.loading = false
+      if (current === trainingRequestId && driver.value?.employeeId === employeeId)
+        training.loading = false
     }
   }
 
@@ -1050,6 +1066,10 @@
       currentRelations.value = []
       currentRelationTotal.value = 0
       currentRelationRequestId++
+      safetyRequestIds.violation++
+      safetyRequestIds.accident++
+      qualificationRequestId++
+      trainingRequestId++
       relationPage.value = 1
       relations.value = []
       relationRequestId++
@@ -1060,8 +1080,12 @@
       qualification.available = false
       qualification.linkedEmployee = false
       qualification.page = 1
+      qualification.loading = false
+      qualification.error = null
       training.records = []
       training.available = false
+      training.loading = false
+      training.error = null
       void loadDriver()
     },
     { immediate: true }

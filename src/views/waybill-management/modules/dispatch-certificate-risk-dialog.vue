@@ -1,5 +1,5 @@
 <template>
-  <ArtDialog ref="dialogRef" size="md" :show-fullscreen-button="false">
+  <ArtDialog ref="dialogRef" size="md">
     <div class="grid min-w-0 gap-4">
       <ElAlert
         title="证件已过期，当前配载已拦截"

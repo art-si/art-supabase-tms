@@ -6,7 +6,7 @@
     :on-confirm="submit"
     confirm-text="保存返程配货"
     :confirm-loading="saving"
-    :confirm-disabled="!selectedWaybillId"
+    :confirm-disabled="cannotSubmit"
   >
     <div class="space-y-4">
       <div
@@ -26,8 +26,12 @@
 
       <ArtSectionCard
         title="关联主运输任务"
-        subtitle="选择本趟出车的运单；已有返程配货的任务不能重复添加。"
+        subtitle="选择已分配正向货量的本趟主任务；每趟任务只可添加一条返程货单。"
+        :loading="optionsLoading"
+        :error="optionsError ? '请检查网络或权限后重试。' : null"
+        error-title="运输任务或客户加载失败"
         preserve-content-structure
+        @retry="loadOptions"
       >
         <ArtEmptyState
           v-if="!candidates.length"
@@ -35,34 +39,43 @@
           description="请先完成该订单的调度。"
           size="compact"
         />
-        <ArtEmptyState
-          v-else-if="!eligibleCandidates.length"
-          title="暂无可新增返程的任务"
-          description="关联任务均已配返程或结束，不能重复添加。"
-          size="compact"
-          :visual-size="64"
-        />
-        <div v-else class="grid gap-2 sm:grid-cols-2">
-          <button
-            v-for="candidate in candidates"
-            :key="candidate.id"
-            type="button"
-            class="rounded-lg border p-3 text-left transition-colors"
-            :class="
-              selectedWaybillId === candidate.id
-                ? 'border-[var(--el-color-primary)] bg-[var(--el-color-primary-light-9)]'
-                : 'border-[var(--el-border-color-light)] hover:border-[var(--el-color-primary-light-5)]'
-            "
-            :disabled="!isCandidateEligible(candidate)"
-            @click="selectedWaybillId = candidate.id"
-          >
-            <span class="block font-medium text-[var(--el-text-color-primary)]">
-              {{ candidate.waybillNo }}
-            </span>
-            <span class="mt-1 block text-xs text-[var(--el-text-color-secondary)]">
-              {{ candidate.hasReturnLeg ? '已有关联返程货单' : candidate.status }}
-            </span>
-          </button>
+        <div v-else>
+          <ElAlert
+            v-if="!eligibleCandidates.length"
+            title="当前没有可添加返程的主任务"
+            description="未配载任务请先完成正向派车配载；已有关联返程或已结束的任务不能重复添加。"
+            type="info"
+            :closable="false"
+            show-icon
+            class="mb-3"
+          />
+          <div class="grid gap-2 sm:grid-cols-2">
+            <button
+              v-for="candidate in candidates"
+              :key="candidate.id"
+              type="button"
+              class="rounded-lg border p-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--el-color-primary)]"
+              :class="
+                selectedWaybillId === candidate.id
+                  ? 'border-[var(--el-color-primary)] bg-[var(--el-color-primary-light-9)]'
+                  : candidate.canAddReturn
+                    ? 'border-[var(--el-border-color-light)] hover:border-[var(--el-color-primary-light-5)]'
+                    : 'cursor-not-allowed border-[var(--el-border-color-lighter)] bg-[var(--el-fill-color-light)]'
+              "
+              :disabled="!candidate.canAddReturn"
+              @click="selectedWaybillId = candidate.id"
+            >
+              <span class="block font-medium text-[var(--el-text-color-primary)]">
+                {{ candidate.waybillNo }}
+              </span>
+              <span class="mt-1 block text-xs text-[var(--el-text-color-secondary)]">
+                <span v-if="candidateUnavailableReason(candidate)">
+                  {{ candidateUnavailableReason(candidate) }}
+                </span>
+                <ArtDictDisplay v-else dict-code="tmsWaybillStatus" :value="candidate.status" />
+              </span>
+            </button>
+          </div>
         </div>
       </ArtSectionCard>
 
@@ -72,7 +85,7 @@
         preserve-content-structure
       >
         <ElAlert
-          v-if="!customerOptions.length"
+          v-if="!optionsLoading && !optionsError && !customerOptions.length"
           title="当前租户暂无可用客户，请先在客户档案中新增或启用客户。"
           type="warning"
           :closable="false"
@@ -107,6 +120,7 @@
               v-model="form[field.key]"
               class="w-full!"
               :min="0"
+              :max="9999999999.99"
               :precision="2"
               :controls="false"
             />
@@ -127,6 +141,20 @@
             <span class="text-sm text-[var(--el-text-color-secondary)]">% 分摊至返程</span>
           </div>
         </div>
+        <ElAlert
+          v-if="sharedTollError"
+          class="mt-4"
+          title="共用路桥费读取失败，暂不能准确预估分摊成本。"
+          type="warning"
+          :closable="false"
+          show-icon
+        >
+          <template #default>
+            <ElButton link type="primary" @click="loadSharedToll(selectedWaybillId)"
+              >重试读取</ElButton
+            >
+          </template>
+        </ElAlert>
         <div class="mt-5 grid gap-3 rounded-lg bg-[var(--el-fill-color-light)] p-4 sm:grid-cols-3">
           <div>
             <span class="text-xs text-[var(--el-text-color-secondary)]">返程运费收入</span>
@@ -201,9 +229,23 @@
   const selectedWaybillId = ref('')
   const allocationMode = ref<'master' | 'allocate'>('master')
   const saving = ref(false)
+  const optionsLoading = ref(false)
+  const optionsError = ref(false)
+  const sharedTollLoading = ref(false)
+  const sharedTollError = ref(false)
   const sharedToll = ref(0)
   const customerOptions = ref<Api.Tms.BasicData.CustomerOption[]>([])
-  const eligibleCandidates = computed(() => candidates.value.filter(isCandidateEligible))
+  const eligibleCandidates = computed(() =>
+    candidates.value.filter((candidate) => candidate.canAddReturn)
+  )
+  const cannotSubmit = computed(
+    () =>
+      !selectedWaybillId.value ||
+      optionsLoading.value ||
+      optionsError.value ||
+      sharedTollLoading.value ||
+      sharedTollError.value
+  )
   const form = reactive<ReturnTripInput>({
     returnCustomerId: '',
     originStation: '',
@@ -302,22 +344,30 @@
     () => form.freightIncome - directExpense.value - allocatedToll.value
   )
 
-  function isCandidateEligible(candidate: ReturnTripCandidate): boolean {
-    return (
-      !candidate.hasReturnLeg && !['signed', 'cancelled', 'completed'].includes(candidate.status)
-    )
+  function candidateUnavailableReason(candidate: ReturnTripCandidate): string | null {
+    if (candidate.hasReturnLeg) return '已有关联返程货单'
+    if (['signed', 'cancelled', 'completed'].includes(candidate.status)) return '任务已结束'
+    if (!candidate.hasForwardAllocation) return '请先完成正向派车配载'
+    return candidate.canAddReturn ? null : '当前任务不可添加返程'
   }
 
-  watch(selectedWaybillId, async (waybillId) => {
+  async function loadSharedToll(waybillId: string): Promise<void> {
     sharedToll.value = 0
     if (!waybillId) return
+    sharedTollLoading.value = true
+    sharedTollError.value = false
     try {
       const amount = await fetchReturnSharedToll(waybillId)
       if (selectedWaybillId.value === waybillId) sharedToll.value = amount
     } catch {
-      ElMessage.error('共用路桥费读取失败，请重试')
+      if (selectedWaybillId.value === waybillId) sharedTollError.value = true
+    } finally {
+      if (selectedWaybillId.value === waybillId) sharedTollLoading.value = false
     }
-  })
+  }
+
+  watch(selectedWaybillId, (waybillId) => void loadSharedToll(waybillId))
+  watch(cannotSubmit, (confirmDisabled) => drawerRef.value?.setOptions({ confirmDisabled }))
 
   function money(value: number): string {
     return Number(value || 0).toFixed(2)
@@ -343,24 +393,41 @@
       remark: null
     })
     allocationMode.value = 'master'
+    optionsLoading.value = true
+    optionsError.value = false
+    sharedTollLoading.value = false
+    sharedTollError.value = false
+    await drawerRef.value?.handleOpen(null, {
+      title: '新增返程配货',
+      subtitle: '一趟出车 · 正向货与返程货共用主运输任务'
+    })
+    await loadOptions()
+  }
+
+  async function loadOptions(): Promise<void> {
+    if (!order.value?.id) return
+    optionsLoading.value = true
+    optionsError.value = false
+    candidates.value = []
+    customerOptions.value = []
+    selectedWaybillId.value = ''
     try {
-      candidates.value = await fetchReturnTripCandidates(String(row.id))
+      candidates.value = await fetchReturnTripCandidates(String(order.value.id))
       const targetTenantId = candidates.value[0]?.tenantId
       if (!targetTenantId) {
         customerOptions.value = []
       } else {
         const customers = await fetchCustomerOptions({ tenantId: targetTenantId })
-        if (customers.error) return
+        if (customers.error) throw customers.error
         customerOptions.value = customers.data ?? []
       }
     } catch {
+      optionsError.value = true
       return
+    } finally {
+      optionsLoading.value = false
     }
     selectedWaybillId.value = eligibleCandidates.value[0]?.id ?? ''
-    await drawerRef.value?.handleOpen(null, {
-      title: '新增返程配货',
-      subtitle: '一趟出车 · 正向货与返程货共用主运输任务'
-    })
   }
 
   async function submit(): Promise<boolean> {

@@ -37,7 +37,7 @@ interface SecureTransportPayload<TRecord, TAccess> {
   waybillStatusCounts?: Record<string, number>
 }
 
-const { supabase, responseHandle } = useSupabase()
+const { supabase, responseHandle, keysToSnakeDeep } = useSupabase()
 
 const normalizeStatus = (value?: string): string | null =>
   value && value !== '__all__' ? value : null
@@ -96,8 +96,9 @@ export async function fetchSecureOrders<TRecord extends Api.Tms.Order.OrderRecor
     total: result.data?.total ?? 0,
     error: result.error,
     fieldAccess: result.data?.fieldAccess ?? {},
-    orderStatusCounts: result.data?.orderStatusCounts ?? {},
-    waybillStatusCounts: result.data?.waybillStatusCounts ?? {}
+    // Status values are database codes. Deep RPC key conversion also camel-cases map keys.
+    orderStatusCounts: keysToSnakeDeep(result.data?.orderStatusCounts ?? {}),
+    waybillStatusCounts: keysToSnakeDeep(result.data?.waybillStatusCounts ?? {})
   }
 }
 

@@ -1,14 +1,32 @@
 <template>
   <ArtDialog ref="dialogRef" size="md">
-    <div class="driver-invite__notice"
-      >填写手机号登记邀请请求。扫码注册、微信资料回填和证件自动审核需接入对应服务后启用。</div
-    >
+    <ElAlert
+      class="mb-4"
+      type="info"
+      show-icon
+      :closable="false"
+      title="先登记手机号，再补齐司机证件资料；扫码注册与微信资料回填将在服务接入后开放。"
+    />
     <div v-if="targetInvitation" class="driver-invite__target">
-      <strong>{{ targetInvitation.phone }}</strong>
-      <span>{{
-        targetInvitation.status === 'profile_created' ? '档案已建立，待认证' : '待登记'
-      }}</span>
-      <p>邀请请求已留痕；认证状态以司机档案和证件审核结果为准。</p>
+      <div class="driver-invite__target-header">
+        <strong>{{ targetInvitation.phone || '手机号已隐藏' }}</strong>
+        <ElTag
+          :type="targetInvitation.status === 'profile_created' ? 'success' : 'info'"
+          effect="light"
+        >
+          {{ targetInvitation.status === 'profile_created' ? '档案已建立' : '待补充档案' }}
+        </ElTag>
+      </div>
+      <dl class="driver-invite__facts">
+        <div
+          ><dt>邀请人</dt><dd>{{ targetInvitation.requestedByName || '暂无' }}</dd></div
+        >
+        <div
+          ><dt>登记时间</dt
+          ><dd>{{ formatWithDayjs(targetInvitation.requestedAt, 'YYYY-MM-DD HH:mm') }}</dd></div
+        >
+      </dl>
+      <p>证件认证以司机档案中的审核结果为准。</p>
     </div>
     <ArtForm
       v-else
@@ -25,11 +43,14 @@
     <div v-if="!targetInvitation" class="driver-invite__recent">
       <strong>最近邀请</strong>
       <span v-if="loading">加载中…</span>
-      <span v-else-if="error">加载失败，请重新打开弹窗。</span>
+      <div v-else-if="error" class="driver-invite__recent-row">
+        <span>邀请记录加载失败</span
+        ><ElButton link type="primary" @click="loadRecent">重试</ElButton>
+      </div>
       <span v-else-if="!recent.length">暂无邀请记录</span>
       <div v-for="item in recent" :key="item.id" class="driver-invite__recent-row">
-        <span>{{ item.phone }}</span>
-        <span>{{ item.status === 'profile_created' ? '档案已建立，待认证' : '待登记' }}</span>
+        <span>{{ item.phone || '手机号已隐藏' }} · {{ item.requestedByName || '邀请人未知' }}</span>
+        <span>{{ item.status === 'profile_created' ? '档案已建立' : '待补充档案' }}</span>
       </div>
     </div>
     <template #footer="{ loading: submitLoading, api }">
@@ -53,13 +74,14 @@
 </template>
 
 <script setup lang="ts">
-  import { ElButton, ElMessage, type FormRules } from 'element-plus'
+  import { ElAlert, ElButton, ElMessage, ElTag, type FormRules } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import { replaceReactiveModel } from '@/utils/form/model'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
+  import { formatWithDayjs } from '@/utils/time'
   import { useUserStore } from '@/store/modules/user'
   import {
     createDriverInvitation,
@@ -181,16 +203,6 @@
 
 <style scoped lang="scss">
   .driver-invite {
-    &__notice {
-      padding: 12px;
-      margin-bottom: 16px;
-      font-size: 12px;
-      line-height: 1.5;
-      color: var(--art-gray-700);
-      background: var(--art-gray-100);
-      border-radius: var(--art-surface-radius);
-    }
-
     &__recent {
       display: grid;
       gap: 8px;
@@ -212,13 +224,44 @@
 
     &__target {
       display: grid;
-      gap: 8px;
+      gap: 12px;
       font-size: 13px;
       color: var(--art-gray-800);
+
+      &-header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
 
       strong {
         font-size: 16px;
         color: var(--art-gray-900);
+      }
+
+      dl {
+        display: grid;
+        gap: 10px;
+        padding: 12px;
+        margin: 0;
+        background: var(--art-gray-100);
+        border-radius: var(--art-surface-radius);
+      }
+
+      dl div {
+        display: flex;
+        gap: 12px;
+        justify-content: space-between;
+      }
+
+      dt,
+      dd {
+        margin: 0;
+      }
+
+      dt {
+        color: var(--art-gray-600);
       }
 
       p {

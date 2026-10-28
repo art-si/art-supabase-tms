@@ -515,7 +515,7 @@ declare global {
           licenseValidFrom?: string | null
           licenseLongTerm?: boolean
           licenseBackExtraUrl?: string | null
-          qualificationType?: string
+          qualificationType?: string | null
           qualificationNo?: string
           qualificationValidTo?: string | null
           qualificationFrontUrl?: string | null

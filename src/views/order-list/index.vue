@@ -133,9 +133,11 @@
 
   const orderStatusTabValues = [
     'pending_load',
+    'partially_dispatched',
     'pending_order',
     'pending_pickup',
     'transporting',
+    'partially_signed',
     'signed',
     'completed',
     'cancelled'
@@ -488,7 +490,7 @@
     },
     {
       label: '待执行',
-      value: ['pending_load', 'pending_order', 'pending_pickup'].reduce(
+      value: ['pending_load', 'partially_dispatched', 'pending_order', 'pending_pickup'].reduce(
         (sum, status) => sum + (table.statusCounts[status] ?? 0),
         0
       ),

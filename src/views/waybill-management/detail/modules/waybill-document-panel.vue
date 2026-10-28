@@ -46,14 +46,14 @@
           <div class="waybill-document-panel__preview">
             <ElImage
               v-if="document.isImage"
-              :src="document.url"
+              :src="document.href"
               :alt="document.name"
               width="320"
               height="184"
               fit="cover"
               loading="lazy"
               :preview-src-list="imageUrls"
-              :initial-index="imageUrls.indexOf(document.url)"
+              :initial-index="imageUrls.indexOf(document.href)"
               preview-teleported
             >
               <template #error>
@@ -65,7 +65,7 @@
             </ElImage>
             <div v-else class="waybill-document-panel__file-preview">
               <ArtSvgIcon :icon="fileIcon(document.mimeType)" aria-hidden="true" />
-              <span>{{ fileExtension(document.name) }}</span>
+              <span>{{ getFileExtension(document.name).toUpperCase() || 'FILE' }}</span>
             </div>
             <ElTag class="waybill-document-panel__category" size="small" effect="dark">
               {{ document.categoryLabel }}
@@ -76,7 +76,8 @@
             <div>
               <strong :title="document.name">{{ document.name }}</strong>
               <ElLink
-                :href="document.url"
+                :href="document.href || undefined"
+                :disabled="!document.href"
                 target="_blank"
                 rel="noopener noreferrer"
                 type="primary"
@@ -85,6 +86,9 @@
               >
                 <ArtSvgIcon icon="ri:external-link-line" aria-hidden="true" />
               </ElLink>
+            </div>
+            <div v-if="!document.href" class="text-xs text-[var(--el-text-color-regular)]">
+              文件地址无效，请重新上传附件
             </div>
             <dl>
               <div
@@ -140,6 +144,8 @@
 
 <script setup lang="ts">
   import { formatSize } from '@/utils/file/format-size'
+  import { getAttachmentNameFromUrl, getFileExtension } from '@/utils/file/attachment'
+  import { resolveHttpUrl } from '@/utils/http-url'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import { uniqBy } from 'lodash-es'
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
@@ -152,6 +158,7 @@
 
   interface WaybillDocument {
     url: string
+    href: string
     name: string
     category: Exclude<DocumentCategory, 'all'>
     categoryLabel: string
@@ -194,7 +201,7 @@
       : documents.value.filter((item) => item.category === activeCategory.value)
   )
   const imageUrls = computed(() =>
-    documents.value.filter((item) => item.isImage).map((item) => item.url)
+    documents.value.filter((item) => item.isImage).map((item) => item.href)
   )
 
   const categorySummary = computed(() => [
@@ -346,13 +353,17 @@
 
   function createDocument(
     url: string,
-    meta: Partial<Omit<WaybillDocument, 'url' | 'name' | 'isImage'>> & { name?: string | null }
+    meta: Partial<Omit<WaybillDocument, 'url' | 'href' | 'name' | 'isImage'>> & {
+      name?: string | null
+    }
   ): WaybillDocument {
     const mimeType = meta.mimeType || null
     const category = meta.category ?? 'order'
-    const name = meta.name || filename(url)
+    const name = meta.name || getAttachmentNameFromUrl(url, '未命名附件')
+    const href = resolveHttpUrl(url, window.location.href) ?? ''
     return {
       url,
+      href,
       name,
       category,
       categoryLabel: meta.categoryLabel || categoryLabel(category),
@@ -363,7 +374,8 @@
       mimeType,
       remark: meta.remark,
       isImage:
-        Boolean(mimeType?.startsWith('image/')) || /\.(avif|gif|jpe?g|png|webp)(\?|$)/i.test(url)
+        Boolean(href) &&
+        (Boolean(mimeType?.startsWith('image/')) || /\.(avif|gif|jpe?g|png|webp)(\?|$)/i.test(href))
     }
   }
 
@@ -386,19 +398,6 @@
 
   function countCategory(category: Exclude<DocumentCategory, 'all'>): number {
     return documents.value.filter((item) => item.category === category).length
-  }
-
-  function filename(url: string): string {
-    const raw = url.split('?')[0]?.split('/').at(-1) || '未命名附件'
-    try {
-      return decodeURIComponent(raw)
-    } catch {
-      return raw
-    }
-  }
-
-  function fileExtension(name: string): string {
-    return name.includes('.') ? name.split('.').at(-1)?.toUpperCase() || 'FILE' : 'FILE'
   }
 
   function fileIcon(mimeType?: string | null): string {
