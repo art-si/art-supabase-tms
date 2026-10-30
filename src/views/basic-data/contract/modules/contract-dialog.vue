@@ -79,7 +79,8 @@
   import { normalizeNullableText } from '@/utils/form/normalize'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
-  import { notifyFriendlyError, useArtFeedback } from '@/hooks/core/useArtFeedback'
+  import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
+  import { useDraftAttachmentRemoval } from '@/hooks/core/useDraftAttachmentRemoval'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import { cloneDeep, omit } from 'lodash-es'
   import type { FormRules } from 'element-plus'
@@ -104,14 +105,12 @@
     submitContractForApproval
   } from '@tms/api'
   import { useUserStore } from '@/store/modules/user'
-  import { getFileExtension, removeAttachmentRow } from '@/utils/file'
+  import { getFileExtension } from '@/utils/file'
   import { canEditField, canViewField, getFieldAccess } from '@/utils/field-permission'
   import { usesCarrierParty } from './contract-business-type'
   import ContractTransportDetails from './contract-transport-details.vue'
 
   defineOptions({ name: 'TmsContractDialog' })
-
-  const { confirmAction } = useArtFeedback()
 
   type Contract = Api.Tms.BasicData.Contract
   type ContractAttachment = Api.Tms.BasicData.ContractAttachment
@@ -870,20 +869,14 @@
     ElMessage.success('附件已添加')
   }
 
-  const removeAttachment = async (row: ContractAttachment): Promise<void> => {
-    if (!canEditSensitiveField('attachments')) return
-    try {
-      await confirmAction(`确定删除附件“${row.name}”吗？`, '删除确认', {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-        confirmButtonType: 'danger'
-      })
-      form.data.attachments = removeAttachmentRow(form.data.attachments ?? [], row)
-    } catch {
-      // 用户取消删除时无需提示。
-    }
-  }
+  const removeAttachment = useDraftAttachmentRemoval<ContractAttachment>({
+    getAttachments: () => form.data.attachments,
+    setAttachments: (rows) => {
+      form.data.attachments = rows
+    },
+    canRemove: () => canEditSensitiveField('attachments'),
+    getContext: () => [form.data.id, form.data.tenantId]
+  })
 
   defineExpose({
     handleOpen,

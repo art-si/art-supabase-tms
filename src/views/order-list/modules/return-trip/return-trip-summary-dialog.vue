@@ -118,8 +118,8 @@
             ><strong>{{ commission(summary.forwardCommissionEstimate) }}</strong></div
           >
           <div class="flex justify-between gap-4"
-            ><span>返程司机提成预估</span
-            ><strong>{{ commission(summary.returnCommissionEstimate) }}</strong></div
+            ><span>返程司机最终提成预估（计入毛利）</span
+            ><strong>{{ amount(summary.returnPlannedCommission) }}</strong></div
           >
         </div>
       </ArtSectionCard>
@@ -157,9 +157,13 @@
     { label: '正向货预计收入', value: summary.value?.forwardRevenue },
     { label: '返程货预计收入', value: summary.value?.returnRevenue },
     { label: '本趟合计预计收入', value: summary.value?.tripPlannedRevenue },
-    { label: '返程预计费用', value: summary.value?.returnDirectPlannedExpense },
+    { label: '返程专属预计费用', value: summary.value?.returnDirectPlannedExpense },
     { label: '返程分摊共用费用', value: summary.value?.returnAllocatedToll },
-    { label: '返程预计毛利', value: summary.value?.returnProjectedGrossProfit, emphasis: true }
+    {
+      label: '返程预计毛利（已扣提成）',
+      value: summary.value?.returnProjectedGrossProfit,
+      emphasis: true
+    }
   ])
 
   const hasApprovedActual = computed(

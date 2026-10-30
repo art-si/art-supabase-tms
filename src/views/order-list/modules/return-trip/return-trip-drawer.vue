@@ -7,6 +7,7 @@
     confirm-text="保存返程配货"
     :confirm-loading="saving"
     :confirm-disabled="cannotSubmit"
+    @close="invalidatePreview"
   >
     <div class="space-y-4">
       <div
@@ -155,7 +156,9 @@
             >
           </template>
         </ElAlert>
-        <div class="mt-5 grid gap-3 rounded-lg bg-[var(--el-fill-color-light)] p-4 sm:grid-cols-3">
+        <div
+          class="mt-5 grid gap-3 rounded-lg bg-[var(--el-fill-color-light)] p-4 sm:grid-cols-2 lg:grid-cols-4"
+        >
           <div>
             <span class="text-xs text-[var(--el-text-color-secondary)]">返程运费收入</span>
             <strong class="mt-1 block text-lg">¥{{ money(form.freightIncome) }}</strong>
@@ -165,21 +168,49 @@
             <strong class="mt-1 block text-lg">¥{{ money(directExpense) }}</strong>
           </div>
           <div>
+            <span class="text-xs text-[var(--el-text-color-secondary)]">返程司机提成预估</span>
+            <strong class="mt-1 block text-lg">
+              {{ previewMoney(preview?.amount) }}
+            </strong>
+          </div>
+          <div>
             <span class="text-xs text-[var(--el-text-color-secondary)]">返程预计毛利</span>
             <strong class="mt-1 block text-lg text-[var(--el-color-primary)]">
-              ¥{{ money(projectedGrossProfit) }}
+              {{ previewMoney(preview?.projectedGrossProfit) }}
             </strong>
           </div>
         </div>
         <p class="mb-0 mt-2 text-xs text-[var(--el-text-color-secondary)]">
-          已审核主单共用路桥费 ¥{{ money(sharedToll) }}，返程分摊 ¥{{ money(allocatedToll) }}；
-          预计毛利率
-          {{
-            form.freightIncome ? money((projectedGrossProfit / form.freightIncome) * 100) : '0.00'
-          }}%。
+          已审核主单共用路桥费 ¥{{ money(sharedToll) }}，返程分摊
+          {{ previewMoney(preview?.allocatedToll) }}；预计毛利已扣司机提成，预计毛利率
+          {{ previewPercent(preview?.projectedGrossMargin) }}。
+        </p>
+        <ElAlert
+          v-if="previewError"
+          class="mt-3"
+          title="返程收益预览失败，保存时仍会按最新规则重新计算。"
+          type="warning"
+          :closable="false"
+          show-icon
+        >
+          <template #default>
+            <ElButton link type="primary" @click="loadPreview">重试预览</ElButton>
+          </template>
+        </ElAlert>
+        <p
+          v-else-if="previewLoading"
+          class="mb-0 mt-2 text-xs text-[var(--el-text-color-secondary)]"
+        >
+          正在按当前返程资料预估司机提成和毛利…
+        </p>
+        <p
+          v-else-if="preview && preview.matched === false"
+          class="mb-0 mt-2 text-xs text-[var(--el-text-color-secondary)]"
+        >
+          当前没有匹配的司机提成规则，本次预估按 0 元计入；保存时会重新匹配。
         </p>
         <p class="mb-0 mt-2 text-xs leading-5 text-[var(--el-text-color-secondary)]">
-          以上为业务预计值，不是已审核成本或财务过账。共享成本分摊后的预计毛利须结合主任务实际费用查看。
+          以上为业务预计值，司机提成已计入预计毛利；不是已审核成本或财务过账。保存时会按最新规则重新计算。
         </p>
       </ArtSectionCard>
 
@@ -198,6 +229,7 @@
 </template>
 
 <script setup lang="ts">
+  import { useDebounceFn } from '@vueuse/core'
   import type { FormRules } from 'element-plus'
   import { ElMessage } from 'element-plus'
   import ArtDrawer from '@/components/core/drawers/art-drawer/index.vue'
@@ -213,8 +245,11 @@
     createReturnTrip,
     fetchReturnSharedToll,
     fetchReturnTripCandidates,
+    previewReturnTrip,
     type ReturnTripCandidate,
-    type ReturnTripInput
+    type ReturnTripInput,
+    type ReturnTripPreview,
+    type ReturnTripPreviewInput
   } from '@tms/api/modules/return-trip'
 
   type OrderRecord = Api.Tms.Order.OrderRecord
@@ -234,6 +269,11 @@
   const sharedTollLoading = ref(false)
   const sharedTollError = ref(false)
   const sharedToll = ref(0)
+  const preview = ref<ReturnTripPreview>()
+  const previewLoading = ref(false)
+  const previewError = ref(false)
+  let previewRequestId = 0
+  const drawerOpen = ref(false)
   const customerOptions = ref<Api.Tms.BasicData.CustomerOption[]>([])
   const eligibleCandidates = computed(() =>
     candidates.value.filter((candidate) => candidate.canAddReturn)
@@ -335,14 +375,62 @@
   const directExpense = computed(
     () => form.informationFee + form.technicalServiceFee + form.directTollFee + form.directMiscFee
   )
-  const allocatedToll = computed(
+  const previewInput = computed<ReturnTripPreviewInput>(() => ({
+    returnCustomerId: form.returnCustomerId,
+    originStation: form.originStation,
+    destinationStation: form.destinationStation,
+    plannedDepartureAt: form.plannedDepartureAt,
+    distanceKm: form.distanceKm,
+    cargoWeightTons: form.cargoWeightTons,
+    cargoVolumeM3: form.cargoVolumeM3,
+    freightIncome: form.freightIncome,
+    informationFee: form.informationFee,
+    technicalServiceFee: form.technicalServiceFee,
+    directTollFee: form.directTollFee,
+    directMiscFee: form.directMiscFee,
+    sharedCostAllocationPct: allocationMode.value === 'allocate' ? form.sharedCostAllocationPct : 0
+  }))
+  const canPreview = computed(
     () =>
-      sharedToll.value *
-      (allocationMode.value === 'allocate' ? form.sharedCostAllocationPct / 100 : 0)
+      drawerOpen.value &&
+      !!selectedWaybillId.value &&
+      !!form.returnCustomerId &&
+      !!form.originStation &&
+      !!form.destinationStation
   )
-  const projectedGrossProfit = computed(
-    () => form.freightIncome - directExpense.value - allocatedToll.value
-  )
+
+  function invalidatePreview(): void {
+    drawerOpen.value = false
+    previewRequestId++
+    preview.value = undefined
+    previewLoading.value = false
+    previewError.value = false
+  }
+
+  async function loadPreview(): Promise<void> {
+    if (!canPreview.value) return
+    const requestId = ++previewRequestId
+    const waybillId = selectedWaybillId.value
+    preview.value = undefined
+    previewLoading.value = true
+    previewError.value = false
+    try {
+      const result = await previewReturnTrip(waybillId, previewInput.value)
+      if (drawerOpen.value && requestId === previewRequestId) preview.value = result
+    } catch {
+      if (drawerOpen.value && requestId === previewRequestId) previewError.value = true
+    } finally {
+      if (drawerOpen.value && requestId === previewRequestId) previewLoading.value = false
+    }
+  }
+  const debouncedPreview = useDebounceFn(loadPreview, 300)
+  watch([selectedWaybillId, previewInput], () => {
+    previewRequestId++
+    preview.value = undefined
+    previewError.value = false
+    previewLoading.value = canPreview.value
+    if (canPreview.value) void debouncedPreview()
+  })
 
   function candidateUnavailableReason(candidate: ReturnTripCandidate): string | null {
     if (candidate.hasReturnLeg) return '已有关联返程货单'
@@ -373,8 +461,22 @@
     return Number(value || 0).toFixed(2)
   }
 
+  function previewMoney(value: number | string | null | undefined): string {
+    if (value === '***') return '***'
+    if (preview.value && value === undefined) return '无权限查看'
+    return typeof value === 'number' ? `¥${money(value)}` : '待预估'
+  }
+
+  function previewPercent(value: number | string | null | undefined): string {
+    if (value === '***') return '***'
+    if (preview.value && value === undefined) return '无权限查看'
+    return typeof value === 'number' ? `${money(value)}%` : '待预估'
+  }
+
   async function handleOpen(row: OrderRecord): Promise<void> {
     if (!row.id) return
+    invalidatePreview()
+    drawerOpen.value = true
     order.value = row
     Object.assign(form, {
       returnCustomerId: '',

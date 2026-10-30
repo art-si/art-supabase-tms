@@ -189,7 +189,7 @@
   const routeNote = computed(() => {
     const notes: Record<RouteStatus, { icon: string; text: string }> = {
       idle: { icon: 'ri:road-map-line', text: '正在准备道路轨迹。' },
-      planning: { icon: 'ri:loader-4-line', text: '高德地图正在根据有效定位节点规划驾车路线。' },
+      planning: { icon: 'ri:refresh-line', text: '高德地图正在根据有效定位节点规划驾车路线。' },
       actual: {
         icon: 'ri:route-line',
         text: '蓝色线路为车辆连续 GPS 实际轨迹；P 点由低速定位簇自动识别并计算停留时长。'

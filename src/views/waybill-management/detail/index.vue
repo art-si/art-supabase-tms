@@ -170,8 +170,8 @@
         </ElTabPane>
       </ElTabs>
     </section>
-    <WaybillCommissionDialog ref="commissionDialogRef" @success="loadDetail" />
   </ArtPageShell>
+  <WaybillCommissionDialog ref="commissionDialogRef" @success="loadDetail" />
 </template>
 
 <script setup lang="ts">

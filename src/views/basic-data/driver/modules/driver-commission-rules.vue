@@ -46,7 +46,46 @@
         label-width="112px"
         :show-reset="false"
         :show-submit="false"
+      >
+        <template #vehicleTypeProfileId>
+          <ElButton
+            class="w-full! justify-between!"
+            type="primary"
+            plain
+            :disabled="vehicleTypeLocked"
+            @click="openVehicleTypePicker"
+          >
+            <span class="min-w-0 truncate">{{ selectedTypeLabel || '请选择适用车型' }}</span>
+            <span class="ml-3 shrink-0">{{ vehicleTypeLocked ? '已随车辆带入' : '参选车型' }}</span>
+          </ElButton>
+        </template>
+      </ArtForm>
+    </ArtDialog>
+    <ArtDialog ref="vehicleTypePickerRef" size="xl">
+      <VehicleTypeProfilePicker
+        v-model="draftProfileId"
+        :profiles="vehicleTypeProfiles"
+        :categories="vehicleCategories"
       />
+      <template #footer="{ api }">
+        <div class="flex items-center justify-end gap-2">
+          <span
+            v-if="!draftProfileId"
+            class="mr-auto text-xs text-[var(--el-text-color-secondary)]"
+          >
+            {{ vehicleTypeProfiles.length ? '请选择具体规格' : '暂无可用规格' }}
+          </span>
+          <ElButton @click="api.handleClose()">取消</ElButton>
+          <ElButton
+            class="ml-0!"
+            type="primary"
+            :disabled="!draftProfileId"
+            @click="api.handleConfirm()"
+          >
+            使用此车型
+          </ElButton>
+        </div>
+      </template>
     </ArtDialog>
     <ArtDialog ref="historyDialogRef" size="xl" :show-footer="false" :loading="historyLoading">
       <div v-if="historyRule" class="mb-4 flex flex-wrap items-center gap-2 text-sm">
@@ -78,6 +117,7 @@
 <script setup lang="tsx">
   import dayjs from 'dayjs'
   import { uniqBy } from 'lodash-es'
+  import { storeToRefs } from 'pinia'
   import { ElButton, ElMessage, ElTag, type FormRules } from 'element-plus'
   import type { ColumnOption } from '@/types'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
@@ -85,6 +125,8 @@
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
   import ArtTable from '@/components/core/tables/art-table/index.vue'
+  import VehicleTypeProfilePicker from '@/components/business/vehicle-type-profile-picker/index.vue'
+  import { useUserStore } from '@/store/modules/user'
   import { replaceReactiveModel } from '@/utils/form/model'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
@@ -100,6 +142,7 @@
     saveDriverCommissionRule,
     type DriverCommissionRevision,
     type TmsVehicleOption,
+    type TmsVehicleTypeProfile,
     type DriverCommissionRule
   } from '@tms/api'
 
@@ -119,7 +162,19 @@
   const selectedHandled = ref('')
   const loading = ref(false)
   const loadError = ref(false)
-  const typeOptions = ref<{ value: string; label: string }[]>([])
+  const vehicleTypeProfiles = ref<TmsVehicleTypeProfile[]>([])
+  const { getDictMap } = storeToRefs(useUserStore())
+  const vehicleCategories = computed(() =>
+    (getDictMap.value.vehicleTypeCategory ?? []).map((option) => option.value).filter(Boolean)
+  )
+  const typeOptions = computed(() =>
+    vehicleTypeProfiles.value.map((item) => ({
+      value: item.id,
+      label: `${item.category}${item.lengthM ? ` · ${item.lengthM} 米` : ''}${item.loadTons ? ` · ${item.loadTons} 吨` : ''}`
+    }))
+  )
+  const vehicleTypePickerRef = ref<ArtDialogExpose>()
+  const draftProfileId = ref<string | null>(null)
   const vehicleOptions = ref<TmsVehicleOption[]>([])
   let loadRequestId = 0
   const dialogRef = ref<ArtDialogExpose<DriverCommissionRule | undefined>>()
@@ -169,15 +224,11 @@
     {
       label: '关联车型',
       key: 'vehicleTypeProfileId',
-      type: 'select',
+      type: 'input',
       span: 24,
-      props: {
-        options: typeOptions.value,
-        filterable: true,
-        clearable: false,
-        disabled: Boolean(form.vehicleId && selectedVehicle.value?.vehicleTypeProfileId),
-        placeholder: '请选择适用车型'
-      }
+      description: vehicleTypeLocked.value
+        ? '车型已按所选车辆锁定；更换车型前请先清除车牌号。'
+        : undefined
     },
     {
       label: '车牌号',
@@ -386,6 +437,26 @@
   const selectedVehicle = computed(() =>
     vehicleOptions.value.find((item) => item.id === form.vehicleId)
   )
+  const vehicleTypeLocked = computed(() =>
+    Boolean(form.vehicleId && selectedVehicle.value?.vehicleTypeProfileId)
+  )
+  const selectedTypeLabel = computed(
+    () => typeOptions.value.find((item) => item.value === form.vehicleTypeProfileId)?.label
+  )
+  async function openVehicleTypePicker(): Promise<void> {
+    if (vehicleTypeLocked.value) return
+    draftProfileId.value = form.vehicleTypeProfileId ?? null
+    await vehicleTypePickerRef.value?.handleOpen(undefined, {
+      title: '参选车型',
+      subtitle: '选择已有启用规格的车型分类，再核对车长、容积和载重。待配置分类暂不可选。',
+      onConfirm: () => {
+        if (!vehicleTypeProfiles.value.some((profile) => profile.id === draftProfileId.value))
+          return false
+        form.vehicleTypeProfileId = draftProfileId.value
+        return true
+      }
+    })
+  }
   const historyColumns: ColumnOption<DriverCommissionRevision>[] = [
     { prop: 'versionNo', label: '版本', width: 64, formatter: (row) => `V${row.versionNo}` },
     {
@@ -522,10 +593,7 @@
       throw profiles.error ?? vehicles.error ?? new Error('车辆及车型资料加载失败')
     }
     if (props.tenantId !== tenantId) return
-    typeOptions.value = (profiles.data ?? []).map((item) => ({
-      value: item.id,
-      label: `${item.category}${item.lengthM ? ` · ${item.lengthM} 米` : ''}${item.loadTons ? ` · ${item.loadTons} 吨` : ''}`
-    }))
+    vehicleTypeProfiles.value = profiles.data ?? []
     const options = vehicles.data ?? []
     if (selectedVehicleId && !options.some((item) => item.id === selectedVehicleId)) {
       const selected = await fetchTmsDriverCommissionVehicleOptions(tenantId, [selectedVehicleId])
@@ -578,7 +646,7 @@
       selectedHandled.value = ''
       loadError.value = false
       rules.value = []
-      typeOptions.value = []
+      vehicleTypeProfiles.value = []
       vehicleOptions.value = []
       void load()
     },

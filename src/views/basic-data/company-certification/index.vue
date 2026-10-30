@@ -773,6 +773,7 @@
           '身份证有效期',
           payload.legalIdLongTerm ? '长期有效' : payload.legalIdExpiresOn
         ),
+        show('invitationCode', '邀请码', payload.invitationCode),
         show('legalAddress', '法定代表人地址', payload.legalAddress)
       ]
     if (activeSection.value === 'authorization')
@@ -792,6 +793,15 @@
         show('expiresOn', '有效期至', payload.longTerm ? '长期有效' : payload.expiresOn)
       ]
     return [
+      show(
+        'legalIsDelegate',
+        '法人是签署受托人',
+        typeof payload.legalIsDelegate === 'boolean'
+          ? payload.legalIsDelegate
+            ? '是'
+            : '否'
+          : undefined
+      ),
       show('companyName', '公司名称', payload.companyName),
       show('socialCreditCode', '统一社会信用代码', payload.socialCreditCode),
       show('legalName', '法人姓名', payload.legalName),

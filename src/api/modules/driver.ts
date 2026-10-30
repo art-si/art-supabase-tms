@@ -28,6 +28,8 @@ export interface DriverCertificateRecord {
   expiresOn: string
   responsibleName: string
   status: string
+  revokedOn: string | null
+  revokedReason: string | null
   attachments: { name: string; url: string }[]
 }
 

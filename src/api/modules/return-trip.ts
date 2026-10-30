@@ -44,6 +44,7 @@ export interface ReturnTripSummary {
   returnDirectPlannedExpense?: number | string | null
   sharedApprovedToll?: number | string | null
   returnAllocatedToll?: number | string | null
+  returnPlannedCommission?: number | string | null
   returnProjectedGrossProfit?: number | string | null
   returnProjectedMargin?: number | string | null
   returnActualRevenue?: number | string | null
@@ -73,6 +74,7 @@ export interface ReturnProfitReportRow {
   plannedRevenue: number | string | null
   plannedExpense: number | string | null
   allocatedSharedToll: number | string | null
+  plannedCommission?: number | string | null
   projectedGrossProfit: number | string | null
   actualRevenue: number | string | null
   actualCost: number | string | null
@@ -88,11 +90,75 @@ export interface ReturnProfitReportResult {
     approvedCount: number
     pendingCount: number
     projectedRevenue: number | null
+    projectedCommission?: number | string | null
     projectedGrossProfit: number | null
     approvedRevenueToDate: number | null
     approvedCostToDate: number | null
     approvedGrossProfitToDate: number | null
     moneyVisible: boolean
+  }
+}
+
+export interface ReturnTripPreview {
+  matched?: boolean
+  amount?: number | string | null
+  projectedGrossProfit?: number | string | null
+  projectedGrossMargin?: number | string | null
+  allocatedToll?: number | string | null
+}
+
+export type ReturnTripPreviewInput = Pick<
+  ReturnTripInput,
+  | 'returnCustomerId'
+  | 'originStation'
+  | 'destinationStation'
+  | 'plannedDepartureAt'
+  | 'distanceKm'
+  | 'cargoWeightTons'
+  | 'cargoVolumeM3'
+  | 'freightIncome'
+  | 'informationFee'
+  | 'technicalServiceFee'
+  | 'directTollFee'
+  | 'directMiscFee'
+  | 'sharedCostAllocationPct'
+>
+
+function isPreviewAmount(value: unknown): value is number | '***' | null {
+  return value == null || value === '***' || (typeof value === 'number' && Number.isFinite(value))
+}
+
+export async function previewReturnTrip(
+  waybillId: string,
+  input: ReturnTripPreviewInput
+): Promise<ReturnTripPreview> {
+  const result = await responseHandle<unknown>(
+    () =>
+      supabase.rpc('tms_preview_return_leg_commission_secure', {
+        p_waybill_id: waybillId,
+        p_data: keysToSnakeDeep(input)
+      }),
+    { showErrorMessage: false }
+  )
+  if (result.error) throw result.error
+  const data = result.data
+  if (!data || typeof data !== 'object' || Array.isArray(data))
+    throw new Error('返程收益预览资料不完整')
+  const preview = data as Record<string, unknown>
+  if (
+    (preview.matched !== undefined && typeof preview.matched !== 'boolean') ||
+    !isPreviewAmount(preview.amount) ||
+    !isPreviewAmount(preview.projectedGrossProfit) ||
+    !isPreviewAmount(preview.projectedGrossMargin) ||
+    !isPreviewAmount(preview.allocatedToll)
+  )
+    throw new Error('返程收益预览资料不完整')
+  return {
+    matched: preview.matched as boolean | undefined,
+    amount: preview.amount,
+    projectedGrossProfit: preview.projectedGrossProfit,
+    projectedGrossMargin: preview.projectedGrossMargin,
+    allocatedToll: preview.allocatedToll
   }
 }
 

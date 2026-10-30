@@ -57,6 +57,12 @@ AI 智能填单只生成可复核草稿；调度推荐和异常研判只提供�
 - 拆单序号按同一原始单的历史调度记录递增，已撤销的序号不复用。撤销的普通配载记录保留审计历史，当前有效调度号仍保持唯一。
 - 编号由数据库 `tms_create_dispatch_plan_secure` 在锁定原始单后生成。2026-09-28 已将两条待接单的历史拆单号修正为 `YD202608-013-01`、`YD202608-013-02`；回滚验证、实际结果校验和有效运单号唯一性校验均通过。
 
+### 派车证件作废门禁（2026-10-29）
+
+- 调度预检返回 `riskKind` 区分已过期和已作废。已过期证件保留有权限、有原因、有审计的强制派车路径；已作废证件显示补证提示，预检的 `canOverride` 为 `false`，服务端 `vms_authorize_dispatch_certificate_risk` 和订单/运单派车触发器同样拒绝绕过。
+- `tms_assert_driver_certified` 在自营司机豁免之前检查已作废的身份证、驾驶证、从业资格证；非自营司机仍须经过原有证件影像和审核校验。作废旧证只在显式登记关联、已生效且仍有效的新证后解除拦截。司机详情的证件表以红色“已作废”展示状态，并在悬停时说明作废原因。
+- `tests/integration/vms-certificate-revocation.sql` 验证实际 `tms_order` 更新受拦截、预检不可强制；`tests/integration/tms-driver-certification-gate.sql` 验证已审核非自营司机的身份证与从业资格证分别作废后被拒绝，关联有效新证后恢复。`tms-driver-profile-required-gate.sql` 和 `tms-dispatch-return-master-guard.sql` 回归通过。浏览器弹窗的最终视觉验收由主仓会话继续记录。
+
 ### 运输订单报价
 
 - 订单列表的“报价”操作打开报价表单。运输费、卸货费、送货费、保险费、税费与补充费用共同组成报价总额；从 `tmsOrderQuoteExpenseItem` 字典选中费用项后立即添加，可连续添加多项，当前字典为人工费、吊车费、其他费用。

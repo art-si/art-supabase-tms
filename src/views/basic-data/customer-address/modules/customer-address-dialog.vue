@@ -37,7 +37,7 @@
             </ArtTooltip>
             <ArtTooltip content="识别信息" placement="top">
               <ArtIconButton
-                :icon="recognizing ? 'ri:loader-4-line' : 'ri:sparkling-2-line'"
+                :icon="recognizing ? 'ri:refresh-line' : 'ri:sparkling-2-line'"
                 variant="solid"
                 :loading="recognizing"
                 label="识别信息"

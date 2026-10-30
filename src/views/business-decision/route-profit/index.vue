@@ -77,7 +77,7 @@
       <template #header-left>
         <ReportNote
           description="返程配货毛利按一张主运单的一条返程子单统计。"
-          note="预计值来自返程货单；已审核值仅汇总完成 FMS 财务应收审核的收入与已审核运单费用，未审批记录不按零元计入实际毛利。共用路桥费按设置比例分摊，主单成本只记录一次；已审核毛利为截至当前口径，后续费用入账会变化。"
+          note="预计毛利已扣返程专属费用、共用路桥分摊及返程司机最终提成预估；正向司机提成不计入返程。已审核值仅汇总完成 FMS 财务应收审核的收入与已审核运单费用，未审批记录不按零元计入实际毛利。已审核毛利为截至当前口径，后续费用入账会变化；预计提成不重复进入已审核成本。"
         />
       </template>
     </ArtTableQuery>
@@ -141,6 +141,7 @@
       approvedCount: 0,
       pendingCount: 0,
       projectedRevenue: null,
+      projectedCommission: null,
       projectedGrossProfit: null,
       approvedRevenueToDate: null,
       approvedCostToDate: null,
@@ -176,6 +177,13 @@
       returnOverview.summary.projectedRevenue,
       '元 · 业务预计',
       'ri:funds-line',
+      returnOverview.loading
+    ),
+    reportMetric(
+      '预计返程司机提成',
+      returnOverview.summary.projectedCommission,
+      '元 · 已计入预计成本',
+      'ri:wallet-3-line',
       returnOverview.loading
     ),
     reportMetric(
@@ -283,6 +291,7 @@
     returnNumberColumn('plannedRevenue', '预计收入（元）'),
     returnNumberColumn('plannedExpense', '专属预计费用（元）', 180),
     returnNumberColumn('allocatedSharedToll', '共用路桥分摊（元）', 190),
+    returnNumberColumn('plannedCommission', '预计司机提成（元）', 180),
     returnNumberColumn('projectedGrossProfit', '预计毛利（元）', 165),
     returnNumberColumn('actualRevenue', '已审核收入（元）', 165),
     returnNumberColumn('actualCost', '已审核成本（元）', 165),

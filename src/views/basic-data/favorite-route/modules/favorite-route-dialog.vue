@@ -178,7 +178,7 @@
   const estimateIcon = computed(() => {
     const icons: Record<EstimateStatus, string> = {
       idle: 'ri:route-line',
-      loading: 'ri:loader-4-line',
+      loading: 'ri:refresh-line',
       ready: 'ri:checkbox-circle-line',
       unavailable: 'ri:information-line'
     }

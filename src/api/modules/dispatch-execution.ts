@@ -7,11 +7,14 @@ type DispatchPlan = Api.Tms.Waybill.DispatchPlan
 type ExecutionSource = Api.Tms.Waybill.ExecutionSource
 
 export interface DispatchCertificateRisk {
+  riskKind: 'expired' | 'revoked'
   subjectType: 'vehicle' | 'driver'
+  subjectId: string
   subjectLabel: string
   certificateType: string
   certificateNo: string | null
-  expiresOn: string
+  expiresOn: string | null
+  revokedOn?: string | null
 }
 
 export interface DispatchCertificateRiskCheck {
@@ -131,11 +134,14 @@ export async function checkDispatchCertificateRisk(
     !result.data.risks.every(
       (risk) =>
         risk &&
+        (risk.riskKind === 'expired' || risk.riskKind === 'revoked') &&
         (risk.subjectType === 'vehicle' || risk.subjectType === 'driver') &&
+        typeof risk.subjectId === 'string' &&
         typeof risk.subjectLabel === 'string' &&
         typeof risk.certificateType === 'string' &&
         (risk.certificateNo == null || typeof risk.certificateNo === 'string') &&
-        typeof risk.expiresOn === 'string'
+        (risk.expiresOn == null || typeof risk.expiresOn === 'string') &&
+        (risk.revokedOn == null || typeof risk.revokedOn === 'string')
     )
   ) {
     throw new Error('证件风险检查未返回有效结果，请重试后再配载')

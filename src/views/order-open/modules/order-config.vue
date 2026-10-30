@@ -184,7 +184,7 @@
   import ArtUploadFile from '@/components/core/forms/art-upload-file/index.vue'
   import { fetchTmsVehicleTypeProfiles, type TmsVehicleTypeProfile } from '@tms/api'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
-  import VehicleTypeArt from './vehicle-type-art.vue'
+  import VehicleTypeArt from '@/components/business/vehicle-type-profile-picker/vehicle-type-art.vue'
 
   const config = defineModel<Api.Tms.Order.OrderConfig>({ required: true })
   defineProps<{ canEditAttachments: boolean; resourceTenantId: string }>()

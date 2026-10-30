@@ -4,6 +4,7 @@
     size="xl"
     show-fullscreen-button
     :aria-label="form.id ? '编辑司机' : '新增司机'"
+    @close="handleDialogClose"
   >
     <div class="driver-dialog__summary">
       <span class="driver-dialog__avatar"><ArtSvgIcon icon="ri:steering-2-line" /></span>
@@ -296,6 +297,7 @@
     type FormRules
   } from 'element-plus'
   import { h } from 'vue'
+  import { until } from '@vueuse/core'
   import type { ColumnOption } from '@/types'
   import { omit, pick } from 'lodash-es'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
@@ -350,6 +352,7 @@
   } from '@/utils/field-permission'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { fetchRegionOptions } from '@/api/region-options'
+  import { useArtOverlaySession } from '@/hooks/core/useArtOverlay'
 
   defineOptions({ name: 'TmsDriverDialog' })
 
@@ -380,6 +383,7 @@
   interface DialogExposeForm {
     validate: () => Promise<boolean>
     clearValidate: () => void
+    readyToSubmit: boolean
   }
 
   interface EmployeeSelectionGroup {
@@ -405,6 +409,14 @@
       .map((tenant) => ({ label: tenant.tenantName, value: tenant.id }))
   ])
   const dialogRef = ref<ArtDialogExpose<Driver | undefined>>()
+  const {
+    version: formSession,
+    invalidate: invalidateFormSession,
+    isCurrent: isFormSessionCurrent
+  } = useArtOverlaySession(() => Boolean(unref(dialogRef.value?.visible)))
+  const handleDialogClose = (): void => {
+    invalidateFormSession()
+  }
   const certificationDialogRef = ref<ArtDialogExpose>()
   const certification = ref<DriverCertificationStatus | null>(null)
   const certificationLoading = ref(false)
@@ -535,7 +547,8 @@
     due_15: '15 天内到期',
     due_today: '今天到期',
     expired: '已过期',
-    handled: '已处理'
+    handled: '已处理',
+    revoked: '已作废'
   }
   const certificateColumns: ColumnOption<DriverCertificateRecord>[] = [
     {
@@ -568,14 +581,18 @@
           ElTag,
           {
             type:
-              row.status === 'expired'
+              row.status === 'expired' || row.status === 'revoked'
                 ? 'danger'
                 : ['due_3_months', 'due_30', 'due_15', 'due_today'].includes(row.status)
                   ? 'warning'
                   : row.status === 'handled'
                     ? 'info'
                     : 'success',
-            effect: 'light'
+            effect: 'light',
+            title:
+              row.status === 'revoked' && row.revokedReason
+                ? `作废原因：${row.revokedReason}`
+                : undefined
           },
           () => certificateStatusLabels[row.status] ?? row.status
         )
@@ -1519,6 +1536,7 @@
   }
 
   const resetForm = async (): Promise<void> => {
+    invalidateFormSession()
     ocrRequestId += 1
     ocrBusy.value = false
     ocrMode.value = null
@@ -1668,20 +1686,33 @@
   }
 
   const handleSubmit = async (): Promise<boolean> => {
+    const session = formSession.value
     try {
       const previousTab = activeTab.value
       for (const tab of tabs) {
         if (tab.key === 'certificates' || tab.key === 'commission') continue
         activeTab.value = tab.key
         await nextTick()
+        if (!isFormSessionCurrent(session)) return false
+        const ready = await until(
+          () => !isFormSessionCurrent(session) || formRef.value?.readyToSubmit === true
+        ).toBe(true, { timeout: 10_000, throwOnTimeout: false })
+        if (!isFormSessionCurrent(session)) return false
+        if (!ready || !formRef.value?.readyToSubmit) {
+          ElMessage.warning('表单选项加载失败或耗时过长，请稍后重试')
+          return false
+        }
         if (!(await validateArtFormForSubmit(formRef.value))) return false
+        if (!isFormSessionCurrent(session)) return false
       }
       activeTab.value = previousTab
     } catch (error) {
+      if (!isFormSessionCurrent(session)) return false
       notifyFriendlyError(error, '表单校验未完成，请稍后重试', 'warning')
       return false
     }
 
+    if (!isFormSessionCurrent(session)) return false
     try {
       const payload = normalizePayload()
       const type = form.id ? 'edit' : 'add'

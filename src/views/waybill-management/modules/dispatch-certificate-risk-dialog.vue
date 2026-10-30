@@ -2,8 +2,12 @@
   <ArtDialog ref="dialogRef" size="md">
     <div class="grid min-w-0 gap-4">
       <ElAlert
-        title="证件已过期，当前配载已拦截"
-        description="请先完成换证。确需派车时，具备证件风险放行权限的人员须填写原因；系统会记录操作人与原因。"
+        :title="hasRevoked ? '证件已作废，当前配载已拦截' : '证件已过期，当前配载已拦截'"
+        :description="
+          hasRevoked
+            ? '请先登记关联的有效新证。已作废证件不能通过填写原因强制派车。'
+            : '请先完成换证。确需派车时，具备证件风险放行权限的人员须填写原因；系统会记录操作人与原因。'
+        "
         type="error"
         :closable="false"
         show-icon
@@ -22,9 +26,13 @@
           <span v-if="risk.certificateNo" class="text-[var(--el-text-color-secondary)]">{{
             risk.certificateNo
           }}</span>
-          <span class="ml-auto tabular-nums text-[var(--el-color-danger)]"
-            >{{ risk.expiresOn }} 到期</span
-          >
+          <span class="ml-auto tabular-nums text-[var(--el-color-danger)]">
+            {{
+              risk.riskKind === 'revoked'
+                ? `${risk.revokedOn || ''} 已作废`
+                : `${risk.expiresOn} 到期`
+            }}
+          </span>
         </div>
       </div>
       <div v-if="allowOverride" class="grid gap-2">
@@ -50,7 +58,7 @@
         >
       </div>
       <ElAlert
-        v-else
+        v-else-if="!hasRevoked"
         title="当前账号无强制派车权限，请联系车管完成换证或由有权限的调度负责人处理。"
         type="warning"
         :closable="false"
@@ -74,6 +82,7 @@
   const risks = ref<DispatchCertificateRiskCheck['risks']>([])
   const reason = ref('')
   const allowOverride = ref(false)
+  const hasRevoked = computed(() => risks.value.some((risk) => risk.riskKind === 'revoked'))
   let submitOverride: ((reason: string) => Promise<boolean>) | undefined
 
   async function handleOpen(
@@ -83,10 +92,12 @@
     risks.value = check.risks
     reason.value = ''
     allowOverride.value =
-      check.canOverride && hasAuth('TmsPendingWaybillList:OverrideCertificateRisk')
+      !hasRevoked.value &&
+      check.canOverride &&
+      hasAuth('TmsPendingWaybillList:OverrideCertificateRisk')
     submitOverride = onOverride
     await dialogRef.value?.handleOpen(check, {
-      title: '证件过期 · 派车风险拦截',
+      title: hasRevoked.value ? '证件作废 · 派车风险拦截' : '证件过期 · 派车风险拦截',
       subtitle: `${check.risks.length} 项证件风险需处理`,
       confirmText: '记录原因并强制派车',
       showConfirmButton: allowOverride.value,

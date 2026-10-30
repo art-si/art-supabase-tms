@@ -5,9 +5,11 @@ import type { ColumnOption } from '@/types'
 import { formatNumberValue } from '@/utils/ui/format'
 import type { ReportRow } from '../../../api/modules/management-reports'
 export const reportNumber = (value: unknown) =>
-  typeof value === 'number'
-    ? formatNumberValue(value, 'zh-CN', { maximumFractionDigits: 2 })
-    : '待核算'
+  value === '***'
+    ? '***'
+    : typeof value === 'number'
+      ? formatNumberValue(value, 'zh-CN', { maximumFractionDigits: 2 })
+      : '待核算'
 export function textColumn(prop: string, label: string, width = 160): ColumnOption<ReportRow> {
   return {
     prop,

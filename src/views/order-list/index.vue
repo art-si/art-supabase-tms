@@ -38,13 +38,13 @@
       focusable
     >
       <template #table-header-top>
-        <div class="order-list__status-tabs">
+        <ElScrollbar class="order-list__status-tabs">
           <ElSegmented
             :model-value="table.searchQuery.orderStatus"
             :options="table.statusTabs"
             @change="handleStatusTabChange"
           />
-        </div>
+        </ElScrollbar>
       </template>
     </ArtTableQuery>
 
@@ -771,22 +771,26 @@
 <style scoped lang="scss">
   .order-list {
     &__status-tabs {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
+      min-width: 0;
+
+      :deep(.el-scrollbar__wrap) {
+        overscroll-behavior-x: contain;
+      }
 
       :deep(.el-segmented) {
         --el-segmented-item-selected-color: var(--el-color-white);
         --el-segmented-item-selected-bg-color: var(--el-color-primary);
 
-        max-width: 100%;
+        width: max-content;
+        min-width: 100%;
 
         .el-segmented__group {
-          flex-wrap: wrap;
+          flex-wrap: nowrap;
         }
 
         .el-segmented__item {
           color: var(--el-color-primary);
+          white-space: nowrap;
 
           &.is-selected {
             color: var(--el-color-white);

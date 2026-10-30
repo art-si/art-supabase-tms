@@ -84,7 +84,7 @@
                 }}</dd></div
               >
               <div
-                ><dt class="text-xs text-[var(--el-text-color-secondary)]">预计费用</dt
+                ><dt class="text-xs text-[var(--el-text-color-secondary)]">预计成本（含提成）</dt
                 ><dd class="mt-1 font-semibold tabular-nums">{{
                   formatSensitiveCurrencyValue(returnProjectedCost, 'CNY')
                 }}</dd></div
@@ -171,14 +171,19 @@
       summary.value?.actualAccountingStatus === 'approved_to_date' ||
       summary.value?.actualAccountingStatus === 'partial_cost'
   )
-  const returnProjectedCost = computed<number | null>(() => {
+  const returnProjectedCost = computed<number | '***' | null>(() => {
     const direct = summary.value?.returnDirectPlannedExpense
     const allocated = summary.value?.returnAllocatedToll
-    if (direct == null || allocated == null) return null
+    const commission = summary.value?.returnPlannedCommission
+    if (direct == null || allocated == null || commission == null) return null
+    if (direct === '***' || allocated === '***' || commission === '***') return '***'
     const directAmount = Number(direct)
     const allocatedAmount = Number(allocated)
-    return Number.isFinite(directAmount) && Number.isFinite(allocatedAmount)
-      ? directAmount + allocatedAmount
+    const commissionAmount = Number(commission)
+    return Number.isFinite(directAmount) &&
+      Number.isFinite(allocatedAmount) &&
+      Number.isFinite(commissionAmount)
+      ? directAmount + allocatedAmount + commissionAmount
       : null
   })
 
