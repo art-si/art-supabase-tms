@@ -1,0 +1,1 @@
+import{E as e,a as t,w as n}from"./_baseForOwn-BkTLsIQZ.js";import{d as r,t as i}from"./_baseSet-Do2boL_i.js";function a(t,r,a){for(var o=-1,s=r.length,c={};++o<s;){var l=r[o],u=n(t,l);a(u,l)&&i(c,e(l,t),u)}return c}function o(e,n){return a(e,n,function(n,r){return t(e,r)})}var s=r(function(e,t){return e==null?{}:o(e,t)});export{a as n,s as t};

@@ -25,15 +25,12 @@
 
       <ArtForm
         ref="formRef"
-        :model-value="form"
-        @update:model-value="replaceReactiveModel(form, $event)"
+        v-model="form"
         :items="formItems"
         :rules="formRules"
         :disabled="!canManage"
         :span="24"
         label-width="118px"
-        :show-reset="false"
-        :show-submit="false"
       />
 
       <section class="address-geofence-dialog__preview" aria-label="围栏半径预览">
@@ -66,7 +63,6 @@
 <script setup lang="ts">
   import { formatCoordinateValue } from '@/utils/ui/coordinates'
   import { normalizeCoordinatePair } from '@/utils/geo'
-  import { replaceReactiveModel } from '@/utils/form/model'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { ElMessage, type FormRules } from 'element-plus'
@@ -99,7 +95,7 @@
   const dialogRef = ref<ArtDialogExpose<CustomerAddress>>()
   const formRef = ref<FormExpose>()
   const address = shallowRef<CustomerAddress>()
-  const form = reactive<GeofenceForm>({ enabled: false, radiusM: 1000 })
+  const form = ref<GeofenceForm>({ enabled: false, radiusM: 1000 })
   const canManage = computed(() => hasAuth('TmsCustomerAddress:Geofence'))
   const hasCoordinate = computed(
     () => normalizeCoordinatePair(address.value?.longitude, address.value?.latitude) !== null
@@ -139,7 +135,7 @@
         ? '启用后，该地址将参与装货或卸货到场定位校验。'
         : '请先完成地址地图定位。',
       props: {
-        disabled: !hasCoordinate.value && !form.enabled,
+        disabled: !hasCoordinate.value && !form.value.enabled,
         activeText: '启用',
         inactiveText: '停用',
         inlinePrompt: true
@@ -149,7 +145,7 @@
       label: '围栏半径',
       key: 'radiusM',
       type: 'number',
-      hidden: !form.enabled,
+      hidden: !form.value.enabled,
       description: '建议按园区入口、装卸月台范围和现场定位漂移合理设置。',
       props: { min: 50, max: 50000, step: 50, controlsPosition: 'right' }
     }
@@ -158,7 +154,7 @@
   const loadDefaultRadius = async (): Promise<void> => {
     if (address.value?.geofenceRadiusM) return
     const { data } = await fetchGeofenceConfig()
-    form.radiusM =
+    form.value.radiusM =
       address.value?.addressType === 'shipping'
         ? (data?.loadingRadiusM ?? 1000)
         : (data?.unloadingRadiusM ?? 1000)
@@ -166,7 +162,7 @@
 
   const handleSubmit = async (): Promise<boolean> => {
     if (!canManage.value || !address.value?.id) return false
-    if (form.enabled && !hasCoordinate.value) {
+    if (form.value.enabled && !hasCoordinate.value) {
       ElMessage.warning('请先完成地址地图定位，或停用围栏后保存')
       return false
     }
@@ -179,10 +175,10 @@
 
     try {
       await updateCustomerAddressGeofence(address.value.id, {
-        geofenceEnabled: form.enabled,
-        geofenceRadiusM: form.enabled
-          ? form.radiusM
-          : (address.value.geofenceRadiusM ?? form.radiusM),
+        geofenceEnabled: form.value.enabled,
+        geofenceRadiusM: form.value.enabled
+          ? form.value.radiusM
+          : (address.value.geofenceRadiusM ?? form.value.radiusM),
         geofenceUpdatedAt: new Date().toISOString()
       })
       emit('success')
@@ -195,7 +191,7 @@
 
   const handleOpen = async (row: CustomerAddress): Promise<void> => {
     address.value = row
-    Object.assign(form, {
+    Object.assign(form.value, {
       enabled: row.geofenceEnabled === true,
       radiusM: Number(row.geofenceRadiusM) || 1000
     })

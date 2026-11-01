@@ -14,8 +14,7 @@
     </BusinessWorkspaceHeader>
     <ArtTableQuery
       ref="tableRef"
-      :model-value="search"
-      @update:model-value="replaceReactiveModel(search, $event)"
+      v-model="search"
       :search-items="searchItems"
       :api-fn="fetchTable"
       :columns-factory="columnsFactory"
@@ -30,40 +29,58 @@
       focusable
     />
     <ElectronicContractDialog ref="formDialogRef" @success="() => tableRef?.refreshCreate()" />
-    <ArtDialog ref="detailDialogRef" size="xl" :show-footer="false" @closed="clearDetailQuery">
+    <ArtDialog
+      ref="detailDialogRef"
+      size="xl"
+      :show-footer="false"
+      @closed="clearDetailQuery"
+      @open="
+        () => {
+          activeDetailTab = 'identity'
+        }
+      "
+    >
       <template v-if="detail">
-        <ArtSectionTitle>合同摘要</ArtSectionTitle>
-        <ArtDescriptions :data="detail" :items="detailItems" :columns="3" />
-        <ArtSectionTitle class="mt-5">签署双方</ArtSectionTitle>
-        <ArtDescriptions :data="detail" :items="partyItems" :columns="3" />
-        <ArtSectionTitle class="mt-5">合同内容</ArtSectionTitle>
-        <div
-          class="prose max-w-none break-words rounded-md bg-[var(--el-fill-color-extra-light)] px-5 py-4 text-sm leading-7 text-[var(--el-text-color-primary)]"
-          v-html="safeContent"
-        />
-        <ArtSectionTitle class="mt-5">附件</ArtSectionTitle>
-        <ArtUploadFile
-          v-if="detail.attachments.length"
-          :model-value="detail.attachments"
-          title="合同附件"
-          :limit="10"
-          multiple
-          readonly
-        />
-        <ArtEmptyState
-          v-else
-          title="暂无附件"
-          description="上传合同附件后，可在此预览。"
-          :visual-size="72"
-          size="compact"
-        />
+        <ElTabs v-model="activeDetailTab">
+          <ElTabPane name="identity" label="合同摘要">
+            <ArtDescriptions :data="detail" :items="detailItems" :columns="3" />
+          </ElTabPane>
+          <ElTabPane name="parties" label="签署双方">
+            <ArtDescriptions :data="detail" :items="partyItems" :columns="3" />
+          </ElTabPane>
+          <ElTabPane name="content" label="正文与附件">
+            <div
+              class="prose max-w-none break-words rounded-md bg-[var(--el-fill-color-extra-light)] px-5 py-4 text-sm leading-7 text-[var(--el-text-color-primary)]"
+              v-html="safeContent"
+            />
+            <ArtSectionTitle class="mt-5">附件</ArtSectionTitle>
+            <ArtUploadFile
+              v-if="detail.attachments.length"
+              :model-value="detail.attachments"
+              title="合同附件"
+              :limit="10"
+              multiple
+              readonly
+            />
+            <ArtEmptyState
+              v-else
+              title="暂无附件"
+              description="上传合同附件后，可在此预览。"
+              :visual-size="72"
+              size="compact"
+            />
+          </ElTabPane>
+        </ElTabs>
       </template>
     </ArtDialog>
+    <MasterDataDeleteGuard ref="deleteGuardRef" />
   </div>
 </template>
 
 <script setup lang="tsx">
-  import { replaceReactiveModel } from '@/utils/form/model'
+  import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
+  import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
+
   import DOMPurify from 'dompurify'
   import { RouterLink } from 'vue-router'
   import { storeToRefs } from 'pinia'
@@ -107,11 +124,16 @@
   const userStore = useUserStore()
   const { getDictMap } = storeToRefs(userStore)
   const tableRef = ref<ArtTableQueryExpose>()
+  const { deleteGuardRef, deleteRecords } = useRecordDeleteGuard(
+    'tms_electronic_contract',
+    '电子合同'
+  )
   const formDialogRef = ref<InstanceType<typeof ElectronicContractDialog>>()
+  const activeDetailTab = ref('identity')
   const detailDialogRef = ref<ArtDialogExpose<ElectronicContractRecord>>()
   const detail = ref<ElectronicContractRecord>()
   const safeContent = computed(() => DOMPurify.sanitize(detail.value?.contentHtml || ''))
-  const search = reactive<ElectronicContractSearch>({
+  const search = ref<ElectronicContractSearch>({
     contractNo: '',
     contractName: '',
     status: ''
@@ -253,14 +275,24 @@
     {
       permission: 'TmsElectronicContract:Delete',
       type: 'delete',
-      content: ({ selectedCount }: { selectedCount: number }) =>
-        `确定删除选中的 ${selectedCount} 份电子合同吗？`,
+      confirm: false,
       onClick: async ({ selectedRows, api }) => {
-        await deleteTmsBasicRecords(
-          'tms_electronic_contract',
-          (selectedRows as ElectronicContractRecord[]).map((row) => row.id)
-        )
-        await api.refreshRemove()
+        const resources = (selectedRows as ElectronicContractRecord[]).map((row) => ({
+          id: row.id,
+          label: row.contractNo || row.contractName || '电子合同'
+        }))
+        await deleteRecords({
+          resources,
+          permission: 'TmsElectronicContract:Delete',
+          remove: () =>
+            deleteTmsBasicRecords(
+              'tms_electronic_contract',
+              resources.map((resource) => resource.id)
+            ),
+          onDeleted: async () => {
+            await api.refreshRemove()
+          }
+        })
       }
     }
   ])

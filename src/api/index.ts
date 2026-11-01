@@ -8,6 +8,7 @@ export {
   fetchCarrierDetail,
   fetchCarrierList,
   fetchCarrierOptions,
+  fetchCarrierParentOptions,
   importCarriers
 } from '@tms/api/modules/carrier'
 export {

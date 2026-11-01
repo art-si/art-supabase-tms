@@ -1,1 +1,0 @@
-import{$i as e}from"./scroll-hYo27a2m.js";var t=(e=``)=>e.replace(/[|\\{}()[\]^$+*?.]/g,`\\$&`).replace(/-/g,`\\x2d`),n=t=>e(t);export{t as n,n as t};

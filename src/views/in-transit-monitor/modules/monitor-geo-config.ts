@@ -1,6 +1,4 @@
-import type { GeoCoord, StationGeoPosition } from './monitor-types'
-
-export const INITIAL_MAP_CENTER: GeoCoord = [105.5, 34.2]
+import type { StationGeoPosition } from './monitor-types'
 
 export const stationGeoPositions: StationGeoPosition[] = [
   { keywords: ['北京', '京'], coord: [116.4074, 39.9042] },

@@ -14,8 +14,7 @@
 
     <ArtTableQuery
       ref="tableRef"
-      :model-value="search"
-      @update:model-value="replaceReactiveModel(search, $event)"
+      v-model="search"
       :search-items="searchItems"
       :api-fn="fetchTable"
       :columns-factory="columnsFactory"
@@ -35,11 +34,14 @@
       <ArtSectionTitle>拉黑信息</ArtSectionTitle>
       <ArtDescriptions v-if="detail" :data="detail" :items="detailItems" :columns="2" />
     </ArtDialog>
+    <MasterDataDeleteGuard ref="deleteGuardRef" />
   </div>
 </template>
 
 <script setup lang="tsx">
-  import { replaceReactiveModel } from '@/utils/form/model'
+  import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
+  import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
+
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
@@ -68,10 +70,14 @@
   defineOptions({ name: 'TmsDriverBlacklist' })
 
   const tableRef = ref<ArtTableQueryExpose>()
+  const { deleteGuardRef, deleteRecords } = useRecordDeleteGuard(
+    'tms_driver_blacklist',
+    '司机黑名单'
+  )
   const formDialogRef = ref<InstanceType<typeof BlacklistDialog>>()
   const detailDialogRef = ref<ArtDialogExpose<DriverBlacklistRecord>>()
   const detail = ref<DriverBlacklistRecord>()
-  const search = reactive<BlacklistSearch>({ driverName: '', phone: '', organizationName: '' })
+  const search = ref<BlacklistSearch>({ driverName: '', phone: '', organizationName: '' })
 
   const searchItems: SearchFormItem[] = [
     {
@@ -187,14 +193,24 @@
     {
       permission: 'TmsDriverBlacklist:Delete',
       type: 'delete',
-      content: ({ selectedCount }: { selectedCount: number }) =>
-        `确定删除选中的 ${selectedCount} 条黑名单记录吗？`,
+      confirm: false,
       onClick: async ({ selectedRows, api }) => {
-        await deleteTmsBasicRecords(
-          'tms_driver_blacklist',
-          (selectedRows as DriverBlacklistRecord[]).map((row) => row.id)
-        )
-        await api.refreshRemove()
+        const resources = (selectedRows as DriverBlacklistRecord[]).map((row) => ({
+          id: row.id,
+          label: row.driverName || '司机黑名单'
+        }))
+        await deleteRecords({
+          resources,
+          permission: 'TmsDriverBlacklist:Delete',
+          remove: () =>
+            deleteTmsBasicRecords(
+              'tms_driver_blacklist',
+              resources.map((resource) => resource.id)
+            ),
+          onDeleted: async () => {
+            await api.refreshRemove()
+          }
+        })
       }
     },
     {
@@ -204,7 +220,8 @@
       exportSheetName: '黑名单',
       exportColumns,
       exportApi: async ({ maxRows }) => ({
-        data: (await fetchDriverBlacklistList({ ...search, from: 0, to: maxRows - 1 })).data ?? []
+        data:
+          (await fetchDriverBlacklistList({ ...search.value, from: 0, to: maxRows - 1 })).data ?? []
       })
     }
   ])

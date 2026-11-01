@@ -37,15 +37,13 @@
     <ArtDialog ref="dialogRef" size="lg">
       <ArtForm
         ref="formRef"
-        :model-value="form"
-        @update:model-value="replaceReactiveModel(form, $event)"
+        v-model:active-tab="activeFormTab"
+        v-model="form"
         :items="formItems"
         :rules="formRules"
         :span="12"
         :gutter="16"
         label-width="112px"
-        :show-reset="false"
-        :show-submit="false"
       >
         <template #vehicleTypeProfileId>
           <ElButton
@@ -127,7 +125,7 @@
   import ArtTable from '@/components/core/tables/art-table/index.vue'
   import VehicleTypeProfilePicker from '@/components/business/vehicle-type-profile-picker/index.vue'
   import { useUserStore } from '@/store/modules/user'
-  import { replaceReactiveModel } from '@/utils/form/model'
+
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { useAuth } from '@/hooks/core/useAuth'
@@ -177,6 +175,7 @@
   const draftProfileId = ref<string | null>(null)
   const vehicleOptions = ref<TmsVehicleOption[]>([])
   let loadRequestId = 0
+  const activeFormTab = ref('scopeSection')
   const dialogRef = ref<ArtDialogExpose<DriverCommissionRule | undefined>>()
   const historyDialogRef = ref<ArtDialogExpose<DriverCommissionRule | undefined>>()
   const formRef = ref<{ validate: () => Promise<boolean> }>()
@@ -200,7 +199,7 @@
     enabled: true,
     remark: ''
   })
-  const form = reactive<DriverCommissionRule>(emptyForm())
+  const form = ref<DriverCommissionRule>(emptyForm())
   const methodOptions = [
     { value: 'fixed_per_trip', label: '按趟固定金额' },
     { value: 'per_km', label: '按里程（元/公里）' },
@@ -220,6 +219,7 @@
     freight_percent: '%'
   }
   const formItems = computed<FormItem[]>(() => [
+    { key: 'scopeSection', label: '方案与适用范围', type: 'tab' },
     { label: '方案名称', key: 'ruleName', type: 'input', span: 24, props: { maxlength: 100 } },
     {
       label: '关联车型',
@@ -248,7 +248,7 @@
           const profileId = vehicleOptions.value.find(
             (item) => item.id === value
           )?.vehicleTypeProfileId
-          form.vehicleTypeProfileId = profileId ?? null
+          form.value.vehicleTypeProfileId = profileId ?? null
         }
       }
     },
@@ -265,14 +265,15 @@
       props: { maxlength: 100, placeholder: '留空表示不限线路' }
     },
     { label: '货运方向', key: 'direction', type: 'select', props: { options: directionOptions } },
+    { key: 'rateSection', label: '计费与生效', type: 'tab' },
     { label: '提成方式', key: 'method', type: 'select', props: { options: methodOptions } },
     {
-      label: `提成单价（${rateUnits[form.method]}）`,
+      label: `提成单价（${rateUnits[form.value.method]}）`,
       key: 'rate',
       type: 'number',
       props: {
         min: 0,
-        max: form.method === 'freight_percent' ? 100 : undefined,
+        max: form.value.method === 'freight_percent' ? 100 : undefined,
         precision: 2,
         class: '!w-full'
       }
@@ -435,24 +436,24 @@
     }
   ]
   const selectedVehicle = computed(() =>
-    vehicleOptions.value.find((item) => item.id === form.vehicleId)
+    vehicleOptions.value.find((item) => item.id === form.value.vehicleId)
   )
   const vehicleTypeLocked = computed(() =>
-    Boolean(form.vehicleId && selectedVehicle.value?.vehicleTypeProfileId)
+    Boolean(form.value.vehicleId && selectedVehicle.value?.vehicleTypeProfileId)
   )
   const selectedTypeLabel = computed(
-    () => typeOptions.value.find((item) => item.value === form.vehicleTypeProfileId)?.label
+    () => typeOptions.value.find((item) => item.value === form.value.vehicleTypeProfileId)?.label
   )
   async function openVehicleTypePicker(): Promise<void> {
     if (vehicleTypeLocked.value) return
-    draftProfileId.value = form.vehicleTypeProfileId ?? null
+    draftProfileId.value = form.value.vehicleTypeProfileId ?? null
     await vehicleTypePickerRef.value?.handleOpen(undefined, {
       title: '参选车型',
       subtitle: '选择已有启用规格的车型分类，再核对车长、容积和载重。待配置分类暂不可选。',
       onConfirm: () => {
         if (!vehicleTypeProfiles.value.some((profile) => profile.id === draftProfileId.value))
           return false
-        form.vehicleTypeProfileId = draftProfileId.value
+        form.value.vehicleTypeProfileId = draftProfileId.value
         return true
       }
     })
@@ -654,8 +655,9 @@
   )
 
   async function openEditor(row?: DriverCommissionRule): Promise<void> {
+    activeFormTab.value = 'scopeSection'
     if (!props.driverId || !canEdit.value) return
-    Object.assign(form, emptyForm(), row ?? {})
+    Object.assign(form.value, emptyForm(), row ?? {})
     try {
       await loadReferences(row?.vehicleId)
     } catch (error) {
@@ -667,12 +669,15 @@
       subtitle: '车型、线路与方向共同决定任务的预计算提成',
       onConfirm: async () => {
         if (!(await validateArtFormForSubmit(formRef.value))) return false
-        if (form.effectiveTo && form.effectiveTo < form.effectiveFrom) {
+        if (form.value.effectiveTo && form.value.effectiveTo < form.value.effectiveFrom) {
           ElMessage.warning('失效日期不能早于生效日期')
           return false
         }
         try {
-          await saveDriverCommissionRule(row?.id ?? null, { ...form, driverId: props.driverId! })
+          await saveDriverCommissionRule(row?.id ?? null, {
+            ...form.value,
+            driverId: props.driverId!
+          })
           await load()
           return true
         } catch (error) {

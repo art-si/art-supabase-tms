@@ -1,1 +1,0 @@
-import{B as e,J as t,W as n,et as r,z as i}from"./_baseForOwn-Bs6skvRV.js";function a(r,i){return n(e(r,i,t),r+``)}function o(e){return r(e)&&i(e)}export{a as n,o as t};

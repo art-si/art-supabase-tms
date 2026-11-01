@@ -24,105 +24,112 @@
         </ElSelect>
         <strong v-else class="text-sm">{{ candidates[0]?.waybillNo }}</strong>
       </div>
-      <ArtSectionCard
-        title="一趟运输 · 预计收益"
-        subtitle="正向收入按主单或拆合单分摊额读取；返程货收入归同一趟运输。"
-        :loading="loading"
-        :error="loadError ? '请检查网络或权限后重试。' : null"
-        error-title="返程收益加载失败"
-        preserve-content-structure
-        @retry="loadSummary"
-      >
-        <div v-if="summary" class="grid gap-3 sm:grid-cols-3">
-          <div
-            v-for="metric in metrics"
-            :key="metric.label"
-            class="rounded-lg border border-[var(--el-border-color-light)] p-3"
+      <ElTabs v-model="activeTab">
+        <ElTabPane name="forecast" label="预计收益">
+          <ArtSectionCard
+            title="一趟运输 · 预计收益"
+            subtitle="正向收入按主单或拆合单分摊额读取；返程货收入归同一趟运输。"
+            :loading="loading"
+            :error="loadError ? '请检查网络或权限后重试。' : null"
+            error-title="返程收益加载失败"
+            preserve-content-structure
+            @retry="loadSummary"
           >
-            <span class="block text-xs text-[var(--el-text-color-secondary)]">{{
-              metric.label
-            }}</span>
-            <strong
-              class="mt-1 block text-lg"
-              :class="metric.emphasis ? 'text-[var(--el-color-primary)]' : ''"
-            >
-              {{ amount(metric.value) }}
-            </strong>
-          </div>
-        </div>
-        <ArtEmptyState
-          v-else-if="!loading"
-          title="暂无返程配货记录"
-          description="为该运输任务添加返程货单后，可查看本趟收入与预计毛利。"
-          size="compact"
-        />
-      </ArtSectionCard>
-      <ArtSectionCard
-        v-if="summary"
-        title="财务已审核 · 截至当前"
-        subtitle="以 FMS 已审核应收与已审核运单费用计算；后续费用入账会改变毛利。"
-        preserve-content-structure
-      >
-        <div v-if="hasApprovedActual" class="grid gap-3 sm:grid-cols-3">
-          <div
-            v-for="metric in actualMetrics"
-            :key="metric.label"
-            class="rounded-lg border border-[var(--el-border-color-light)] p-3"
+            <div v-if="summary" class="grid gap-3 sm:grid-cols-3">
+              <div
+                v-for="metric in metrics"
+                :key="metric.label"
+                class="rounded-lg border border-[var(--el-border-color-light)] p-3"
+              >
+                <span class="block text-xs text-[var(--el-text-color-secondary)]">{{
+                  metric.label
+                }}</span>
+                <strong
+                  class="mt-1 block text-lg"
+                  :class="metric.emphasis ? 'text-[var(--el-color-primary)]' : ''"
+                >
+                  {{ amount(metric.value) }}
+                </strong>
+              </div>
+            </div>
+            <ArtEmptyState
+              v-else-if="!loading"
+              title="暂无返程配货记录"
+              description="为该运输任务添加返程货单后，可查看本趟收入与预计毛利。"
+              size="compact"
+            />
+          </ArtSectionCard>
+        </ElTabPane>
+        <ElTabPane v-if="summary" name="actual" label="已审核财务">
+          <ArtSectionCard
+            title="财务已审核 · 截至当前"
+            subtitle="以 FMS 已审核应收与已审核运单费用计算；后续费用入账会改变毛利。"
+            preserve-content-structure
           >
-            <span class="block text-xs text-[var(--el-text-color-secondary)]">{{
-              metric.label
-            }}</span>
-            <strong
-              class="mt-1 block text-lg"
-              :class="metric.emphasis ? 'text-[var(--el-color-primary)]' : ''"
-            >
-              {{ amount(metric.value) }}
-            </strong>
-          </div>
-        </div>
-        <ArtEmptyState
-          v-else
-          title="实际毛利待核算"
-          :description="actualEmptyDescription"
-          size="compact"
-        />
-        <ElAlert
-          v-if="summary.actualAccountingStatus === 'partial_cost'"
-          class="mt-3"
-          title="仍有待审核的返程费用或共用路桥费，当前数字只反映已审核部分。"
-          type="warning"
-          :closable="false"
-          show-icon
-        />
-      </ArtSectionCard>
-      <ArtSectionCard v-if="summary" title="返程预计成本分解" preserve-content-structure>
-        <div class="grid gap-2 text-sm sm:grid-cols-2">
-          <div class="flex justify-between gap-4"
-            ><span>返程专属费用</span
-            ><strong>{{ amount(summary.returnDirectPlannedExpense) }}</strong></div
-          >
-          <div class="flex justify-between gap-4"
-            ><span>已审核共用路桥费</span
-            ><strong>{{ amount(summary.sharedApprovedToll) }}</strong></div
-          >
-          <div class="flex justify-between gap-4"
-            ><span>返程分摊路桥费</span
-            ><strong>{{ amount(summary.returnAllocatedToll) }}</strong></div
-          >
-          <div class="flex justify-between gap-4"
-            ><span>返程预计毛利率</span
-            ><strong>{{ percent(summary.returnProjectedMargin) }}</strong></div
-          >
-          <div class="flex justify-between gap-4"
-            ><span>正向司机提成预估</span
-            ><strong>{{ commission(summary.forwardCommissionEstimate) }}</strong></div
-          >
-          <div class="flex justify-between gap-4"
-            ><span>返程司机最终提成预估（计入毛利）</span
-            ><strong>{{ amount(summary.returnPlannedCommission) }}</strong></div
-          >
-        </div>
-      </ArtSectionCard>
+            <div v-if="hasApprovedActual" class="grid gap-3 sm:grid-cols-3">
+              <div
+                v-for="metric in actualMetrics"
+                :key="metric.label"
+                class="rounded-lg border border-[var(--el-border-color-light)] p-3"
+              >
+                <span class="block text-xs text-[var(--el-text-color-secondary)]">{{
+                  metric.label
+                }}</span>
+                <strong
+                  class="mt-1 block text-lg"
+                  :class="metric.emphasis ? 'text-[var(--el-color-primary)]' : ''"
+                >
+                  {{ amount(metric.value) }}
+                </strong>
+              </div>
+            </div>
+            <ArtEmptyState
+              v-else
+              title="实际毛利待核算"
+              :description="actualEmptyDescription"
+              size="compact"
+            />
+            <ElAlert
+              v-if="summary.actualAccountingStatus === 'partial_cost'"
+              class="mt-3"
+              title="仍有待审核的返程费用或共用路桥费，当前数字只反映已审核部分。"
+              type="warning"
+              :closable="false"
+              show-icon
+            />
+          </ArtSectionCard>
+        </ElTabPane>
+        <ElTabPane v-if="summary" name="cost" label="预计成本分解">
+          <ArtSectionCard title="返程预计成本分解" preserve-content-structure>
+            <div class="grid gap-2 text-sm sm:grid-cols-2">
+              <div class="flex justify-between gap-4"
+                ><span>返程专属费用</span
+                ><strong>{{ amount(summary.returnDirectPlannedExpense) }}</strong></div
+              >
+              <div class="flex justify-between gap-4"
+                ><span>已审核共用路桥费</span
+                ><strong>{{ amount(summary.sharedApprovedToll) }}</strong></div
+              >
+              <div class="flex justify-between gap-4"
+                ><span>返程分摊路桥费</span
+                ><strong>{{ amount(summary.returnAllocatedToll) }}</strong></div
+              >
+              <div class="flex justify-between gap-4"
+                ><span>返程预计毛利率</span
+                ><strong>{{ percent(summary.returnProjectedMargin) }}</strong></div
+              >
+              <div class="flex justify-between gap-4"
+                ><span>正向司机提成预估</span
+                ><strong>{{ commission(summary.forwardCommissionEstimate) }}</strong></div
+              >
+              <div class="flex justify-between gap-4"
+                ><span>返程司机最终提成预估（计入毛利）</span
+                ><strong>{{ amount(summary.returnPlannedCommission) }}</strong></div
+              >
+            </div>
+          </ArtSectionCard>
+        </ElTabPane>
+      </ElTabs>
       <ElAlert
         title="预计值与财务已审核值分开展示；返程专属费用只有提交并审核后才进入实际成本。"
         type="info"
@@ -146,6 +153,7 @@
   } from '@tms/api/modules/return-trip'
 
   type OrderRecord = Api.Tms.Order.OrderRecord
+  const activeTab = ref('forecast')
   const dialogRef = ref<ArtDialogExpose>()
   const order = ref<OrderRecord>()
   const candidates = ref<ReturnTripCandidate[]>([])
@@ -207,6 +215,7 @@
   }
 
   async function loadSummary(): Promise<void> {
+    activeTab.value = 'forecast'
     const waybillId = selectedWaybillId.value
     if (!waybillId) return
     summary.value = undefined
@@ -223,6 +232,7 @@
   }
 
   async function handleOpen(row: OrderRecord): Promise<void> {
+    activeTab.value = 'forecast'
     if (!row.id) return
     order.value = row
     summary.value = undefined

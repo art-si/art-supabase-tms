@@ -18,8 +18,6 @@
         :rules="rules"
         :span="24"
         label-width="100px"
-        :show-reset="false"
-        :show-submit="false"
       />
     </ArtAsyncState>
   </ArtDialog>

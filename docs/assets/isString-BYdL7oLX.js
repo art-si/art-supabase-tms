@@ -1,1 +1,0 @@
-import{Z as e,et as t,tt as n}from"./_baseForOwn-Bs6skvRV.js";var r=RegExp(`[\\u200d\\ud800-\\udfff\\u0300-\\u036f\\ufe20-\\ufe2f\\u20d0-\\u20ff\\ufe0e\\ufe0f]`);function i(e){return r.test(e)}var a=`[object String]`;function o(r){return typeof r==`string`||!e(r)&&t(r)&&n(r)==a}export{i as n,o as t};

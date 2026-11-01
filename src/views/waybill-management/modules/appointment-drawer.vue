@@ -63,8 +63,6 @@
         ref="formRef"
         :model-value="form"
         custom-layout
-        :show-reset="false"
-        :show-submit="false"
         label-position="top"
         form-class="space-y-4"
         :disabled="saving"
@@ -349,6 +347,7 @@
     </div>
     <AppointmentChildDialog ref="childDialogRef" @select="applySelectedChildren" />
   </ArtDrawer>
+  <MasterDataDeleteGuard ref="deleteGuardRef" />
 </template>
 
 <script setup lang="ts">
@@ -362,8 +361,9 @@
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
   import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import ArtSvgIcon from '@/components/core/base/art-svg-icon/index.vue'
-  import { useArtFeedback } from '@/hooks/core/useArtFeedback'
   import { useAuth } from '@/hooks/core/useAuth'
+  import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
+  import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
   import {
     changeAppointmentStatus,
     deleteAppointment,
@@ -407,7 +407,6 @@
 
   const props = defineProps<{ kind: AppointmentKind; permissions: AppointmentPermissions }>()
   const emit = defineEmits<{ (event: 'success'): void }>()
-  const { confirmAction } = useArtFeedback()
   const { hasAuth } = useAuth()
   const drawerRef = ref<ArtDrawerExpose<AppointmentListRow>>()
   const childDialogRef = ref<{
@@ -426,6 +425,7 @@
   const selectingEntry = ref<EditableEntry | null>(null)
 
   const title = computed(() => (props.kind === 'pickup' ? '提货预约' : '送货预约'))
+  const { deleteGuardRef, deleteRecord } = useRecordDeleteGuard('tms_waybill_appointment', title)
   const canAdd = computed(() => hasAuth(props.permissions.add))
   const canEdit = computed(() => hasAuth(props.permissions.edit))
   const canDelete = computed(() => hasAuth(props.permissions.delete))
@@ -565,24 +565,26 @@
 
   async function removeEntry(entry: EditableEntry, index: number): Promise<void> {
     if (!entry.id) {
+      if (!canAdd.value) return
       form.entries.splice(index, 1)
       return
     }
-    try {
-      await confirmAction('确定删除这条预约记录吗？', '删除预约', {
-        type: 'warning',
-        confirmButtonText: '删除'
-      })
-    } catch {
-      return
-    }
-    try {
-      await deleteAppointment(entry.id)
-      emit('success')
-      await load()
-    } catch {
-      // The API boundary already showed the error; keep the editor open.
-    }
+    if (entry.status === 'completed') return
+    const id = entry.id
+    await deleteRecord({
+      resource: {
+        id,
+        label: [waybill.value?.waybillNo, entry.plateNo, entry.scheduledAt]
+          .filter(Boolean)
+          .join(' · ')
+      },
+      permission: props.permissions.delete,
+      remove: () => deleteAppointment(id),
+      onDeleted: async () => {
+        emit('success')
+        await load()
+      }
+    })
   }
 
   async function handleSave(): Promise<boolean> {

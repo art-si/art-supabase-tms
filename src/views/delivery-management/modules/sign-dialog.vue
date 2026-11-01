@@ -26,8 +26,6 @@
         :span="12"
         :gutter="20"
         label-width="86px"
-        :show-reset="false"
-        :show-submit="false"
       />
       <ElAlert
         v-if="ocrResult?.assessment.signals.length"

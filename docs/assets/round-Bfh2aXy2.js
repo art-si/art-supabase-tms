@@ -1,1 +1,0 @@
-import{D as e,rt as t}from"./_baseForOwn-Bs6skvRV.js";import{r as n,t as r}from"./toInteger-BIEuFw8k.js";var i=t.isFinite,a=Math.min;function o(t){var o=Math[t];return function(t,s){if(t=n(t),s=s==null?0:a(r(s),292),s&&i(t)){var c=(e(t)+`e`).split(`e`),l=o(c[0]+`e`+(+c[1]+s));return c=(e(l)+`e`).split(`e`),+(c[0]+`e`+(+c[1]-s))}return o(t)}}var s=o(`round`);export{s as t};

@@ -1,6 +1,11 @@
 import { toDateStartTimestamp, toDateEndTimestamp } from '@/utils/time/date-boundary'
 import { normalizeNullableText } from '@/utils/form/normalize'
-import { buildSupabaseRpcRange, normalizeSupabaseFunctionError } from '@/utils/supabase'
+import {
+  buildSupabaseRpcRange,
+  fetchAllRangePages,
+  normalizeSupabaseFunctionError
+} from '@/utils/supabase'
+import { loadAllDocumentPages } from '@/utils/business/document-detail-list'
 import { useSupabase } from '@/hooks/core/useSupabase'
 import { normalizeBooleanFilter, withRequestOptions } from '@/api/providers/supabase/query'
 import type { ApiRequestOptions } from '@/types/api/request'
@@ -103,6 +108,42 @@ export async function fetchCarrierList(params: CarrierSearchParams, options?: Ap
     error: result.error,
     fieldAccess: result.data?.fieldAccess ?? {}
   }
+}
+
+/** Parent maintenance needs full hierarchy and a concrete write tenant, unlike reference pickers. */
+export async function fetchCarrierParentOptions(params: {
+  tenantId?: string | null
+  recordId?: string
+}): Promise<Carrier[]> {
+  let tenantId = params.tenantId
+  const recordId = params.recordId
+  if (recordId) {
+    const record = await responseHandle<{ tenantId: string }>(
+      () => supabase.from('mdm_carrier').select('tenant_id').eq('id', recordId).single(),
+      { breakReturn: true, showErrorMessage: false }
+    )
+    tenantId = record.data?.tenantId
+  }
+  if (!tenantId) throw new Error('无法确认承运商所属租户，请刷新后重试')
+
+  const [carriers, identities] = await Promise.all([
+    loadAllDocumentPages(fetchCarrierList, {}),
+    fetchAllRangePages<{ id: string }>(({ from, to }) =>
+      responseHandle<{ id: string }[]>(
+        () =>
+          supabase
+            .from('mdm_carrier')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .order('id')
+            .range(from, to),
+        { breakReturn: true, showErrorMessage: false }
+      )
+    )
+  ])
+  if (identities.error) throw identities.error
+  const tenantRecordIds = new Set((identities.data ?? []).map((record) => record.id))
+  return carriers.filter((carrier) => carrier.id && tenantRecordIds.has(carrier.id))
 }
 
 export async function exportCarrierList(

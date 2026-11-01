@@ -1,0 +1,1 @@
+import{Q as e,nt as t,tt as n}from"./_baseForOwn-BkTLsIQZ.js";var r=RegExp(`[\\u200d\\ud800-\\udfff\\u0300-\\u036f\\ufe20-\\ufe2f\\u20d0-\\u20ff\\ufe0e\\ufe0f]`);function i(e){return r.test(e)}var a=`[object String]`;function o(r){return typeof r==`string`||!e(r)&&n(r)&&t(r)==a}export{i as n,o as t};

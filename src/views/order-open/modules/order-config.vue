@@ -20,8 +20,6 @@
       :validate-on-rule-change="false"
       label-position="top"
       custom-layout
-      :show-reset="false"
-      :show-submit="false"
       form-class="order-config__vehicle-form"
     >
       <ElFormItem prop="vehicleType" class="order-config__vehicle-validation">
@@ -112,8 +110,6 @@
       :gutter="16"
       label-position="top"
       root-class="order-config__settings-form p-0!"
-      :show-reset="false"
-      :show-submit="false"
       :validate-on-rule-change="false"
     >
       <template #tempMinC>

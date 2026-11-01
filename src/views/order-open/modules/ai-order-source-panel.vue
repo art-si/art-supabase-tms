@@ -29,8 +29,6 @@
           :span="24"
           label-width="0"
           root-class="ai-order-source__form"
-          :show-reset="false"
-          :show-submit="false"
         />
       </div>
 

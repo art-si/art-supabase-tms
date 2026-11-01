@@ -1,5 +1,7 @@
 <template>
-  <div class="business-workspace-page art-full-height min-w-0 gap-3">
+  <div
+    class="business-workspace-page art-full-height min-h-[var(--art-full-height)]! min-w-0 gap-3"
+  >
     <BusinessWorkspaceHeader
       eyebrow="COMPANY CERTIFICATION"
       title="公司认证信息"
@@ -8,6 +10,7 @@
     />
 
     <ArtSectionCard
+      class="min-h-0 flex-1"
       title="认证工作区"
       subtitle="资料变更保留独立申请记录，审核结果以服务端状态为准。"
       :loading="loading"
@@ -240,8 +243,6 @@
         :items="[]"
         custom-layout
         label-position="top"
-        :show-reset="false"
-        :show-submit="false"
         class="certification-form"
       >
         <ElFormItem
@@ -505,14 +506,7 @@
         show-icon
         :closable="false"
       />
-      <ArtForm
-        :model-value="reviewForm"
-        :items="[]"
-        custom-layout
-        label-position="top"
-        :show-reset="false"
-        :show-submit="false"
-      >
+      <ArtForm :model-value="reviewForm" :items="[]" custom-layout label-position="top">
         <ElFormItem label="审核结果" required>
           <ElRadioGroup v-model="reviewForm.decision">
             <ElRadio value="approved">资料通过</ElRadio>

@@ -8,8 +8,6 @@
       :span="8"
       :gutter="20"
       label-width="100px"
-      :show-reset="false"
-      :show-submit="false"
     />
   </ArtDialog>
 </template>
@@ -99,7 +97,6 @@
       remark: [{ max: 500, message: '备注不能超过 500 个字符', trigger: 'blur' }]
     },
     items: computed<FormItem[]>(() => [
-      { label: '基础信息', key: 'baseSection', type: 'divider', span: 24 },
       ...(shouldExposeTenantField.value
         ? [
             {
@@ -177,7 +174,6 @@
           inlinePrompt: true
         }
       },
-      { label: '联系信息', key: 'contactSection', type: 'divider', span: 24 },
       {
         label: '负责人',
         key: 'managerName',
@@ -196,7 +192,6 @@
           placeholder: '请输入站点联系电话'
         }
       },
-      { label: '备注信息', key: 'remarkSection', type: 'divider', span: 24 },
       {
         label: '备注',
         key: 'remark',

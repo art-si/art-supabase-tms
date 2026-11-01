@@ -193,15 +193,12 @@
         </div>
         <ArtForm
           ref="formRef"
-          :model-value="form"
-          @update:model-value="replaceReactiveModel(form, $event)"
+          v-model="form"
           :items="visibleItems"
           :rules="formRules"
           :span="12"
           :gutter="16"
           label-width="116px"
-          :show-reset="false"
-          :show-submit="false"
           tenant-scope-mode="manual"
         >
           <template #employeeId>
@@ -282,8 +279,8 @@
 </template>
 
 <script setup lang="ts">
-  import { replaceReactiveModel } from '@/utils/form/model'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
+  import { focusFirstInvalidFormField } from '@/utils/form/validation'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import {
     ElAlert,
@@ -380,12 +377,6 @@
   type CarrierOption = Api.Tms.BasicData.CarrierOption
   type DriverEmployeeOption = Api.Tms.BasicData.DriverEmployeeOption
 
-  interface DialogExposeForm {
-    validate: () => Promise<boolean>
-    clearValidate: () => void
-    readyToSubmit: boolean
-  }
-
   interface EmployeeSelectionGroup {
     selectedRows: DataSelectRecord[]
     columns: DataSelectColumn[]
@@ -427,7 +418,7 @@
   const { hasAuth } = useAuth()
   const canReviewCertification = computed(
     () =>
-      Boolean(form.id) &&
+      Boolean(form.value.id) &&
       Boolean(certification.value?.required) &&
       Boolean(certification.value?.canReview) &&
       hasAuth('TmsDriver:Audit')
@@ -439,11 +430,11 @@
       certification.value?.qualificationStatus === 'verified'
   )
   const loadCertification = async (): Promise<void> => {
-    if (!form.id) return
+    if (!form.value.id) return
     certificationLoading.value = true
     certificationError.value = false
     try {
-      const result = await fetchDriverCertification(String(form.id))
+      const result = await fetchDriverCertification(String(form.value.id))
       if (result.error || !result.data) throw result.error ?? new Error('认证结果为空')
       certification.value = result.data
     } catch (error) {
@@ -460,7 +451,7 @@
     reviewReason.value = ''
     void certificationDialogRef.value?.handleOpen(undefined, {
       title: decision === 'approved' ? '审核司机证件' : '撤销司机认证',
-      subtitle: form.driverName,
+      subtitle: form.value.driverName,
       confirmText: decision === 'approved' ? '确认审核通过' : '确认撤销',
       onConfirm: async () => {
         if (decision === 'revoked' && reviewReason.value.trim().length < 6) {
@@ -469,16 +460,16 @@
         }
         try {
           const result = await reviewDriverCertification(
-            String(form.id),
+            String(form.value.id),
             decision,
             reviewReason.value
           )
           if (result.error) throw result.error
-          const profile = await fetchDriverProfile(String(form.id))
+          const profile = await fetchDriverProfile(String(form.value.id))
           if (profile.data) {
-            form.identityAuthStatus = profile.data.identityAuthStatus
-            form.licenseAuthStatus = profile.data.licenseAuthStatus
-            form.qualificationAuthStatus = profile.data.qualificationAuthStatus
+            form.value.identityAuthStatus = profile.data.identityAuthStatus
+            form.value.licenseAuthStatus = profile.data.licenseAuthStatus
+            form.value.qualificationAuthStatus = profile.data.qualificationAuthStatus
           }
           await loadCertification()
           emit('success', 'edit')
@@ -498,7 +489,7 @@
   const certificateRows = ref<DriverCertificateRecord[]>([])
   const certificateLoading = ref(false)
   const certificateError = ref(false)
-  const formRef = ref<DialogExposeForm>()
+  const formRef = ref<InstanceType<typeof ArtForm>>()
   const activeTab = ref<DriverTab>('basic')
   const selectedCommissionRuleId = ref('')
   const activeImage = ref<DriverImageKey | ''>('')
@@ -605,11 +596,11 @@
     }
   ]
   const loadCertificates = async (): Promise<void> => {
-    if (!form.id || !canViewCertificates.value) return
+    if (!form.value.id || !canViewCertificates.value) return
     certificateLoading.value = true
     certificateError.value = false
     try {
-      const result = await fetchDriverCertificates(form.id)
+      const result = await fetchDriverCertificates(form.value.id)
       if (result.error) {
         certificateError.value = true
         return
@@ -625,10 +616,10 @@
     if (tab === 'certificates') void loadCertificates()
   })
   const openCertificateCenter = (): void => {
-    if (!form.id) return
+    if (!form.value.id) return
     void router.push({
       path: '/vms/certificate-center',
-      query: { subjectType: 'driver', subjectId: form.id }
+      query: { subjectType: 'driver', subjectId: form.value.id }
     })
     dialogRef.value?.handleClose()
   }
@@ -669,14 +660,14 @@
   }
   const genderOptions = computed(() => {
     const options = getDictMap.value.sex ?? []
-    const value = form.gender
+    const value = form.value.gender
     if (!value || options.some((option) => String(option.value) === value)) return options
     const label = legacyGenderLabels[value]
     return label ? [...options, { label, value }] : options
   })
   const ethnicityOptions = computed(() => {
     const options = getDictMap.value.hrEthnicity ?? []
-    const value = form.ethnicity
+    const value = form.value.ethnicity
     if (!value || options.some((option) => String(option.value) === value)) return options
     return [...options, { label: value, value }]
   })
@@ -784,7 +775,7 @@
     isRecordOwner: true
   })
 
-  const form = reactive<DriverForm>(createInitialForm())
+  const form = ref<DriverForm>(createInitialForm())
   const privateBucket = 'tms-driver-private'
   const imageKeys: readonly DriverImageKey[] = [
     'portraitUrl',
@@ -801,7 +792,7 @@
   const uploadDriverDocument = (file: File) =>
     uploadPrivateAttachment(file, {
       bucket: privateBucket,
-      tenantId: form.tenantId || '',
+      tenantId: form.value.tenantId || '',
       allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp'],
       maxBytes: 8 * 1024 * 1024
     })
@@ -813,7 +804,7 @@
   let ocrRequestId = 0
   const ocrResult = ref<DriverDocumentOcrResult | null>(null)
   const ocrReplaceExisting = ref(false)
-  const activeOcrImageUrl = computed(() => (activeImage.value ? form[activeImage.value] : ''))
+  const activeOcrImageUrl = computed(() => (activeImage.value ? form.value[activeImage.value] : ''))
   const ocrFieldLabels: Record<string, string> = {
     driverName: '姓名',
     idCardNo: '身份证号',
@@ -866,7 +857,7 @@
   const canRecognizeDocument = computed(
     () =>
       hasAuth('TmsDriver:Ocr') &&
-      hasAuth(form.id ? 'TmsDriver:Edit' : 'TmsDriver:Add') &&
+      hasAuth(form.value.id ? 'TmsDriver:Edit' : 'TmsDriver:Add') &&
       canEditDriverField('identityDocuments') &&
       (activeTab.value !== 'identity' || canEditDriverField('idCardNo'))
   )
@@ -877,7 +868,7 @@
     return ocrFieldsByTab[tab].flatMap((field) => {
       const recognized = result.document[field]
       if (!recognized || (Array.isArray(recognized) && !recognized.length)) return []
-      const current = form[field as keyof DriverForm]
+      const current = form.value[field as keyof DriverForm]
       const confidence = result.fieldConfidence[field]
       return [
         {
@@ -901,8 +892,8 @@
     const imageSide = activeImage.value
     if (!imageSide || imageSide === 'portraitUrl' || !canRecognizeDocument.value || ocrBusy.value)
       return
-    const imageUrl = form[imageSide]
-    if (!imageUrl || !form.tenantId) return
+    const imageUrl = form.value[imageSide]
+    if (!imageUrl || !form.value.tenantId) return
     const requestId = ++ocrRequestId
     ocrError.value = ''
     ocrErrorSide.value = imageSide
@@ -915,8 +906,8 @@
       const { data, error } = await analyzeDriverDocumentByAi({
         imagePath,
         imageSide: imageSide as DriverDocumentImageSide,
-        driverId: form.id ? String(form.id) : undefined,
-        tenantId: form.tenantId
+        driverId: form.value.id ? String(form.value.id) : undefined,
+        tenantId: form.value.tenantId
       })
       if (error) throw error
       if (!data) throw new Error('未获取到证件识别结果')
@@ -943,7 +934,7 @@
     const imageSide = activeImage.value
     if (!imageSide || imageSide === 'portraitUrl' || !canRecognizeDocument.value || ocrBusy.value)
       return
-    const imageUrl = form[imageSide]
+    const imageUrl = form.value[imageSide]
     if (!imageUrl) return
     const requestId = ++ocrRequestId
     ocrError.value = ''
@@ -1006,7 +997,7 @@
         })
         if (!value.length) continue
       }
-      Object.assign(form, { [row.field]: value })
+      Object.assign(form.value, { [row.field]: value })
       applied += 1
     }
     ElMessage.success(
@@ -1016,13 +1007,13 @@
   }
 
   const canViewDriverField = (field: Api.Tms.BasicData.DriverFieldKey): boolean =>
-    canViewField(form.fieldAccess, field)
+    canViewField(form.value.fieldAccess, field)
 
   const canEditDriverField = (field: Api.Tms.BasicData.DriverFieldKey): boolean =>
-    canEditField(form.fieldAccess, field)
+    canEditField(form.value.fieldAccess, field)
 
   const canViewIdentityDocuments = computed(() =>
-    isReadableFieldAccess(getFieldAccess(form.fieldAccess, 'identityDocuments'))
+    isReadableFieldAccess(getFieldAccess(form.value.fieldAccess, 'identityDocuments'))
   )
 
   const formRules = computed<FormRules<DriverForm>>(() => ({
@@ -1032,7 +1023,7 @@
       { min: 2, max: 50, message: '长度应为 2 到 50 个字符', trigger: 'blur' }
     ],
     carrierId:
-      form.driverOwnership === 'carrier'
+      form.value.driverOwnership === 'carrier'
         ? [{ required: true, message: '请选择所属承运商', trigger: 'change' }]
         : [],
     driverOwnership: [{ required: true, message: '请选择司机归属', trigger: 'change' }],
@@ -1063,10 +1054,10 @@
     licenseClasses: [
       { required: true, type: 'array', min: 1, message: '请选择准驾车型', trigger: 'change' }
     ],
-    licenseExpireDate: form.licenseLongTerm
+    licenseExpireDate: form.value.licenseLongTerm
       ? []
       : [{ required: true, message: '请选择驾照有效期', trigger: 'change' }],
-    idCardValidTo: form.idCardLongTerm
+    idCardValidTo: form.value.idCardLongTerm
       ? []
       : [{ required: true, message: '请选择身份证有效期', trigger: 'change' }],
     emergencyContactPhone: canEditDriverField('emergencyContact')
@@ -1091,14 +1082,14 @@
       props: {
         options: tenantOptions.value,
         filterable: true,
-        disabled: Boolean(form.id) || tenantOptions.value.length < 2
+        disabled: Boolean(form.value.id) || tenantOptions.value.length < 2
       }
     },
     {
       label: '花名册员工',
       key: 'employeeId',
       span: 24,
-      hidden: Boolean(form.id),
+      hidden: Boolean(form.value.id),
       description:
         '选择后回填共有身份信息并将员工岗位同步为司机；证照、承运商和司机类型仍需单独维护。'
     },
@@ -1190,7 +1181,7 @@
         clearable: true,
         placeholder: '公司名称/承运商编码',
         onChange: () => {
-          form.carrierVehiclePlates = []
+          form.value.carrierVehiclePlates = []
           void reloadAssignedVehicles()
         }
       }
@@ -1200,7 +1191,7 @@
       key: 'carrierVehiclePlates',
       type: 'inputTag',
       span: 16,
-      hidden: () => !form.id,
+      hidden: () => !form.value.id,
       props: {
         disabled: true,
         tagType: 'primary',
@@ -1362,7 +1353,7 @@
       label: '身份证有效期',
       key: 'idCardValidTo',
       type: 'date',
-      hidden: Boolean(form.idCardLongTerm),
+      hidden: Boolean(form.value.idCardLongTerm),
       props: { type: 'date', valueFormat: 'YYYY-MM-DD', class: '!w-full' }
     },
     { label: '长期有效', key: 'idCardLongTerm', type: 'switch' },
@@ -1518,21 +1509,21 @@
     return [...formItems.value, ...profileItems.value].filter(
       (item) =>
         fields.includes(item.key) &&
-        (item.key !== 'carrierId' || form.driverOwnership === 'carrier')
+        (item.key !== 'carrierId' || form.value.driverOwnership === 'carrier')
     )
   })
 
   watch(
-    () => form.licenseClasses,
+    () => form.value.licenseClasses,
     (classes) => {
-      form.licenseType = classes?.[0] || ''
+      form.value.licenseType = classes?.[0] || ''
     },
     { deep: true }
   )
 
   const replaceForm = (nextForm: DriverForm): void => {
-    Object.keys(form).forEach((key) => delete form[key as keyof DriverForm])
-    Object.assign(form, nextForm)
+    Object.keys(form.value).forEach((key) => delete form.value[key as keyof DriverForm])
+    Object.assign(form.value, nextForm)
   }
 
   const resetForm = async (): Promise<void> => {
@@ -1582,7 +1573,7 @@
   }
 
   const handleEmployeeValueChange = (value: DataSelectKey | DataSelectKey[] | undefined): void => {
-    form.employeeId = typeof value === 'string' ? value : null
+    form.value.employeeId = typeof value === 'string' ? value : null
   }
 
   const handleEmployeeRowsChange = (rows: DataSelectRecord[]): void => {
@@ -1593,7 +1584,7 @@
     const employee = rows[0] as DriverEmployeeOption | undefined
     if (!employee) return
 
-    Object.assign(form, {
+    Object.assign(form.value, {
       employeeId: employee.id,
       driverName: employee.employeeName,
       phone: employee.phone ?? '',
@@ -1608,7 +1599,7 @@
   }
 
   const handleEmployeeClear = (): void => {
-    form.employeeId = null
+    form.value.employeeId = null
     employeeSelection.selectedRows = []
     employeeSelection.tenantLabel = ''
   }
@@ -1617,7 +1608,7 @@
     carrierId: string | null
     profile: DriverProfile
   } => {
-    const rawPayload = structuredClone(toRaw(form))
+    const rawPayload = structuredClone(toRaw(form.value))
     for (const key of imageKeys) {
       const value = rawPayload[key]
       if (!value) {
@@ -1674,8 +1665,8 @@
 
     return {
       ...payload,
-      ...(form.id ? {} : { tenantId: form.tenantId }),
-      carrierId: form.driverOwnership === 'carrier' ? form.carrierId || null : null,
+      ...(form.value.id ? {} : { tenantId: form.value.tenantId }),
+      carrierId: form.value.driverOwnership === 'carrier' ? form.value.carrierId || null : null,
       profile: pick(rawPayload, profileKeys),
       licenseExpireDate: payload.licenseExpireDate || null,
       idCardFrontUrl: payload.idCardFrontUrl || null,
@@ -1702,7 +1693,11 @@
           ElMessage.warning('表单选项加载失败或耗时过长，请稍后重试')
           return false
         }
-        if (!(await validateArtFormForSubmit(formRef.value))) return false
+        if (!(await validateArtFormForSubmit(formRef.value))) {
+          const root = formRef.value?.$el
+          if (root instanceof HTMLElement) focusFirstInvalidFormField(shallowRef(root))
+          return false
+        }
         if (!isFormSessionCurrent(session)) return false
       }
       activeTab.value = previousTab
@@ -1715,7 +1710,7 @@
     if (!isFormSessionCurrent(session)) return false
     try {
       const payload = normalizePayload()
-      const type = form.id ? 'edit' : 'add'
+      const type = form.value.id ? 'edit' : 'add'
       if (type === 'edit') await editDriver(payload)
       else await addDriver(payload)
       emit('success', type)
@@ -1749,9 +1744,9 @@
     const isEdit = Boolean(row?.id)
     if (!isEdit) await tenantScopeStore.loadTenantOptions()
     if (initial && !row) {
-      form.phone = initial.phone
-      form.driverOwnership = initial.driverOwnership
-      form.carrierId = initial.carrierId || ''
+      form.value.phone = initial.phone
+      form.value.driverOwnership = initial.driverOwnership
+      form.value.carrierId = initial.carrierId || ''
       activeTab.value = 'identity'
     }
     if (row) {
@@ -1832,13 +1827,13 @@
   }
 
   const reloadAssignedVehicles = async (): Promise<void> => {
-    const driverId = form.id
-    const carrierId = form.carrierId
+    const driverId = form.value.id
+    const carrierId = form.value.carrierId
     const requestId = ++vehicleState.requestId
     vehicleState.error = ''
 
     if (!driverId || !carrierId) {
-      form.carrierVehiclePlates = []
+      form.value.carrierVehiclePlates = []
       vehicleState.loading = false
       return
     }
@@ -1851,10 +1846,10 @@
         vehicleState.error = '关联车辆加载失败，请重试'
         return
       }
-      form.carrierVehiclePlates = (result.data ?? []).map((vehicle) => vehicle.plateNo)
+      form.value.carrierVehiclePlates = (result.data ?? []).map((vehicle) => vehicle.plateNo)
     } catch {
       if (requestId !== vehicleState.requestId) return
-      form.carrierVehiclePlates = []
+      form.value.carrierVehiclePlates = []
       vehicleState.error = '关联车辆加载失败，请重试'
     } finally {
       if (requestId === vehicleState.requestId) vehicleState.loading = false

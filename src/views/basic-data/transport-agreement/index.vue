@@ -14,8 +14,7 @@
     </BusinessWorkspaceHeader>
     <ArtTableQuery
       ref="tableRef"
-      :model-value="search"
-      @update:model-value="replaceReactiveModel(search, $event)"
+      v-model="search"
       :search-items="searchItems"
       :api-fn="fetchTable"
       :columns-factory="columnsFactory"
@@ -30,109 +29,126 @@
       focusable
     />
     <TransportAgreementDialog ref="formDialogRef" @success="refresh" />
-    <ArtDialog ref="detailDialogRef" size="xl" :show-footer="false">
+    <ArtDialog
+      ref="detailDialogRef"
+      size="xl"
+      :show-footer="false"
+      @open="
+        () => {
+          activeDetailTab = 'transport'
+        }
+      "
+    >
       <template v-if="detail">
-        <ArtSectionTitle>运输信息</ArtSectionTitle>
-        <ArtDescriptions :data="detail" :items="transportItems" :columns="3" />
-        <ArtSectionTitle class="mt-5">协议内容</ArtSectionTitle>
-        <div
-          class="prose max-w-none break-words rounded-md bg-[var(--el-fill-color-extra-light)] px-5 py-4 text-sm leading-7 text-[var(--el-text-color-primary)]"
-          v-html="safeContent"
-        />
-        <ArtSectionTitle class="mt-5">证件附件</ArtSectionTitle>
-        <ArtEmptyState
-          v-if="
-            !detail.idCardImages.length &&
-            !detail.registrationImages.length &&
-            !detail.driverLicenseImage &&
-            !detail.roadPermitImage
-          "
-          title="暂无证件附件"
-          description="补充证件材料后，可在此查看。"
-          :visual-size="72"
-          size="compact"
-        />
-        <div v-else class="grid gap-5 md:grid-cols-2">
-          <div>
-            <div class="mb-2 text-sm font-medium">身份证</div>
-            <ArtUploadImage
-              v-if="detail.idCardImages.length"
-              :model-value="detail.idCardImages"
-              title="身份证"
-              :limit="3"
-              multiple
-              readonly
+        <ElTabs v-model="activeDetailTab">
+          <ElTabPane name="transport" label="运输与协议">
+            <ArtDescriptions :data="detail" :items="transportItems" :columns="3" />
+            <ArtSectionTitle class="mt-5">协议内容</ArtSectionTitle>
+            <div
+              class="prose max-w-none break-words rounded-md bg-[var(--el-fill-color-extra-light)] px-5 py-4 text-sm leading-7 text-[var(--el-text-color-primary)]"
+              v-html="safeContent"
             />
+          </ElTabPane>
+          <ElTabPane name="documents" label="证件附件">
             <ArtEmptyState
-              v-else
-              title="未上传身份证"
-              description="请在协议档案中补充。"
-              :visual-size="56"
+              v-if="
+                !detail.idCardImages.length &&
+                !detail.registrationImages.length &&
+                !detail.driverLicenseImage &&
+                !detail.roadPermitImage
+              "
+              title="暂无证件附件"
+              description="补充证件材料后，可在此查看。"
+              :visual-size="72"
               size="compact"
             />
-          </div>
-          <div>
-            <div class="mb-2 text-sm font-medium">行驶证</div>
-            <ArtUploadImage
-              v-if="detail.registrationImages.length"
-              :model-value="detail.registrationImages"
-              title="行驶证"
-              :limit="3"
-              multiple
-              readonly
-            />
-            <ArtEmptyState
-              v-else
-              title="未上传行驶证"
-              description="请在协议档案中补充。"
-              :visual-size="56"
-              size="compact"
-            />
-          </div>
-          <div>
-            <div class="mb-2 text-sm font-medium">驾驶证</div>
-            <ArtUploadImage
-              v-if="detail.driverLicenseImage"
-              :model-value="detail.driverLicenseImage"
-              title="驾驶证"
-              :limit="1"
-              readonly
-            />
-            <ArtEmptyState
-              v-else
-              title="未上传驾驶证"
-              description="请在协议档案中补充。"
-              :visual-size="56"
-              size="compact"
-            />
-          </div>
-          <div>
-            <div class="mb-2 text-sm font-medium">道路运输证</div>
-            <ArtUploadImage
-              v-if="detail.roadPermitImage"
-              :model-value="detail.roadPermitImage"
-              title="道路运输证"
-              :limit="1"
-              readonly
-            />
-            <ArtEmptyState
-              v-else
-              title="未上传道路运输证"
-              description="请在协议档案中补充。"
-              :visual-size="56"
-              size="compact"
-            />
-          </div>
-        </div>
-        <ArtSectionTitle class="mt-5">签署信息</ArtSectionTitle>
-        <ArtDescriptions :data="detail" :items="signatureItems" :columns="3" />
+            <div v-else class="grid gap-5 md:grid-cols-2">
+              <div>
+                <div class="mb-2 text-sm font-medium">身份证</div>
+                <ArtUploadImage
+                  v-if="detail.idCardImages.length"
+                  :model-value="detail.idCardImages"
+                  title="身份证"
+                  :limit="3"
+                  multiple
+                  readonly
+                />
+                <ArtEmptyState
+                  v-else
+                  title="未上传身份证"
+                  description="请在协议档案中补充。"
+                  :visual-size="56"
+                  size="compact"
+                />
+              </div>
+              <div>
+                <div class="mb-2 text-sm font-medium">行驶证</div>
+                <ArtUploadImage
+                  v-if="detail.registrationImages.length"
+                  :model-value="detail.registrationImages"
+                  title="行驶证"
+                  :limit="3"
+                  multiple
+                  readonly
+                />
+                <ArtEmptyState
+                  v-else
+                  title="未上传行驶证"
+                  description="请在协议档案中补充。"
+                  :visual-size="56"
+                  size="compact"
+                />
+              </div>
+              <div>
+                <div class="mb-2 text-sm font-medium">驾驶证</div>
+                <ArtUploadImage
+                  v-if="detail.driverLicenseImage"
+                  :model-value="detail.driverLicenseImage"
+                  title="驾驶证"
+                  :limit="1"
+                  readonly
+                />
+                <ArtEmptyState
+                  v-else
+                  title="未上传驾驶证"
+                  description="请在协议档案中补充。"
+                  :visual-size="56"
+                  size="compact"
+                />
+              </div>
+              <div>
+                <div class="mb-2 text-sm font-medium">道路运输证</div>
+                <ArtUploadImage
+                  v-if="detail.roadPermitImage"
+                  :model-value="detail.roadPermitImage"
+                  title="道路运输证"
+                  :limit="1"
+                  readonly
+                />
+                <ArtEmptyState
+                  v-else
+                  title="未上传道路运输证"
+                  description="请在协议档案中补充。"
+                  :visual-size="56"
+                  size="compact"
+                />
+              </div>
+            </div>
+          </ElTabPane>
+          <ElTabPane name="signing" label="签署信息">
+            <ArtDescriptions :data="detail" :items="signatureItems" :columns="3" />
+          </ElTabPane>
+        </ElTabs>
       </template>
     </ArtDialog>
+    <MasterDataDeleteGuard ref="deleteGuardRef" />
   </div>
 </template>
 
 <script setup lang="tsx">
-  import { replaceReactiveModel } from '@/utils/form/model'
+  import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
+  import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
+
   import DOMPurify from 'dompurify'
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
@@ -165,11 +181,16 @@
   defineOptions({ name: 'TmsTransportAgreement' })
 
   const tableRef = ref<ArtTableQueryExpose>()
+  const { deleteGuardRef, deleteRecords } = useRecordDeleteGuard(
+    'tms_transport_agreement',
+    '运输协议'
+  )
   const formDialogRef = ref<InstanceType<typeof TransportAgreementDialog>>()
+  const activeDetailTab = ref('transport')
   const detailDialogRef = ref<ArtDialogExpose<TransportAgreementRecord>>()
   const detail = ref<TransportAgreementRecord>()
   const safeContent = computed(() => DOMPurify.sanitize(detail.value?.contentHtml || ''))
-  const search = reactive<TransportAgreementSearch>({
+  const search = ref<TransportAgreementSearch>({
     agreementNo: '',
     shipperName: '',
     carrierId: '',
@@ -314,14 +335,24 @@
     {
       permission: 'TmsTransportAgreement:Delete',
       type: 'delete',
-      content: ({ selectedCount }: { selectedCount: number }) =>
-        `确定删除选中的 ${selectedCount} 份运输协议吗？`,
+      confirm: false,
       onClick: async ({ selectedRows, api }) => {
-        await deleteTmsBasicRecords(
-          'tms_transport_agreement',
-          (selectedRows as TransportAgreementRecord[]).map((row) => row.id)
-        )
-        await api.refreshRemove()
+        const resources = (selectedRows as TransportAgreementRecord[]).map((row) => ({
+          id: row.id,
+          label: row.agreementNo || '运输协议'
+        }))
+        await deleteRecords({
+          resources,
+          permission: 'TmsTransportAgreement:Delete',
+          remove: () =>
+            deleteTmsBasicRecords(
+              'tms_transport_agreement',
+              resources.map((resource) => resource.id)
+            ),
+          onDeleted: async () => {
+            await api.refreshRemove()
+          }
+        })
       }
     },
     {
@@ -342,7 +373,8 @@
       ],
       exportApi: async ({ maxRows }) => ({
         data:
-          (await fetchTransportAgreementList({ ...search, from: 0, to: maxRows - 1 })).data ?? []
+          (await fetchTransportAgreementList({ ...search.value, from: 0, to: maxRows - 1 })).data ??
+          []
       })
     }
   ])

@@ -8,22 +8,18 @@
     />
     <ArtForm
       ref="formRef"
-      :model-value="form"
-      @update:model-value="replaceReactiveModel(form, $event)"
+      v-model="form"
       :items="formItems"
       :rules="rules"
       :span="12"
       :gutter="20"
       label-width="100px"
-      :show-reset="false"
-      :show-submit="false"
       scroll-to-error
     />
   </ArtDialog>
 </template>
 
 <script setup lang="ts">
-  import { replaceReactiveModel } from '@/utils/form/model'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import dayjs from 'dayjs'
@@ -55,7 +51,7 @@
     reason: '',
     remark: null
   })
-  const form = reactive<BlacklistInput>(initialForm())
+  const form = ref<BlacklistInput>(initialForm())
 
   const formItems = computed<FormItem[]>(() => [
     ...tenantField.value,
@@ -117,13 +113,13 @@
     }
     try {
       await addDriverBlacklist({
-        ...form,
-        driverName: form.driverName.trim(),
-        phone: form.phone.trim(),
-        organizationName: form.organizationName.trim(),
-        reason: form.reason.trim(),
-        remark: normalizeNullableText(form.remark),
-        blacklistedAt: new Date(form.blacklistedAt.replace(' ', 'T')).toISOString()
+        ...form.value,
+        driverName: form.value.driverName.trim(),
+        phone: form.value.phone.trim(),
+        organizationName: form.value.organizationName.trim(),
+        reason: form.value.reason.trim(),
+        remark: normalizeNullableText(form.value.remark),
+        blacklistedAt: new Date(form.value.blacklistedAt.replace(' ', 'T')).toISOString()
       })
       emit('success')
       return true
@@ -134,7 +130,7 @@
   }
 
   const handleOpen = async (): Promise<void> => {
-    Object.assign(form, initialForm())
+    Object.assign(form.value, initialForm())
     await dialogRef.value?.handleOpen(undefined, {
       title: '新增黑名单',
       subtitle: '登记后可在列表中查看与导出，提交前请确认手机号和拉黑原因。',

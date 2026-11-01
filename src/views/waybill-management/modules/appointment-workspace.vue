@@ -17,8 +17,7 @@
 
     <ArtTableQuery
       ref="tableQueryRef"
-      :model-value="searchQuery"
-      @update:model-value="replaceReactiveModel(searchQuery, $event)"
+      v-model="searchQuery"
       :search-items="searchItems"
       :api-fn="fetchTableData"
       :columns-factory="columnsFactory"
@@ -39,7 +38,6 @@
 </template>
 
 <script setup lang="tsx">
-  import { replaceReactiveModel } from '@/utils/form/model'
   import { ElLink, ElMessage } from 'element-plus'
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
   import type {
@@ -82,7 +80,7 @@
   const tableQueryRef = ref<ArtTableQueryExpose>()
   const drawerRef = ref<DrawerExpose>()
   const statusOptions = useDictionaryOptions('tmsAppointmentStatus')
-  const searchQuery = reactive<AppointmentSearchParams>({
+  const searchQuery = ref<AppointmentSearchParams>({
     cargoKeyword: '',
     shippingKeyword: '',
     receivingKeyword: '',

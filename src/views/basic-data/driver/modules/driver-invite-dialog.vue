@@ -31,14 +31,11 @@
     <ArtForm
       v-else
       ref="formRef"
-      :model-value="form"
-      @update:model-value="replaceReactiveModel(form, $event)"
+      v-model="form"
       :items="items"
       :rules="rules"
       :span="24"
       label-width="100px"
-      :show-reset="false"
-      :show-submit="false"
     />
     <div v-if="!targetInvitation" class="driver-invite__recent">
       <strong>最近邀请</strong>
@@ -78,7 +75,6 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import { replaceReactiveModel } from '@/utils/form/model'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { formatWithDayjs } from '@/utils/time'
@@ -100,7 +96,7 @@
   const { getDictMap } = storeToRefs(useUserStore())
   const dialogRef = ref<ArtDialogExpose<undefined>>()
   const formRef = ref<{ validate: () => Promise<boolean> }>()
-  const form = reactive({ phone: '', driverOwnership: 'self', carrierId: '' })
+  const form = ref({ phone: '', driverOwnership: 'self', carrierId: '' })
   const recent = ref<DriverInvitation[]>([])
   const targetInvitation = ref<DriverInvitation | null>(null)
   const loading = ref(false)
@@ -127,7 +123,7 @@
       label: '所属承运商',
       key: 'carrierId',
       type: 'select',
-      hidden: form.driverOwnership !== 'carrier',
+      hidden: form.value.driverOwnership !== 'carrier',
       api: fetchCarrierOptions,
       resultField: 'data',
       labelField: 'companyName',
@@ -142,7 +138,7 @@
     ],
     driverOwnership: [{ required: true, message: '请选择司机归属', trigger: 'change' }],
     carrierId:
-      form.driverOwnership === 'carrier'
+      form.value.driverOwnership === 'carrier'
         ? [{ required: true, message: '请选择承运商', trigger: 'change' }]
         : []
   }))
@@ -165,7 +161,7 @@
   }
 
   const open = async (targetId?: string): Promise<void> => {
-    Object.assign(form, { phone: '', driverOwnership: 'self', carrierId: '' })
+    Object.assign(form.value, { phone: '', driverOwnership: 'self', carrierId: '' })
     targetInvitation.value = null
     if (targetId) {
       const result = await fetchDriverInvitation(targetId)
@@ -183,9 +179,9 @@
       onConfirm: async () => {
         if (!(await validateArtFormForSubmit(formRef.value))) return false
         const payload = {
-          phone: form.phone.trim(),
-          driverOwnership: form.driverOwnership,
-          carrierId: form.driverOwnership === 'carrier' ? form.carrierId || null : null
+          phone: form.value.phone.trim(),
+          driverOwnership: form.value.driverOwnership,
+          carrierId: form.value.driverOwnership === 'carrier' ? form.value.carrierId || null : null
         }
         try {
           await createDriverInvitation(payload)

@@ -420,6 +420,8 @@ type DeletableBasicTable =
 export async function deleteTmsBasicRecords(table: DeletableBasicTable, ids: string[]) {
   return await responseHandle(() => supabase.from(table).delete({ count: 'exact' }).in('id', ids), {
     showMessage: true,
+    showErrorMessage: false,
+    showReferenceFeedback: false,
     breakReturn: true,
     requireAffected: true
   })

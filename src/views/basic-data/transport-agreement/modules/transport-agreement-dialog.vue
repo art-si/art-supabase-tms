@@ -7,15 +7,13 @@
     </div>
     <ArtForm
       ref="formRef"
-      :model-value="form"
-      @update:model-value="replaceReactiveModel(form, $event)"
+      v-model:active-tab="activeTab"
+      v-model="form"
       :items="formItems"
       :rules="rules"
       :span="8"
       :gutter="20"
       label-width="118px"
-      :show-reset="false"
-      :show-submit="false"
       scroll-to-error
     >
       <template #contentHtml>
@@ -73,7 +71,6 @@
 </template>
 
 <script setup lang="ts">
-  import { replaceReactiveModel } from '@/utils/form/model'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import type { FormRules } from 'element-plus'
@@ -111,6 +108,7 @@
   const userStore = useUserStore()
   onMounted(() => void userStore.ensureDictLoaded('tmsTransportAgreementStatus'))
   const { needsTenantChoice, tenantField, selectedTenantId } = useBasicRecordTenant()
+  const activeTab = ref('transportSection')
   const dialogRef = ref<ArtDialogExpose<TransportAgreementRecord | undefined>>()
   const formRef = ref<FormExpose>()
   const editingId = ref('')
@@ -142,62 +140,62 @@
     partyBRepresentative: '',
     partyBSignedOn: ''
   })
-  const form = reactive<AgreementForm>(initialForm())
+  const form = ref<AgreementForm>(initialForm())
 
   watch(
-    () => form.tenantId,
+    () => form.value.tenantId,
     async () => {
       if (hydrating.value) return
-      form.carrierId = ''
+      form.value.carrierId = ''
       if (needsTenantChoice.value) await formRef.value?.reloadOptions('carrierId')
     }
   )
   watch(
-    () => form.carrierId,
+    () => form.value.carrierId,
     async (id) => {
       if (hydrating.value) return
       const version = ++carrierLoadVersion.value
-      form.carrierName = ''
-      form.partyBRepresentative = ''
-      form.vehicleId = ''
+      form.value.carrierName = ''
+      form.value.partyBRepresentative = ''
+      form.value.vehicleId = ''
       if (id) {
-        const { data } = await fetchBasicRecordCarrierOptions(form.tenantId)
+        const { data } = await fetchBasicRecordCarrierOptions(form.value.tenantId)
         if (version !== carrierLoadVersion.value) return
         const carrier = (data ?? []).find((item) => item.id === id)
-        form.carrierName = carrier?.companyName ?? ''
-        form.partyBRepresentative = carrier?.legalRepresentative || carrier?.contactName || ''
+        form.value.carrierName = carrier?.companyName ?? ''
+        form.value.partyBRepresentative = carrier?.legalRepresentative || carrier?.contactName || ''
       }
       await formRef.value?.reloadOptions('vehicleId')
     }
   )
   watch(
-    () => form.vehicleId,
+    () => form.value.vehicleId,
     async (id) => {
       if (hydrating.value) return
       const version = ++vehicleLoadVersion.value
-      form.plateNo = ''
-      form.vehicleType = ''
-      form.vehicleLengthText = ''
-      if (!id || !form.carrierId) return
-      const { data } = await fetchTmsVehicleOptions({ carrierId: form.carrierId })
+      form.value.plateNo = ''
+      form.value.vehicleType = ''
+      form.value.vehicleLengthText = ''
+      if (!id || !form.value.carrierId) return
+      const { data } = await fetchTmsVehicleOptions({ carrierId: form.value.carrierId })
       if (version !== vehicleLoadVersion.value) return
       const vehicle = (data ?? []).find((item) => item.id === id)
-      form.plateNo = vehicle?.plateNo ?? ''
-      form.vehicleType = vehicle?.vehicleType ?? ''
-      form.vehicleLengthText = '车辆档案未维护'
+      form.value.plateNo = vehicle?.plateNo ?? ''
+      form.value.vehicleType = vehicle?.vehicleType ?? ''
+      form.value.vehicleLengthText = '车辆档案未维护'
     }
   )
 
   const formItems = computed<FormItem[]>(() => [
     ...tenantField.value,
-    { label: '运输信息', key: 'transportSection', type: 'divider', span: 24 },
+    { label: '运输信息', key: 'transportSection', type: 'tab', span: 24 },
     { label: '托运方', key: 'shipperName', type: 'input', span: 12, props: { maxlength: 120 } },
     {
       label: '承运方',
       key: 'carrierId',
       type: 'select',
       span: 12,
-      api: () => fetchBasicRecordCarrierOptions(form.tenantId),
+      api: () => fetchBasicRecordCarrierOptions(form.value.tenantId),
       resultField: 'data',
       labelField: 'companyName',
       valueField: 'id',
@@ -208,15 +206,15 @@
       label: '车牌号',
       key: 'vehicleId',
       type: 'select',
-      api: () => fetchTmsVehicleOptions({ carrierId: form.carrierId }),
+      api: () => fetchTmsVehicleOptions({ carrierId: form.value.carrierId }),
       resultField: 'data',
       labelField: 'plateNo',
       valueField: 'id',
       props: {
         filterable: true,
         clearable: true,
-        disabled: !form.carrierId,
-        placeholder: form.carrierId ? '从车辆档案选择' : '请先选择承运方'
+        disabled: !form.value.carrierId,
+        placeholder: form.value.carrierId ? '从车辆档案选择' : '请先选择承运方'
       }
     },
     {
@@ -254,12 +252,12 @@
       }
     },
     { label: '协议内容', key: 'contentHtml', span: 24 },
-    { label: '证件附件', key: 'documentsSection', type: 'divider', span: 24 },
+    { label: '证件附件', key: 'documentsSection', type: 'tab', span: 24 },
     { label: '身份证（最多 3 张）', key: 'idCardImages', span: 12 },
     { label: '行驶证（最多 3 张）', key: 'registrationImages', span: 12 },
     { label: '驾驶证', key: 'driverLicenseImage', span: 12 },
     { label: '道路运输证', key: 'roadPermitImage', span: 12 },
-    { label: '签署信息', key: 'signSection', type: 'divider', span: 24 },
+    { label: '签署信息', key: 'signSection', type: 'tab', span: 24 },
     {
       label: '甲方（盖章）',
       key: 'partyASeal',
@@ -323,30 +321,30 @@
   const handleSubmit = async (): Promise<boolean> => {
     try {
       if (!(await validateArtFormForSubmit(formRef.value))) return false
-      if (form.endsOn && form.startsOn && form.endsOn < form.startsOn) {
+      if (form.value.endsOn && form.value.startsOn && form.value.endsOn < form.value.startsOn) {
         ElMessage.warning('协议结束时间不能早于开始时间')
         return false
       }
       const payload: TransportAgreementInput = {
-        tenantId: form.tenantId,
-        shipperName: form.shipperName.trim(),
-        carrierId: form.carrierId,
-        contactPhone: form.contactPhone.trim(),
-        vehicleId: form.vehicleId,
-        startsOn: form.startsOn,
-        endsOn: form.endsOn,
-        status: form.status,
-        contentHtml: form.contentHtml,
-        idCardImages: form.idCardImages,
-        registrationImages: form.registrationImages,
-        driverLicenseImage: form.driverLicenseImage,
-        roadPermitImage: form.roadPermitImage,
-        partyASeal: form.partyASeal.trim(),
-        partyARepresentative: form.partyARepresentative.trim(),
-        partyASignedOn: form.partyASignedOn,
-        partyBSeal: form.partyBSeal.trim(),
-        partyBRepresentative: form.partyBRepresentative.trim(),
-        partyBSignedOn: form.partyBSignedOn
+        tenantId: form.value.tenantId,
+        shipperName: form.value.shipperName.trim(),
+        carrierId: form.value.carrierId,
+        contactPhone: form.value.contactPhone.trim(),
+        vehicleId: form.value.vehicleId,
+        startsOn: form.value.startsOn,
+        endsOn: form.value.endsOn,
+        status: form.value.status,
+        contentHtml: form.value.contentHtml,
+        idCardImages: form.value.idCardImages,
+        registrationImages: form.value.registrationImages,
+        driverLicenseImage: form.value.driverLicenseImage,
+        roadPermitImage: form.value.roadPermitImage,
+        partyASeal: form.value.partyASeal.trim(),
+        partyARepresentative: form.value.partyARepresentative.trim(),
+        partyASignedOn: form.value.partyASignedOn,
+        partyBSeal: form.value.partyBSeal.trim(),
+        partyBRepresentative: form.value.partyBRepresentative.trim(),
+        partyBSignedOn: form.value.partyBSignedOn
       }
       if (editingId.value) await editTransportAgreement(editingId.value, payload)
       else await addTransportAgreement(payload)
@@ -359,11 +357,12 @@
   }
 
   const handleOpen = async (row?: TransportAgreementRecord): Promise<void> => {
+    activeTab.value = 'transportSection'
     editingId.value = row?.id ?? ''
     hydrating.value = true
-    Object.assign(form, initialForm())
+    Object.assign(form.value, initialForm())
     if (row) {
-      Object.assign(form, {
+      Object.assign(form.value, {
         tenantId: row.tenantId,
         shipperName: row.shipperName,
         carrierId: row.carrierId,

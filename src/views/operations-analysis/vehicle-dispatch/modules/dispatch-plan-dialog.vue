@@ -26,8 +26,6 @@
         :rules="rules"
         :span="12"
         label-position="top"
-        :show-reset="false"
-        :show-submit="false"
       />
     </ArtAsyncState>
   </ArtDialog>

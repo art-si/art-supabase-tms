@@ -3,6 +3,7 @@
     <div class="contract-dialog">
       <ArtForm
         ref="formRef"
+        v-model:active-tab="activeTab"
         v-model="form.data"
         :items="form.items"
         :rules="form.rules"
@@ -11,46 +12,47 @@
         label-width="124px"
         :validate-on-rule-change="false"
         scroll-to-error
-        :show-reset="false"
-        :show-submit="false"
-      />
-
-      <ContractTransportDetails
-        ref="transportDetailsRef"
-        v-model="form.data.transportDetails"
-        :unit-options="cargoUnitOptions"
-        :pricing-access="transportDetailsPricingAccess"
-        :editable="canEditTransportDetails"
-      />
-
-      <ArtSectionCard
-        v-if="canViewSensitiveField('attachments')"
-        class="contract-dialog__section"
-        preserve-content-structure
       >
-        <template #header
-          ><div class="contract-dialog__section-header">
-            <ArtSectionTitle :show-line="false">合同附件</ArtSectionTitle>
-            <div class="contract-dialog__section-actions" aria-label="合同附件操作">
-              <ArtUploadFile
-                title="上传附件"
-                :resource-tenant-id="form.data.tenantId || ''"
-                :disabled="!canEditSensitiveField('attachments')"
-                :show-file-list="false"
-                :show-tip="false"
-                inline
-                @resource-change="handleAttachmentUpload"
-              />
-            </div> </div
-        ></template>
-        <ArtTable
-          :data="form.data.attachments"
-          :columns="attachmentColumns"
-          :pagination="undefined"
-          :show-table-header="false"
-          empty-height="160px"
-        />
-      </ArtSectionCard>
+        <template #transportDetails>
+          <ContractTransportDetails
+            ref="transportDetailsRef"
+            v-model="form.data.transportDetails"
+            :unit-options="cargoUnitOptions"
+            :pricing-access="transportDetailsPricingAccess"
+            :editable="canEditTransportDetails"
+          />
+        </template>
+        <template #contractAttachments>
+          <ArtSectionCard
+            v-if="canViewSensitiveField('attachments')"
+            class="contract-dialog__section"
+            preserve-content-structure
+          >
+            <template #header
+              ><div class="contract-dialog__section-header">
+                <ArtSectionTitle :show-line="false">合同附件</ArtSectionTitle>
+                <div class="contract-dialog__section-actions" aria-label="合同附件操作">
+                  <ArtUploadFile
+                    title="上传附件"
+                    :resource-tenant-id="form.data.tenantId || ''"
+                    :disabled="!canEditSensitiveField('attachments')"
+                    :show-file-list="false"
+                    :show-tip="false"
+                    inline
+                    @resource-change="handleAttachmentUpload"
+                  />
+                </div> </div
+            ></template>
+            <ArtTable
+              :data="form.data.attachments"
+              :columns="attachmentColumns"
+              :pagination="undefined"
+              :show-table-header="false"
+              empty-height="160px"
+            />
+          </ArtSectionCard>
+        </template>
+      </ArtForm>
     </div>
 
     <template #footer="{ loading, api }">
@@ -145,6 +147,7 @@
   const userStore = useUserStore()
   const { getDictMap } = storeToRefs(userStore)
   const { defaultWriteTenantId } = useTenantScopeFormPolicy()
+  const activeTab = ref('baseSection')
   const dialogRef = ref<ArtDialogExpose<Contract | undefined>>()
   const formRef = ref<FormExpose>()
   const transportDetailsRef = ref<InstanceType<typeof ContractTransportDetails>>()
@@ -230,7 +233,7 @@
     carrierOptions: [],
     customerOptions: [],
     items: computed<FormItem[]>(() => [
-      { label: '基础信息', key: 'baseSection', type: 'divider', span: 24 },
+      { label: '基础信息', key: 'baseSection', type: 'tab', span: 24 },
       {
         label: '合同编号',
         key: 'contractNo',
@@ -350,7 +353,7 @@
         type: 'input',
         props: { maxlength: 40, placeholder: '请输入经办人' }
       },
-      { label: '计费与履约', key: 'termsSection', type: 'divider', span: 24 },
+      { label: '计费与履约', key: 'termsSection', type: 'tab', span: 24 },
       {
         label: '计费方式',
         key: 'billingMethod',
@@ -436,7 +439,7 @@
         span: 16,
         props: { maxlength: 60, clearable: true, placeholder: '可选，填写关联运单号' }
       },
-      { label: '运输与合同约定', key: 'routeSection', type: 'divider', span: 24 },
+      { label: '运输与合同约定', key: 'routeSection', type: 'tab', span: 24 },
       {
         label: '运输路线',
         key: 'transportRoute',
@@ -500,7 +503,16 @@
           showWordLimit: true,
           placeholder: '请输入合同说明'
         }
-      }
+      },
+      { key: 'transportDetailsSection', label: '运输明细', type: 'tab', hidden: false },
+      { key: 'transportDetails', label: '', type: 'slot', span: 24 },
+      {
+        key: 'contractAttachmentsSection',
+        label: '合同附件',
+        type: 'tab',
+        hidden: !canViewSensitiveField('attachments')
+      },
+      { key: 'contractAttachments', label: '', type: 'slot', span: 24 }
     ]),
     rules: {
       contractNo: [
@@ -755,7 +767,10 @@
 
   const validateTransportDetails = async (): Promise<boolean> => {
     if (!canEditTransportDetails.value) return true
+    activeTab.value = 'transportDetailsSection'
+    await nextTick()
     const tableValidation = await transportDetailsRef.value?.validate()
+    if (tableValidation?.firstError) ElMessage.warning(tableValidation.firstError.message)
     if (!tableValidation || tableValidation.valid) return true
     return false
   }
@@ -798,6 +813,7 @@
   }
 
   const handleOpen = async (row?: Contract): Promise<void> => {
+    activeTab.value = 'baseSection'
     const targetTenantId = defaultWriteTenantId.value
     if (!row?.id && !targetTenantId) {
       ElMessage.warning('无法确定新增合同的目标租户，请刷新后重试')

@@ -7,15 +7,13 @@
     </div>
     <ArtForm
       ref="formRef"
-      :model-value="form"
-      @update:model-value="replaceReactiveModel(form, $event)"
+      v-model:active-tab="activeTab"
+      v-model="form"
       :items="formItems"
       :rules="rules"
       :span="8"
       :gutter="20"
       label-width="112px"
-      :show-reset="false"
-      :show-submit="false"
       scroll-to-error
     >
       <template #attachments>
@@ -33,7 +31,6 @@
 </template>
 
 <script setup lang="ts">
-  import { replaceReactiveModel } from '@/utils/form/model'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { storeToRefs } from 'pinia'
@@ -54,17 +51,13 @@
 
   defineOptions({ name: 'TmsServiceCaseDialog' })
 
-  interface FormExpose {
-    validate: () => Promise<boolean>
-    clearValidate: () => void
-  }
-
   const emit = defineEmits<{ success: [mode: 'add' | 'edit'] }>()
   const userStore = useUserStore()
   const { getDictMap } = storeToRefs(userStore)
   const { needsTenantChoice, tenantField, selectedTenantId } = useBasicRecordTenant()
   const dialogRef = ref<ArtDialogExpose<ServiceCaseRecord | undefined>>()
-  const formRef = ref<FormExpose>()
+  const formRef = ref<InstanceType<typeof ArtForm>>()
+  const activeTab = ref('baseSection')
   const editId = ref<string>()
   const initialForm = (): ServiceCaseInput => ({
     tenantId: selectedTenantId.value,
@@ -79,14 +72,14 @@
     remark: null,
     status: 'pending'
   })
-  const form = reactive<ServiceCaseInput>(initialForm())
+  const form = ref<ServiceCaseInput>(initialForm())
   const serviceTypeOptions = computed(() => getDictMap.value.tmsServiceType ?? [])
   const complaintTypeOptions = computed(() => getDictMap.value.tmsComplaintType ?? [])
   const statusOptions = computed(() => getDictMap.value.tmsServiceCaseStatus ?? [])
 
   const formItems = computed<FormItem[]>(() => [
     ...(!editId.value ? tenantField.value : []),
-    { label: '基础信息', key: 'baseSection', type: 'divider', span: 24 },
+    { label: '基础信息', key: 'baseSection', type: 'tab' },
     {
       label: '服务类型',
       key: 'serviceType',
@@ -116,6 +109,7 @@
     },
     { label: '联系人', key: 'contactName', type: 'input', props: { maxlength: 80 } },
     { label: '联系人手机号', key: 'contactPhone', type: 'input', props: { maxlength: 11 } },
+    { label: '内容与处理', key: 'contentSection', type: 'tab' },
     {
       label: '内容',
       key: 'content',
@@ -147,7 +141,7 @@
         : [],
     serviceType: [{ required: true, message: '请选择服务类型', trigger: 'change' }],
     complaintTypes:
-      form.serviceType === 'complaint'
+      form.value.serviceType === 'complaint'
         ? [
             {
               type: 'array',
@@ -175,13 +169,13 @@
       return false
     }
     const payload: ServiceCaseInput = {
-      ...form,
-      title: form.title.trim(),
-      waybillNo: normalizeNullableText(form.waybillNo),
-      contactName: form.contactName.trim(),
-      contactPhone: form.contactPhone.trim(),
-      content: form.content.trim(),
-      remark: normalizeNullableText(form.remark)
+      ...form.value,
+      title: form.value.title.trim(),
+      waybillNo: normalizeNullableText(form.value.waybillNo),
+      contactName: form.value.contactName.trim(),
+      contactPhone: form.value.contactPhone.trim(),
+      content: form.value.content.trim(),
+      remark: normalizeNullableText(form.value.remark)
     }
     try {
       if (editId.value) await editServiceCase(editId.value, payload)
@@ -195,10 +189,11 @@
   }
 
   const handleOpen = async (row?: ServiceCaseRecord): Promise<void> => {
+    activeTab.value = 'baseSection'
     editId.value = row?.id
-    Object.assign(form, initialForm())
+    Object.assign(form.value, initialForm())
     if (row) {
-      Object.assign(form, {
+      Object.assign(form.value, {
         tenantId: row.tenantId,
         serviceType: row.serviceType,
         complaintTypes: [...row.complaintTypes],

@@ -123,8 +123,6 @@
         :span="12"
         label-width="112px"
         root-class="dispatch-dialog__form"
-        :show-reset="false"
-        :show-submit="false"
       >
         <template #dispatchCarrierId>
           <ArtTableSingleSelect

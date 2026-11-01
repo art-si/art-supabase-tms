@@ -92,8 +92,6 @@
           :span="12"
           :gutter="20"
           label-position="top"
-          :show-reset="false"
-          :show-submit="false"
           class="cargo-operation-dialog__form art-card-xs"
         >
           <template #photoUrls>

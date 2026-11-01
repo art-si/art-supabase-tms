@@ -51,8 +51,6 @@
           :gutter="24"
           label-width="98px"
           root-class="customer-price-edit__form"
-          :show-reset="false"
-          :show-submit="false"
         />
 
         <div class="customer-price-edit__contact-grid">
@@ -90,8 +88,6 @@
               :span="24"
               label-width="92px"
               root-class="customer-price-edit__form"
-              :show-reset="false"
-              :show-submit="false"
             >
               <template #shippingAddressDetail>
                 <div
@@ -177,8 +173,6 @@
               :span="24"
               label-width="92px"
               root-class="customer-price-edit__form"
-              :show-reset="false"
-              :show-submit="false"
             >
               <template #receivingAddressDetail>
                 <div
@@ -265,8 +259,6 @@
           :gutter="24"
           label-width="98px"
           root-class="customer-price-edit__form"
-          :show-reset="false"
-          :show-submit="false"
         />
       </ArtSectionCard>
 
@@ -285,8 +277,6 @@
           :gutter="24"
           label-width="98px"
           root-class="customer-price-edit__form"
-          :show-reset="false"
-          :show-submit="false"
         />
       </ArtSectionCard>
 
@@ -305,8 +295,6 @@
           :gutter="24"
           label-width="98px"
           root-class="customer-price-edit__form"
-          :show-reset="false"
-          :show-submit="false"
         />
       </ArtSectionCard>
     </div>

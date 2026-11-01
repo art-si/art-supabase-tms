@@ -140,6 +140,7 @@
     {
       prop: 'cargoDescription',
       label: '货物描述',
+      headerTooltip: '可批量参选货物，或手工填写合同约定的货物描述。',
       required: true,
       requiredMessage: ({ rowIndex }) => `第 ${rowIndex + 1} 条运输明细缺少货物描述`,
       minWidth: 190,
@@ -179,6 +180,7 @@
     {
       prop: 'contractQuantity',
       label: '合同数量',
+      headerTooltip: '合同数量不能小于 0，运费按数量与运输单价计算。',
       required: true,
       rules: [
         {
@@ -204,6 +206,7 @@
     {
       prop: 'unit',
       label: '计量单位',
+      headerTooltip: '必须选择或填写合同约定的计量单位。',
       required: true,
       requiredMessage: ({ rowIndex }) => `第 ${rowIndex + 1} 条运输明细未选择计量单位`,
       minWidth: 130,

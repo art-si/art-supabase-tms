@@ -7,15 +7,13 @@
     </div>
     <ArtForm
       ref="formRef"
-      :model-value="form"
-      @update:model-value="replaceReactiveModel(form, $event)"
+      v-model:active-tab="activeTab"
+      v-model="form"
       :items="formItems"
       :rules="rules"
       :span="8"
       :gutter="20"
       label-width="112px"
-      :show-reset="false"
-      :show-submit="false"
       scroll-to-error
     >
       <template #contentHtml>
@@ -41,7 +39,6 @@
 </template>
 
 <script setup lang="ts">
-  import { replaceReactiveModel } from '@/utils/form/model'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import type { FormRules } from 'element-plus'
@@ -74,6 +71,7 @@
   const emit = defineEmits<{ success: [] }>()
   const userStore = useUserStore()
   const { needsTenantChoice, tenantField, selectedTenantId } = useBasicRecordTenant()
+  const activeTab = ref('contractSection')
   const dialogRef = ref<ArtDialogExpose>()
   const formRef = ref<FormExpose>()
   const initialForm = (): ContractForm => ({
@@ -92,36 +90,36 @@
     contentHtml: '',
     attachments: []
   })
-  const form = reactive<ContractForm>(initialForm())
+  const form = ref<ContractForm>(initialForm())
   const carrierLoadVersion = ref(0)
 
   watch(
-    () => form.tenantId,
+    () => form.value.tenantId,
     async () => {
-      form.partyBCarrierId = ''
-      form.partyBCompany = ''
-      form.partyBRepresentative = ''
+      form.value.partyBCarrierId = ''
+      form.value.partyBCompany = ''
+      form.value.partyBRepresentative = ''
       if (needsTenantChoice.value) await formRef.value?.reloadOptions('partyBCarrierId')
     }
   )
   watch(
-    () => form.partyBCarrierId,
+    () => form.value.partyBCarrierId,
     async (id) => {
       const version = ++carrierLoadVersion.value
-      form.partyBCompany = ''
-      form.partyBRepresentative = ''
+      form.value.partyBCompany = ''
+      form.value.partyBRepresentative = ''
       if (!id) return
-      const { data } = await fetchBasicRecordCarrierOptions(form.tenantId)
+      const { data } = await fetchBasicRecordCarrierOptions(form.value.tenantId)
       if (version !== carrierLoadVersion.value) return
       const carrier = (data ?? []).find((item) => item.id === id)
-      form.partyBCompany = carrier?.companyName ?? ''
-      form.partyBRepresentative = carrier?.legalRepresentative || carrier?.contactName || ''
+      form.value.partyBCompany = carrier?.companyName ?? ''
+      form.value.partyBRepresentative = carrier?.legalRepresentative || carrier?.contactName || ''
     }
   )
 
   const formItems = computed<FormItem[]>(() => [
     ...tenantField.value,
-    { label: '合同信息', key: 'contractSection', type: 'divider', span: 24 },
+    { label: '合同信息', key: 'contractSection', type: 'tab', span: 24 },
     {
       label: '合同名称',
       key: 'contractName',
@@ -144,7 +142,7 @@
     },
     { label: '合同内容', key: 'contentHtml', span: 24 },
     { label: '附件', key: 'attachments', span: 24 },
-    { label: '签署双方', key: 'partySection', type: 'divider', span: 24 },
+    { label: '签署双方', key: 'partySection', type: 'tab', span: 24 },
     { label: '甲方公司', key: 'partyACompany', type: 'input', props: { maxlength: 120 } },
     { label: '甲方代表人', key: 'partyARepresentative', type: 'input', props: { maxlength: 80 } },
     { label: '甲方主体', key: 'partyASubject', type: 'input', props: { maxlength: 120 } },
@@ -152,7 +150,7 @@
       label: '乙方承运商',
       key: 'partyBCarrierId',
       type: 'select',
-      api: () => fetchBasicRecordCarrierOptions(form.tenantId),
+      api: () => fetchBasicRecordCarrierOptions(form.value.tenantId),
       resultField: 'data',
       labelField: 'companyName',
       valueField: 'id',
@@ -189,22 +187,26 @@
       notifyFriendlyError(error, '表单校验未完成，请稍后重试', 'warning')
       return false
     }
-    if (!form.dateRange[0] || !form.dateRange[1] || form.dateRange[1] < form.dateRange[0]) {
+    if (
+      !form.value.dateRange[0] ||
+      !form.value.dateRange[1] ||
+      form.value.dateRange[1] < form.value.dateRange[0]
+    ) {
       return false
     }
     const payload: ElectronicContractInput = {
-      tenantId: form.tenantId,
-      contractName: form.contractName.trim(),
-      partyACompany: form.partyACompany.trim(),
-      partyARepresentative: normalizeNullableText(form.partyARepresentative),
-      partyASubject: form.partyASubject.trim(),
-      partyBCarrierId: form.partyBCarrierId,
-      partyBRepresentative: normalizeNullableText(form.partyBRepresentative),
-      partyBSubject: form.partyBSubject.trim(),
-      startsOn: form.dateRange[0],
-      endsOn: form.dateRange[1],
-      contentHtml: form.contentHtml,
-      attachments: form.attachments
+      tenantId: form.value.tenantId,
+      contractName: form.value.contractName.trim(),
+      partyACompany: form.value.partyACompany.trim(),
+      partyARepresentative: normalizeNullableText(form.value.partyARepresentative),
+      partyASubject: form.value.partyASubject.trim(),
+      partyBCarrierId: form.value.partyBCarrierId,
+      partyBRepresentative: normalizeNullableText(form.value.partyBRepresentative),
+      partyBSubject: form.value.partyBSubject.trim(),
+      startsOn: form.value.dateRange[0],
+      endsOn: form.value.dateRange[1],
+      contentHtml: form.value.contentHtml,
+      attachments: form.value.attachments
     }
     try {
       await addElectronicContract(payload)
@@ -217,7 +219,8 @@
   }
 
   const handleOpen = async (): Promise<void> => {
-    Object.assign(form, initialForm())
+    activeTab.value = 'contractSection'
+    Object.assign(form.value, initialForm())
     await dialogRef.value?.handleOpen(undefined, {
       title: '创建电子合同',
       subtitle: '按合同信息、内容与签署双方完成登记。',

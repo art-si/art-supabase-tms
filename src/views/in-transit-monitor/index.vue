@@ -226,6 +226,8 @@
   import ArtIconButton from '@/components/core/widget/art-icon-button/index.vue'
   import { fetchInTransitMonitorList } from '@tms/api'
   import { useAmapSdk } from '@/hooks/core/useAmapSdk'
+  import { useAmapGeolocation } from '@/hooks/core/useAmapGeolocation'
+  import { useAmapInitialView } from '@/hooks/core/useAmapInitialView'
   import { useUserStore } from '@/store/modules/user'
   import { formatWithDayjs } from '@/utils/time'
   import { formatPercentValue } from '@/utils/ui/format'
@@ -251,7 +253,6 @@
     regionOptions,
     VEHICLE_TYPE_DICT_CODE
   } from './modules/monitor-config'
-  import { INITIAL_MAP_CENTER } from './modules/monitor-geo-config'
   import type {
     GeoCoord,
     MonitorMode,
@@ -293,6 +294,8 @@
     plugins: AMAP_PLUGINS,
     securityJsCode: import.meta.env.VITE_AMAP_SECURITY_JS_CODE
   })
+  const { getCurrentLocation } = useAmapGeolocation()
+  const initialView = useAmapInitialView(getCurrentLocation)
   const { getDictMap } = storeToRefs(userStore)
   const viewportRef = ref<HTMLDivElement>()
   const chartRef = ref<HTMLDivElement>()
@@ -506,8 +509,9 @@
   function initializeMap(AMap: MonitorAmapNamespace, element: HTMLElement): void {
     try {
       amapSdk.value = AMap
+      const businessCenter = getBusinessMapCenter()
       amapInstance.value = new AMap.Map(element, {
-        center: INITIAL_MAP_CENTER,
+        ...(businessCenter ? { center: businessCenter } : {}),
         doubleClickZoom: true,
         dragEnable: true,
         features: ['bg', 'road', 'point'],
@@ -528,6 +532,8 @@
       amapInstance.value.addControl(new AMap.Scale())
       amapInstance.value.on('zoomchange', syncMapViewState)
       amapInstance.value.on('mapmove', syncMapViewState)
+      amapInstance.value.on('dragstart', initialView.cancel)
+      amapInstance.value.on('click', initialView.cancel)
       amapReady.value = true
       const routeOrder = mapRouteOrder.value
       if (routeOrder) void ensureDrivingRoute(routeOrder)
@@ -538,6 +544,37 @@
 
     updateChinaMap()
     fitSelectedMapView(true)
+    if (amapInstance.value && !getBusinessMapCenter())
+      void centerOnCurrentLocation(amapInstance.value)
+  }
+
+  function getBusinessMapCenter(): GeoCoord | undefined {
+    const active = mapRouteOrder.value
+    return (
+      active?.currentGeo ??
+      active?.originGeo ??
+      active?.destinationGeo ??
+      activeOrder.value?.originGeo ??
+      modeOrders.value.find((order) => order.currentGeo)?.currentGeo
+    )
+  }
+
+  async function centerOnCurrentLocation(instance: MonitorAmapMapInstance): Promise<void> {
+    try {
+      const center = await initialView.resolveCenter()
+      if (!center || amapInstance.value !== instance || getBusinessMapCenter()) return
+      if (instance.setZoomAndCenter) instance.setZoomAndCenter(13, center)
+      else {
+        instance.setCenter?.(center)
+        instance.setZoom?.(13)
+      }
+      syncMapViewState()
+    } catch (error) {
+      if (amapInstance.value !== instance) return
+      ElMessage.warning(
+        getFriendlySupabaseErrorMessage(error, '暂时无法获取当前位置，可拖动地图查看')
+      )
+    }
   }
 
   function updateChinaMap(): void {
@@ -913,8 +950,7 @@
     const active = mapRouteOrder.value
     if (!map) return
     if (!active) {
-      const selected = activeOrder.value
-      if (selected) fitPendingVehicle(selected.originGeo)
+      fitPendingVehicle(getBusinessMapCenter())
       return
     }
     if (!force && mapZoom.value >= 11) return
@@ -929,10 +965,12 @@
       selectedMarker
     ].filter((overlay): overlay is MonitorAmapOverlay => Boolean(overlay))
     if (overlays.length && map.setFitView) {
+      initialView.cancel()
       map.setFitView(overlays, false, [96, 96, 96, 380])
     } else {
       const current = active.currentGeo
       if (!current) return
+      initialView.cancel()
       if (map.setZoomAndCenter) map.setZoomAndCenter(INITIAL_MAP_ZOOM, current)
       else {
         map.setZoom?.(INITIAL_MAP_ZOOM)
@@ -945,6 +983,7 @@
   function fitPendingVehicle(origin?: GeoCoord): void {
     const map = amapInstance.value
     if (!map || !origin) return
+    initialView.cancel()
     map.setCenter?.(origin)
     if (mapZoom.value !== INITIAL_MAP_ZOOM) map.setZoom?.(INITIAL_MAP_ZOOM)
     syncMapViewState()
@@ -953,13 +992,14 @@
   function fitSelectedMapView(force = false): void {
     const selected = activeOrder.value
     if (selected?.status === 'pending') {
-      fitPendingVehicle(selected.originGeo)
+      fitPendingVehicle(selected.originGeo ?? getBusinessMapCenter())
       return
     }
     fitActiveTrack(force)
   }
 
   function zoomMap(direction: 'in' | 'out'): void {
+    initialView.cancel()
     const map = amapInstance.value
     if (!map) return
     if (direction === 'in') map.zoomIn?.()
@@ -976,6 +1016,7 @@
   }
 
   function destroyMonitorMap(): void {
+    initialView.cancel()
     amapInstance.value?.destroy?.()
     amapInstance.value = undefined
     amapSdk.value = undefined

@@ -168,7 +168,13 @@ export async function saveAppointment(payload: AppointmentSavePayload) {
 export async function deleteAppointment(id: string) {
   return await responseHandle(
     () => supabase.rpc('tms_delete_waybill_appointment_secure', { p_id: id }),
-    { ...writeOptions, showMessage: true, message: '预约已删除' }
+    {
+      ...writeOptions,
+      showMessage: true,
+      message: '预约已删除',
+      showErrorMessage: false,
+      showReferenceFeedback: false
+    }
   )
 }
 

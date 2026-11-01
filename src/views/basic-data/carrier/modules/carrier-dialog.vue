@@ -2,15 +2,13 @@
   <ArtDialog ref="dialogRef" size="xl">
     <ArtForm
       ref="formRef"
-      :model-value="form"
-      @update:model-value="replaceReactiveModel(form, $event)"
+      v-model:active-tab="activeTab"
+      v-model="form"
       :items="formItems"
       :rules="formRules"
       :span="8"
       :gutter="20"
       label-width="118px"
-      :show-reset="false"
-      :show-submit="false"
     >
       <template #businessLicenseUrl>
         <ArtUploadImage
@@ -39,7 +37,6 @@
 </template>
 
 <script setup lang="ts">
-  import { replaceReactiveModel } from '@/utils/form/model'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import type { FormRules } from 'element-plus'
@@ -50,9 +47,11 @@
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import { useDocumentNumberRule } from '@/hooks/core/useDocumentNumberRule'
   import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
-  import { addCarrier, editCarrier, fetchCarrierOptions } from '@tms/api'
+  import { addCarrier, editCarrier, fetchCarrierParentOptions } from '@tms/api'
   import { fetchRegionOptions } from '@/api/region-options'
   import { useUserStore } from '@/store/modules/user'
+  import { useTenantScopeFormPolicy } from '@/hooks/core/useTenantScopeFormPolicy'
+  import TreeUtils from '@/utils/tree'
   import { carrierSelections } from '@tms/views/basic-data/carrier/modules/carrier-selection'
   import {
     isReadableFieldAccess,
@@ -77,6 +76,8 @@
   }>()
 
   const { getDictMap } = storeToRefs(useUserStore())
+  const { defaultWriteTenantId } = useTenantScopeFormPolicy()
+  const activeTab = ref('baseSection')
   const dialogRef = ref<ArtDialogExpose<Carrier | undefined>>()
   const formRef = ref<DialogExposeForm>()
 
@@ -124,17 +125,17 @@
     isRecordOwner: true
   })
 
-  const form = reactive<CarrierForm>(createInitialForm())
-  const carrierNumber = useDocumentNumberRule('master.carrier', () => form.tenantId)
+  const form = ref<CarrierForm>(createInitialForm())
+  const carrierNumber = useDocumentNumberRule('master.carrier', () => form.value.tenantId)
 
   const canViewCarrierField = (field: Api.Tms.BasicData.CarrierFieldKey): boolean =>
-    canViewField(form.fieldAccess, field)
+    canViewField(form.value.fieldAccess, field)
 
   const canEditCarrierField = (field: Api.Tms.BasicData.CarrierFieldKey): boolean =>
-    canEditField(form.fieldAccess, field)
+    canEditField(form.value.fieldAccess, field)
 
   const canViewCarrierAttachments = computed(() =>
-    isReadableFieldAccess(getFieldAccess(form.fieldAccess, 'attachments'))
+    isReadableFieldAccess(getFieldAccess(form.value.fieldAccess, 'attachments'))
   )
 
   const formRules: FormRules<CarrierForm> = {
@@ -151,7 +152,7 @@
     carrierCode: [
       {
         validator: (_rule, value, callback) =>
-          carrierNumber.manualRequired(Boolean(form.id)) && !String(value || '').trim()
+          carrierNumber.manualRequired(Boolean(form.value.id)) && !String(value || '').trim()
             ? callback(new Error('请输入承运商编码'))
             : callback(),
         trigger: 'blur'
@@ -177,15 +178,23 @@
     remark: [{ max: 500, message: '备注不能超过 500 个字符', trigger: 'blur' }]
   }
 
+  const parentUnitTree = new TreeUtils({ parentKey: 'parentUnitId' })
+  const loadParentUnitOptions = async () => {
+    const tenantId = form.value.tenantId || defaultWriteTenantId.value
+    const currentId = form.value.id ?? ''
+    const carriers = await fetchCarrierParentOptions({ tenantId, recordId: currentId || undefined })
+    const tree = parentUnitTree.listToTree(carriers)
+    return parentUnitTree.removeNode(tree, currentId).tree
+  }
   const formItems = computed<FormItem[]>(() => [
-    { label: '基础信息', key: 'baseSection', type: 'divider', span: 24 },
+    { label: '基础信息', key: 'baseSection', type: 'tab', span: 24 },
     {
       label: '承运商编码',
       key: 'carrierCode',
       type: 'input',
       props: {
         maxlength: 30,
-        ...carrierNumber.inputProps(Boolean(form.id), '请输入承运商编码')
+        ...carrierNumber.inputProps(Boolean(form.value.id), '请输入承运商编码')
       },
       description: carrierNumber.description.value
     },
@@ -223,19 +232,13 @@
     {
       label: '上级单位',
       key: 'parentUnitId',
-      type: 'select',
-      api: fetchCarrierOptions,
+      type: 'treeSelect',
+      api: loadParentUnitOptions,
       immediate: false,
-      beforeFetch: () => ({
-        excludeId: form.id,
-        includeDisabled: true,
-        maxRows: 1000
-      }),
-      resultField: 'data',
       labelField: 'companyName',
       valueField: 'id',
       labelFn: (option) => {
-        const carrier = option as Api.Tms.BasicData.CarrierOption
+        const carrier = option as Carrier
         const code = carrier.carrierCode ? `（${carrier.carrierCode}）` : ''
         const status = carrier.enabled === false ? ' · 已停用' : ''
         return `${carrier.companyName}${code}${status}`
@@ -243,6 +246,7 @@
       props: {
         clearable: true,
         filterable: true,
+        checkStrictly: true,
         placeholder: '请选择上级承运商单位'
       },
       description: '选填；不选择则作为一级承运商单位。'
@@ -314,7 +318,7 @@
         placeholder: '请输入备注信息'
       }
     },
-    { label: '联系人信息', key: 'contactSection', type: 'divider', span: 24 },
+    { label: '联系人信息', key: 'contactSection', type: 'tab', span: 24 },
     {
       label: '姓名',
       key: 'contactName',
@@ -356,7 +360,9 @@
       type: 'input',
       props: { maxlength: 20, placeholder: '请输入 QQ' }
     },
-    { label: '财务信息', key: 'financeSection', type: 'divider', span: 24 },
+    ...(canViewCarrierField('taxNo') || canViewCarrierField('bankAccount')
+      ? [{ label: '财务信息', key: 'financeSection', type: 'tab', span: 24 } satisfies FormItem]
+      : []),
     {
       label: '发票抬头',
       key: 'invoiceTitle',
@@ -411,8 +417,8 @@
   ])
 
   const replaceForm = (nextForm: CarrierForm): void => {
-    Object.keys(form).forEach((key) => delete form[key as keyof CarrierForm])
-    Object.assign(form, nextForm)
+    Object.keys(form.value).forEach((key) => delete form.value[key as keyof CarrierForm])
+    Object.assign(form.value, nextForm)
   }
 
   const resetForm = async (): Promise<void> => {
@@ -422,7 +428,7 @@
   }
 
   const normalizePayload = (): Carrier => {
-    const { regionPath, ...rawPayload } = structuredClone(toRaw(form))
+    const { regionPath, ...rawPayload } = structuredClone(toRaw(form.value))
     if (rawPayload.id && !canEditField(rawPayload.fieldAccess, 'contactPhone')) {
       delete rawPayload.contactPhone
     }
@@ -476,7 +482,7 @@
 
     try {
       const payload = normalizePayload()
-      const type = form.id ? 'edit' : 'add'
+      const type = form.value.id ? 'edit' : 'add'
       if (type === 'edit') await editCarrier(payload)
       else await addCarrier(payload)
       emit('success', type)
@@ -488,6 +494,7 @@
   }
 
   const handleOpen = async (row?: Carrier): Promise<void> => {
+    activeTab.value = 'baseSection'
     await resetForm()
     const isEdit = Boolean(row?.id)
     if (row) {

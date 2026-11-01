@@ -2,21 +2,18 @@
   <ArtDialog ref="dialogRef" size="lg" @close="handleDialogClose">
     <ArtForm
       ref="formRef"
-      :model-value="form"
-      @update:model-value="replaceReactiveModel(form, $event)"
+      v-model:active-tab="activeTab"
+      v-model="form"
       :items="formItems"
       :rules="formRules"
       :span="8"
       :gutter="20"
       label-width="112px"
-      :show-reset="false"
-      :show-submit="false"
     />
   </ArtDialog>
 </template>
 
 <script setup lang="ts">
-  import { replaceReactiveModel } from '@/utils/form/model'
   import { normalizeNullableNumber, normalizeNullableText } from '@/utils/form/normalize'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
@@ -55,6 +52,7 @@
   const emit = defineEmits<{ (event: 'success', type: 'add' | 'edit'): void }>()
   const { tenantOptions } = storeToRefs(useTenantScopeStore())
   const { defaultWriteTenantId, shouldExposeTenantField } = useTenantScopeFormPolicy()
+  const activeTab = ref('materialSection')
   const dialogRef = ref<ArtDialogExpose<CargoDialogOpenData>>()
   const formRef = ref<DialogExposeForm>()
   const materials = ref<CargoMaterialOption[]>([])
@@ -81,7 +79,7 @@
     enabled: true,
     remark: ''
   })
-  const form = reactive<CargoForm>(initialForm())
+  const form = ref<CargoForm>(initialForm())
   const tenantChoices = computed(() =>
     tenantOptions.value.map((tenant) => ({
       label: tenant.tenantName || tenant.tenantCode,
@@ -91,7 +89,7 @@
   const groupOptions = computed(() =>
     groupTree.listToTree(
       groups.value
-        .filter((group) => group.tenantId === form.tenantId)
+        .filter((group) => group.tenantId === form.value.tenantId)
         .map((group) => ({
           id: group.id,
           parentId: group.parentId,
@@ -107,7 +105,7 @@
     if (
       dialogActive.value &&
       version === materialContextVersion.value &&
-      tenantId === form.tenantId
+      tenantId === form.value.tenantId
     ) {
       materials.value = rows
     }
@@ -117,8 +115,8 @@
     }))
   }
   const unitLabel = computed(() => {
-    const material = materials.value.find((item) => item.id === form.materialId)
-    return material?.baseUnit?.unitName || material?.basicUnit || form.unit || ''
+    const material = materials.value.find((item) => item.id === form.value.materialId)
+    return material?.baseUnit?.unitName || material?.basicUnit || form.value.unit || ''
   })
   const formRules = computed<FormRules<CargoForm>>(() => ({
     tenantId: shouldExposeTenantField.value
@@ -129,7 +127,7 @@
   }))
   const numberInputProps = { min: 0, precision: 2, controlsPosition: 'right', class: '!w-full' }
   const formItems = computed<FormItem[]>(() => [
-    { label: '物料身份', key: 'materialSection', type: 'divider', span: 24 },
+    { label: '物料身份', key: 'materialSection', type: 'tab', span: 24 },
     ...(shouldExposeTenantField.value
       ? [
           {
@@ -140,7 +138,7 @@
             props: {
               options: tenantChoices.value,
               filterable: true,
-              disabled: Boolean(form.id),
+              disabled: Boolean(form.value.id),
               placeholder: '请选择货物所属租户',
               onChange: handleTenantChange
             }
@@ -154,7 +152,7 @@
       span: 16,
       api: fetchMaterialChoices,
       params: {
-        tenantId: form.tenantId,
+        tenantId: form.value.tenantId,
         contextVersion: materialContextVersion.value,
         active: dialogActive.value
       },
@@ -162,7 +160,7 @@
       props: {
         filterable: true,
         clearable: true,
-        disabled: !form.tenantId,
+        disabled: !form.value.tenantId,
         placeholder: '从 MDM 物料编码中选择',
         onChange: applyMaterial
       },
@@ -194,7 +192,7 @@
       type: 'text',
       content: () => unitLabel.value || '选择物料后自动带入'
     },
-    { label: '运输参数', key: 'transportSection', type: 'divider', span: 24 },
+    { label: '运输参数', key: 'transportSection', type: 'tab', span: 24 },
     { label: '长(m)', key: 'lengthM', type: 'number', props: numberInputProps },
     { label: '宽(m)', key: 'widthM', type: 'number', props: numberInputProps },
     { label: '高(m)', key: 'heightM', type: 'number', props: numberInputProps },
@@ -228,7 +226,7 @@
   ])
 
   const replaceForm = (next: CargoForm): void => {
-    Object.assign(form, initialForm(), next)
+    Object.assign(form.value, initialForm(), next)
   }
   const handleDialogClose = (): void => {
     dialogActive.value = false
@@ -236,37 +234,37 @@
     materials.value = []
   }
   const handleTenantChange = (): void => {
-    form.materialId = null
-    form.materialGroupId = null
-    form.cargoCode = ''
-    form.cargoName = ''
-    form.specModel = ''
-    form.unit = ''
+    form.value.materialId = null
+    form.value.materialGroupId = null
+    form.value.cargoCode = ''
+    form.value.cargoName = ''
+    form.value.specModel = ''
+    form.value.unit = ''
     materials.value = []
   }
   const applyMaterial = (id?: string): void => {
     const material = materials.value.find((item) => item.id === id)
-    form.cargoCode = material?.materialCode || ''
-    form.cargoName = material?.materialName || ''
-    form.specModel = material?.specificationModel || ''
-    form.unit = material?.basicUnit || ''
-    if (material?.materialGroupId) form.materialGroupId = material.materialGroupId
+    form.value.cargoCode = material?.materialCode || ''
+    form.value.cargoName = material?.materialName || ''
+    form.value.specModel = material?.specificationModel || ''
+    form.value.unit = material?.basicUnit || ''
+    if (material?.materialGroupId) form.value.materialGroupId = material.materialGroupId
   }
   const payload = (): Cargo => ({
-    id: form.id,
-    tenantId: form.tenantId,
-    materialId: form.materialId,
-    materialGroupId: form.materialGroupId,
-    cargoName: form.cargoName,
-    unit: form.unit,
-    lengthM: normalizeNullableNumber(form.lengthM),
-    widthM: normalizeNullableNumber(form.widthM),
-    heightM: normalizeNullableNumber(form.heightM),
-    volumeM3: normalizeNullableNumber(form.volumeM3),
-    weightKg: normalizeNullableNumber(form.weightKg),
-    valueAmount: normalizeNullableNumber(form.valueAmount),
-    enabled: form.enabled,
-    remark: normalizeNullableText(form.remark)
+    id: form.value.id,
+    tenantId: form.value.tenantId,
+    materialId: form.value.materialId,
+    materialGroupId: form.value.materialGroupId,
+    cargoName: form.value.cargoName,
+    unit: form.value.unit,
+    lengthM: normalizeNullableNumber(form.value.lengthM),
+    widthM: normalizeNullableNumber(form.value.widthM),
+    heightM: normalizeNullableNumber(form.value.heightM),
+    volumeM3: normalizeNullableNumber(form.value.volumeM3),
+    weightKg: normalizeNullableNumber(form.value.weightKg),
+    valueAmount: normalizeNullableNumber(form.value.valueAmount),
+    enabled: form.value.enabled,
+    remark: normalizeNullableText(form.value.remark)
   })
   const handleSubmit = async (): Promise<boolean> => {
     if (!dialogActive.value) return false
@@ -277,7 +275,7 @@
       return false
     }
     try {
-      const type = form.id ? 'edit' : 'add'
+      const type = form.value.id ? 'edit' : 'add'
       if (type === 'edit') await editCargo(payload())
       else await addCargo(payload())
       emit('success', type)
@@ -288,6 +286,7 @@
     }
   }
   const handleOpen = async (data: CargoDialogOpenData): Promise<void> => {
+    activeTab.value = 'materialSection'
     materialContextVersion.value += 1
     dialogActive.value = true
     materials.value = []
@@ -303,10 +302,10 @@
       materialGroupId: data.row?.materialGroupId || data.initialGroupId || null
     })
     if (data.copy) {
-      form.cargoCode = ''
-      form.cargoName = ''
-      form.specModel = ''
-      form.unit = ''
+      form.value.cargoCode = ''
+      form.value.cargoName = ''
+      form.value.specModel = ''
+      form.value.unit = ''
     }
     await dialogRef.value?.handleOpen(data, {
       title: data.copy ? '复制货物参数' : data.row ? '编辑货物' : '新增货物',

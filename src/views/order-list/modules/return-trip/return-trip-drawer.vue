@@ -25,205 +25,207 @@
         </p>
       </div>
 
-      <ArtSectionCard
-        title="关联主运输任务"
-        subtitle="选择已分配正向货量的本趟主任务；每趟任务只可添加一条返程货单。"
-        :loading="optionsLoading"
-        :error="optionsError ? '请检查网络或权限后重试。' : null"
-        error-title="运输任务或客户加载失败"
-        preserve-content-structure
-        @retry="loadOptions"
-      >
-        <ArtEmptyState
-          v-if="!candidates.length"
-          title="暂无可关联的运输任务"
-          description="请先完成该订单的调度。"
-          size="compact"
-        />
-        <div v-else>
-          <ElAlert
-            v-if="!eligibleCandidates.length"
-            title="当前没有可添加返程的主任务"
-            description="未配载任务请先完成正向派车配载；已有关联返程或已结束的任务不能重复添加。"
-            type="info"
-            :closable="false"
-            show-icon
-            class="mb-3"
-          />
-          <div class="grid gap-2 sm:grid-cols-2">
-            <button
-              v-for="candidate in candidates"
-              :key="candidate.id"
-              type="button"
-              class="rounded-lg border p-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--el-color-primary)]"
-              :class="
-                selectedWaybillId === candidate.id
-                  ? 'border-[var(--el-color-primary)] bg-[var(--el-color-primary-light-9)]'
-                  : candidate.canAddReturn
-                    ? 'border-[var(--el-border-color-light)] hover:border-[var(--el-color-primary-light-5)]'
-                    : 'cursor-not-allowed border-[var(--el-border-color-lighter)] bg-[var(--el-fill-color-light)]'
-              "
-              :disabled="!candidate.canAddReturn"
-              @click="selectedWaybillId = candidate.id"
-            >
-              <span class="block font-medium text-[var(--el-text-color-primary)]">
-                {{ candidate.waybillNo }}
-              </span>
-              <span class="mt-1 block text-xs text-[var(--el-text-color-secondary)]">
-                <span v-if="candidateUnavailableReason(candidate)">
-                  {{ candidateUnavailableReason(candidate) }}
-                </span>
-                <ArtDictDisplay v-else dict-code="tmsWaybillStatus" :value="candidate.status" />
-              </span>
-            </button>
-          </div>
-        </div>
-      </ArtSectionCard>
-
-      <ArtSectionCard
-        title="返程路线"
-        subtitle="选择返程结算客户，从正向目的地接货，填写返程目的地、计划时间和单独里程。"
-        preserve-content-structure
-      >
-        <ElAlert
-          v-if="!optionsLoading && !optionsError && !customerOptions.length"
-          title="当前租户暂无可用客户，请先在客户档案中新增或启用客户。"
-          type="warning"
-          :closable="false"
-          show-icon
-          class="mb-4"
-        />
-        <ArtForm
-          ref="formRef"
-          :model-value="form"
-          :items="routeFormItems"
-          :rules="rules"
-          :span="12"
-          :gutter="16"
-          label-position="top"
-          :show-reset="false"
-          :show-submit="false"
-          @update:model-value="replaceReactiveModel(form, $event)"
-        />
-      </ArtSectionCard>
-
-      <ArtSectionCard
-        title="返程收入与预计费用"
-        subtitle="信息费、平台技术服务费及返程专属费用仅归集本子单；共享成本按比例分摊或全部留在主单。"
-        preserve-content-structure
-      >
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <label v-for="field in moneyFields" :key="field.key" class="block">
-            <span class="mb-1.5 block text-sm text-[var(--el-text-color-regular)]">{{
-              field.label
-            }}</span>
-            <ElInputNumber
-              v-model="form[field.key]"
-              class="w-full!"
-              :min="0"
-              :max="9999999999.99"
-              :precision="2"
-              :controls="false"
+      <ElTabs v-model="activeTab">
+        <ElTabPane name="route" label="路线与任务">
+          <ArtSectionCard
+            title="关联主运输任务"
+            subtitle="选择已分配正向货量的本趟主任务；每趟任务只可添加一条返程货单。"
+            :loading="optionsLoading"
+            :error="optionsError ? '请检查网络或权限后重试。' : null"
+            error-title="运输任务或客户加载失败"
+            preserve-content-structure
+            @retry="loadOptions"
+          >
+            <ArtEmptyState
+              v-if="!candidates.length"
+              title="暂无可关联的运输任务"
+              description="请先完成该订单的调度。"
+              size="compact"
             />
-          </label>
-        </div>
-        <div class="mt-5 border-t border-[var(--el-border-color-light)] pt-4">
-          <ElRadioGroup v-model="allocationMode" aria-label="共用成本归集方式">
-            <ElRadio value="master">全部归集主单</ElRadio>
-            <ElRadio value="allocate">按比例分摊</ElRadio>
-          </ElRadioGroup>
-          <div v-if="allocationMode === 'allocate'" class="mt-3 flex items-center gap-2">
-            <ElInputNumber
-              v-model="form.sharedCostAllocationPct"
-              :min="0"
-              :max="100"
-              :precision="2"
-            />
-            <span class="text-sm text-[var(--el-text-color-secondary)]">% 分摊至返程</span>
-          </div>
-        </div>
-        <ElAlert
-          v-if="sharedTollError"
-          class="mt-4"
-          title="共用路桥费读取失败，暂不能准确预估分摊成本。"
-          type="warning"
-          :closable="false"
-          show-icon
-        >
-          <template #default>
-            <ElButton link type="primary" @click="loadSharedToll(selectedWaybillId)"
-              >重试读取</ElButton
-            >
-          </template>
-        </ElAlert>
-        <div
-          class="mt-5 grid gap-3 rounded-lg bg-[var(--el-fill-color-light)] p-4 sm:grid-cols-2 lg:grid-cols-4"
-        >
-          <div>
-            <span class="text-xs text-[var(--el-text-color-secondary)]">返程运费收入</span>
-            <strong class="mt-1 block text-lg">¥{{ money(form.freightIncome) }}</strong>
-          </div>
-          <div>
-            <span class="text-xs text-[var(--el-text-color-secondary)]">返程专属预计费用</span>
-            <strong class="mt-1 block text-lg">¥{{ money(directExpense) }}</strong>
-          </div>
-          <div>
-            <span class="text-xs text-[var(--el-text-color-secondary)]">返程司机提成预估</span>
-            <strong class="mt-1 block text-lg">
-              {{ previewMoney(preview?.amount) }}
-            </strong>
-          </div>
-          <div>
-            <span class="text-xs text-[var(--el-text-color-secondary)]">返程预计毛利</span>
-            <strong class="mt-1 block text-lg text-[var(--el-color-primary)]">
-              {{ previewMoney(preview?.projectedGrossProfit) }}
-            </strong>
-          </div>
-        </div>
-        <p class="mb-0 mt-2 text-xs text-[var(--el-text-color-secondary)]">
-          已审核主单共用路桥费 ¥{{ money(sharedToll) }}，返程分摊
-          {{ previewMoney(preview?.allocatedToll) }}；预计毛利已扣司机提成，预计毛利率
-          {{ previewPercent(preview?.projectedGrossMargin) }}。
-        </p>
-        <ElAlert
-          v-if="previewError"
-          class="mt-3"
-          title="返程收益预览失败，保存时仍会按最新规则重新计算。"
-          type="warning"
-          :closable="false"
-          show-icon
-        >
-          <template #default>
-            <ElButton link type="primary" @click="loadPreview">重试预览</ElButton>
-          </template>
-        </ElAlert>
-        <p
-          v-else-if="previewLoading"
-          class="mb-0 mt-2 text-xs text-[var(--el-text-color-secondary)]"
-        >
-          正在按当前返程资料预估司机提成和毛利…
-        </p>
-        <p
-          v-else-if="preview && preview.matched === false"
-          class="mb-0 mt-2 text-xs text-[var(--el-text-color-secondary)]"
-        >
-          当前没有匹配的司机提成规则，本次预估按 0 元计入；保存时会重新匹配。
-        </p>
-        <p class="mb-0 mt-2 text-xs leading-5 text-[var(--el-text-color-secondary)]">
-          以上为业务预计值，司机提成已计入预计毛利；不是已审核成本或财务过账。保存时会按最新规则重新计算。
-        </p>
-      </ArtSectionCard>
+            <div v-else>
+              <ElAlert
+                v-if="!eligibleCandidates.length"
+                title="当前没有可添加返程的主任务"
+                description="未配载任务请先完成正向派车配载；已有关联返程或已结束的任务不能重复添加。"
+                type="info"
+                :closable="false"
+                show-icon
+                class="mb-3"
+              />
+              <div class="grid gap-2 sm:grid-cols-2">
+                <button
+                  v-for="candidate in candidates"
+                  :key="candidate.id"
+                  type="button"
+                  class="rounded-lg border p-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--el-color-primary)]"
+                  :class="
+                    selectedWaybillId === candidate.id
+                      ? 'border-[var(--el-color-primary)] bg-[var(--el-color-primary-light-9)]'
+                      : candidate.canAddReturn
+                        ? 'border-[var(--el-border-color-light)] hover:border-[var(--el-color-primary-light-5)]'
+                        : 'cursor-not-allowed border-[var(--el-border-color-lighter)] bg-[var(--el-fill-color-light)]'
+                  "
+                  :disabled="!candidate.canAddReturn"
+                  @click="selectedWaybillId = candidate.id"
+                >
+                  <span class="block font-medium text-[var(--el-text-color-primary)]">
+                    {{ candidate.waybillNo }}
+                  </span>
+                  <span class="mt-1 block text-xs text-[var(--el-text-color-secondary)]">
+                    <span v-if="candidateUnavailableReason(candidate)">
+                      {{ candidateUnavailableReason(candidate) }}
+                    </span>
+                    <ArtDictDisplay v-else dict-code="tmsWaybillStatus" :value="candidate.status" />
+                  </span>
+                </button>
+              </div>
+            </div>
+          </ArtSectionCard>
 
-      <ArtSectionCard title="备注" preserve-content-structure>
-        <ElInput
-          v-model="form.remark"
-          type="textarea"
-          :rows="3"
-          maxlength="500"
-          show-word-limit
-          placeholder="补充返程配货说明"
-        />
-      </ArtSectionCard>
+          <ArtSectionCard
+            title="返程路线"
+            subtitle="选择返程结算客户，从正向目的地接货，填写返程目的地、计划时间和单独里程。"
+            preserve-content-structure
+          >
+            <ElAlert
+              v-if="!optionsLoading && !optionsError && !customerOptions.length"
+              title="当前租户暂无可用客户，请先在客户档案中新增或启用客户。"
+              type="warning"
+              :closable="false"
+              show-icon
+              class="mb-4"
+            />
+            <ArtForm
+              ref="formRef"
+              v-model="form"
+              :items="routeFormItems"
+              :rules="rules"
+              :span="12"
+              :gutter="16"
+              label-position="top"
+            />
+          </ArtSectionCard>
+        </ElTabPane>
+        <ElTabPane name="finance" label="收入与费用">
+          <ArtSectionCard
+            title="返程收入与预计费用"
+            subtitle="信息费、平台技术服务费及返程专属费用仅归集本子单；共享成本按比例分摊或全部留在主单。"
+            preserve-content-structure
+          >
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <label v-for="field in moneyFields" :key="field.key" class="block">
+                <span class="mb-1.5 block text-sm text-[var(--el-text-color-regular)]">{{
+                  field.label
+                }}</span>
+                <ElInputNumber
+                  v-model="form[field.key]"
+                  class="w-full!"
+                  :min="0"
+                  :max="9999999999.99"
+                  :precision="2"
+                  :controls="false"
+                />
+              </label>
+            </div>
+            <div class="mt-5 border-t border-[var(--el-border-color-light)] pt-4">
+              <ElRadioGroup v-model="allocationMode" aria-label="共用成本归集方式">
+                <ElRadio value="master">全部归集主单</ElRadio>
+                <ElRadio value="allocate">按比例分摊</ElRadio>
+              </ElRadioGroup>
+              <div v-if="allocationMode === 'allocate'" class="mt-3 flex items-center gap-2">
+                <ElInputNumber
+                  v-model="form.sharedCostAllocationPct"
+                  :min="0"
+                  :max="100"
+                  :precision="2"
+                />
+                <span class="text-sm text-[var(--el-text-color-secondary)]">% 分摊至返程</span>
+              </div>
+            </div>
+            <ElAlert
+              v-if="sharedTollError"
+              class="mt-4"
+              title="共用路桥费读取失败，暂不能准确预估分摊成本。"
+              type="warning"
+              :closable="false"
+              show-icon
+            >
+              <template #default>
+                <ElButton link type="primary" @click="loadSharedToll(selectedWaybillId)"
+                  >重试读取</ElButton
+                >
+              </template>
+            </ElAlert>
+            <div
+              class="mt-5 grid gap-3 rounded-lg bg-[var(--el-fill-color-light)] p-4 sm:grid-cols-2 lg:grid-cols-4"
+            >
+              <div>
+                <span class="text-xs text-[var(--el-text-color-secondary)]">返程运费收入</span>
+                <strong class="mt-1 block text-lg">¥{{ money(form.freightIncome) }}</strong>
+              </div>
+              <div>
+                <span class="text-xs text-[var(--el-text-color-secondary)]">返程专属预计费用</span>
+                <strong class="mt-1 block text-lg">¥{{ money(directExpense) }}</strong>
+              </div>
+              <div>
+                <span class="text-xs text-[var(--el-text-color-secondary)]">返程司机提成预估</span>
+                <strong class="mt-1 block text-lg">
+                  {{ previewMoney(preview?.amount) }}
+                </strong>
+              </div>
+              <div>
+                <span class="text-xs text-[var(--el-text-color-secondary)]">返程预计毛利</span>
+                <strong class="mt-1 block text-lg text-[var(--el-color-primary)]">
+                  {{ previewMoney(preview?.projectedGrossProfit) }}
+                </strong>
+              </div>
+            </div>
+            <p class="mb-0 mt-2 text-xs text-[var(--el-text-color-secondary)]">
+              已审核主单共用路桥费 ¥{{ money(sharedToll) }}，返程分摊
+              {{ previewMoney(preview?.allocatedToll) }}；预计毛利已扣司机提成，预计毛利率
+              {{ previewPercent(preview?.projectedGrossMargin) }}。
+            </p>
+            <ElAlert
+              v-if="previewError"
+              class="mt-3"
+              title="返程收益预览失败，保存时仍会按最新规则重新计算。"
+              type="warning"
+              :closable="false"
+              show-icon
+            >
+              <template #default>
+                <ElButton link type="primary" @click="loadPreview">重试预览</ElButton>
+              </template>
+            </ElAlert>
+            <p
+              v-else-if="previewLoading"
+              class="mb-0 mt-2 text-xs text-[var(--el-text-color-secondary)]"
+            >
+              正在按当前返程资料预估司机提成和毛利…
+            </p>
+            <p
+              v-else-if="preview && preview.matched === false"
+              class="mb-0 mt-2 text-xs text-[var(--el-text-color-secondary)]"
+            >
+              当前没有匹配的司机提成规则，本次预估按 0 元计入；保存时会重新匹配。
+            </p>
+            <p class="mb-0 mt-2 text-xs leading-5 text-[var(--el-text-color-secondary)]">
+              以上为业务预计值，司机提成已计入预计毛利；不是已审核成本或财务过账。保存时会按最新规则重新计算。
+            </p>
+          </ArtSectionCard>
+
+          <ArtSectionCard title="备注" preserve-content-structure>
+            <ElInput
+              v-model="form.remark"
+              type="textarea"
+              :rows="3"
+              maxlength="500"
+              show-word-limit
+              placeholder="补充返程配货说明"
+            />
+          </ArtSectionCard>
+        </ElTabPane>
+      </ElTabs>
     </div>
   </ArtDrawer>
 </template>
@@ -237,8 +239,9 @@
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import { replaceReactiveModel } from '@/utils/form/model'
+
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
+  import { focusFirstInvalidFormField } from '@/utils/form/validation'
   import { normalizeNullableText } from '@/utils/form/normalize'
   import { fetchCustomerOptions } from '@tms/api/modules/customer'
   import {
@@ -257,8 +260,9 @@
     'freightIncome' | 'informationFee' | 'technicalServiceFee' | 'directTollFee' | 'directMiscFee'
 
   const emit = defineEmits<{ success: [] }>()
+  const activeTab = ref('route')
   const drawerRef = ref<ArtDrawerExpose>()
-  const formRef = ref<{ validate: () => Promise<boolean> }>()
+  const formRef = ref<InstanceType<typeof ArtForm>>()
   const order = ref<OrderRecord>()
   const candidates = ref<ReturnTripCandidate[]>([])
   const selectedWaybillId = ref('')
@@ -286,7 +290,7 @@
       sharedTollLoading.value ||
       sharedTollError.value
   )
-  const form = reactive<ReturnTripInput>({
+  const form = ref<ReturnTripInput>({
     returnCustomerId: '',
     originStation: '',
     destinationStation: '',
@@ -373,30 +377,35 @@
     destinationStation: [{ required: true, message: '请填写返程目的地', trigger: 'blur' }]
   }
   const directExpense = computed(
-    () => form.informationFee + form.technicalServiceFee + form.directTollFee + form.directMiscFee
+    () =>
+      form.value.informationFee +
+      form.value.technicalServiceFee +
+      form.value.directTollFee +
+      form.value.directMiscFee
   )
   const previewInput = computed<ReturnTripPreviewInput>(() => ({
-    returnCustomerId: form.returnCustomerId,
-    originStation: form.originStation,
-    destinationStation: form.destinationStation,
-    plannedDepartureAt: form.plannedDepartureAt,
-    distanceKm: form.distanceKm,
-    cargoWeightTons: form.cargoWeightTons,
-    cargoVolumeM3: form.cargoVolumeM3,
-    freightIncome: form.freightIncome,
-    informationFee: form.informationFee,
-    technicalServiceFee: form.technicalServiceFee,
-    directTollFee: form.directTollFee,
-    directMiscFee: form.directMiscFee,
-    sharedCostAllocationPct: allocationMode.value === 'allocate' ? form.sharedCostAllocationPct : 0
+    returnCustomerId: form.value.returnCustomerId,
+    originStation: form.value.originStation,
+    destinationStation: form.value.destinationStation,
+    plannedDepartureAt: form.value.plannedDepartureAt,
+    distanceKm: form.value.distanceKm,
+    cargoWeightTons: form.value.cargoWeightTons,
+    cargoVolumeM3: form.value.cargoVolumeM3,
+    freightIncome: form.value.freightIncome,
+    informationFee: form.value.informationFee,
+    technicalServiceFee: form.value.technicalServiceFee,
+    directTollFee: form.value.directTollFee,
+    directMiscFee: form.value.directMiscFee,
+    sharedCostAllocationPct:
+      allocationMode.value === 'allocate' ? form.value.sharedCostAllocationPct : 0
   }))
   const canPreview = computed(
     () =>
       drawerOpen.value &&
       !!selectedWaybillId.value &&
-      !!form.returnCustomerId &&
-      !!form.originStation &&
-      !!form.destinationStation
+      !!form.value.returnCustomerId &&
+      !!form.value.originStation &&
+      !!form.value.destinationStation
   )
 
   function invalidatePreview(): void {
@@ -474,11 +483,12 @@
   }
 
   async function handleOpen(row: OrderRecord): Promise<void> {
+    activeTab.value = 'route'
     if (!row.id) return
     invalidatePreview()
     drawerOpen.value = true
     order.value = row
-    Object.assign(form, {
+    Object.assign(form.value, {
       returnCustomerId: '',
       originStation: row.destinationStation || '',
       destinationStation: row.originStation || '',
@@ -534,17 +544,24 @@
 
   async function submit(): Promise<boolean> {
     if (!selectedWaybillId.value) {
+      activeTab.value = 'route'
       ElMessage.warning('请先选择可关联的主运输任务')
       return false
     }
     try {
-      if (!(await validateArtFormForSubmit(formRef.value))) return false
+      if (!(await validateArtFormForSubmit(formRef.value))) {
+        activeTab.value = 'route'
+        await nextTick()
+        const root = formRef.value?.$el
+        if (root instanceof HTMLElement) focusFirstInvalidFormField(shallowRef(root))
+        return false
+      }
       saving.value = true
       await createReturnTrip(selectedWaybillId.value, {
-        ...form,
+        ...form.value,
         sharedCostAllocationPct:
-          allocationMode.value === 'allocate' ? form.sharedCostAllocationPct : 0,
-        remark: normalizeNullableText(form.remark)
+          allocationMode.value === 'allocate' ? form.value.sharedCostAllocationPct : 0,
+        remark: normalizeNullableText(form.value.remark)
       })
       emit('success')
       return true

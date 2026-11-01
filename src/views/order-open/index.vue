@@ -100,8 +100,6 @@
             :gutter="24"
             label-width="84px"
             root-class="order-open__form"
-            :show-reset="false"
-            :show-submit="false"
           />
           <div
             v-if="form.data.transferStationIds?.length"
@@ -183,8 +181,6 @@
                 :span="24"
                 label-width="88px"
                 root-class="order-open__form"
-                :show-reset="false"
-                :show-submit="false"
               />
               <ArtAddressPicker
                 v-if="canViewOrderField('shipperAddress')"
@@ -233,8 +229,6 @@
                 :span="24"
                 label-width="88px"
                 root-class="order-open__form"
-                :show-reset="false"
-                :show-submit="false"
               />
               <ArtAddressPicker
                 v-if="canViewOrderField('receiverAddress')"
@@ -404,8 +398,6 @@
               :gutter="14"
               label-width="76px"
               root-class="order-open__form order-open__form--settlement"
-              :show-reset="false"
-              :show-submit="false"
             />
             <footer class="order-open__panel-total">
               <span>应收运费合计</span>
@@ -434,8 +426,6 @@
               :gutter="14"
               label-width="76px"
               root-class="order-open__form order-open__form--settlement"
-              :show-reset="false"
-              :show-submit="false"
             />
             <footer class="order-open__panel-total">
               <span>款项分配合计</span>
@@ -461,8 +451,6 @@
               :span="24"
               label-width="76px"
               root-class="order-open__form order-open__form--settlement-summary"
-              :show-reset="false"
-              :show-submit="false"
             />
             <dl class="order-open__settlement-overview">
               <div>
@@ -499,8 +487,6 @@
               :span="24"
               label-width="80px"
               root-class="order-open__form order-open__form--transport"
-              :show-reset="false"
-              :show-submit="false"
             />
           </section>
           <section

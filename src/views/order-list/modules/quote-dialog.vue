@@ -55,120 +55,109 @@
       </section>
 
       <ArtForm
-        ref="feeFormRef"
+        ref="formRef"
         v-model="form"
-        :items="feeItems"
+        v-model:active-tab="activeTab"
+        :items="formItems"
+        :rules="amountRules"
         :span="8"
         :gutter="16"
-        :show-reset="false"
-        :show-submit="false"
-      />
-
-      <section>
-        <ArtSectionTitle>补充费用</ArtSectionTitle>
-        <p class="mb-3 mt-3 text-sm text-[var(--art-gray-700)]">
-          选择一项后立即加入下方，可继续选择其他费用。
-        </p>
-        <div class="rounded-[var(--custom-radius)] bg-[var(--art-gray-100)] p-3 sm:p-4">
-          <ElSelect
-            v-model="selectedExpenseCode"
-            filterable
-            class="w-full"
-            placeholder="选择要添加的费用项"
-            aria-label="添加补充费用项"
-            :disabled="form.supplementaryItems.length >= expenseOptions.length"
-            @change="addExpenseItem"
-          >
-            <ElOption
-              v-for="option in expenseOptions"
-              :key="option.value"
-              :label="option.label || option.name"
-              :value="option.value"
-              :disabled="form.supplementaryItems.some((item) => item.code === option.value)"
-            />
-          </ElSelect>
-          <div v-if="form.supplementaryItems.length" class="mt-3 space-y-2">
-            <div
-              v-for="item in form.supplementaryItems"
-              :key="item.code"
-              class="grid grid-cols-[minmax(0,1fr)_36px] items-center gap-2 rounded-[var(--art-control-radius)] border border-[var(--art-gray-200)] bg-[var(--default-box-color)] p-2.5 sm:grid-cols-[110px_minmax(150px,1fr)_minmax(180px,1.5fr)_36px]"
-            >
-              <span class="min-w-0 font-medium text-[var(--art-gray-800)]">{{
-                expenseLabel(item.code)
-              }}</span>
-              <ElInputNumber
-                v-model="item.amount"
-                :min="0"
-                :max="9999999999.99"
-                :precision="2"
-                :controls="false"
-                class="col-start-1 row-start-2 w-full! sm:col-auto sm:row-auto"
-                :aria-label="`${expenseLabel(item.code)}金额（元）`"
-              />
-              <ElInput
-                v-model="item.remark"
-                maxlength="200"
-                class="col-start-1 row-start-3 min-w-0 sm:col-auto sm:row-auto"
-                :aria-label="`${expenseLabel(item.code)}备注`"
-                placeholder="费用说明（选填）"
-              />
-              <ArtIconButton
-                icon="ri:delete-bin-line"
-                tone="danger"
-                class="col-start-2 row-start-1 sm:col-auto sm:row-auto"
-                :label="`移除${expenseLabel(item.code)}`"
-                @click="removeExpenseItem(item.code)"
+      >
+        <template #supplementaryItems>
+          <section>
+            <ArtSectionTitle>补充费用</ArtSectionTitle>
+            <p class="mb-3 mt-3 text-sm text-[var(--art-gray-700)]">
+              选择一项后立即加入下方，可继续选择其他费用。
+            </p>
+            <div class="rounded-[var(--custom-radius)] bg-[var(--art-gray-100)] p-3 sm:p-4">
+              <ElSelect
+                v-model="selectedExpenseCode"
+                filterable
+                class="w-full"
+                placeholder="选择要添加的费用项"
+                aria-label="添加补充费用项"
+                :disabled="form.supplementaryItems.length >= expenseOptions.length"
+                @change="addExpenseItem"
+              >
+                <ElOption
+                  v-for="option in expenseOptions"
+                  :key="option.value"
+                  :label="option.label || option.name"
+                  :value="option.value"
+                  :disabled="form.supplementaryItems.some((item) => item.code === option.value)"
+                />
+              </ElSelect>
+              <ArtTable
+                v-if="form.supplementaryItems.length"
+                ref="expenseTableRef"
+                :data="form.supplementaryItems"
+                :columns="expenseColumns"
+                row-key="code"
+                class="mt-3"
+                :height="form.supplementaryItems.length > 5 ? 320 : undefined"
+              >
+                <template #code="{ row }">{{ expenseLabel(row.code) }}</template>
+                <template #amount="{ row }"
+                  ><ElInputNumber
+                    v-model="row.amount"
+                    v-bind="moneyProps"
+                    :aria-label="expenseLabel(row.code) + '金额（元）'"
+                /></template>
+                <template #remark="{ row }"
+                  ><ElInput
+                    v-model="row.remark"
+                    maxlength="200"
+                    :aria-label="expenseLabel(row.code) + '备注'"
+                    placeholder="费用说明（选填）"
+                /></template>
+                <template #operation="{ row }"
+                  ><ArtIconButton
+                    icon="ri:delete-bin-line"
+                    tone="danger"
+                    :label="'移除' + expenseLabel(row.code)"
+                    @click="removeExpenseItem(row.code)"
+                /></template>
+              </ArtTable>
+              <ArtEmptyState
+                v-else
+                title="暂无补充费用"
+                description="可从上方选择费用项。"
+                size="compact"
+                :visual-size="64"
               />
             </div>
-          </div>
-          <ArtEmptyState
-            v-else
-            title="暂无补充费用"
-            description="可从上方选择费用项。"
-            size="compact"
-            :visual-size="64"
-          />
-        </div>
-        <div
-          class="mt-3 flex flex-wrap items-baseline justify-end gap-x-3 border-t border-[var(--art-gray-200)] pt-3 text-sm"
-        >
-          <span class="text-[var(--art-gray-700)]">报价费用与补充费用合计（含税）</span>
-          <strong class="text-lg tabular-nums text-[var(--el-color-primary)]">
-            ¥{{
-              formatNumberValue(totalAmount, 'zh-CN', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-              })
-            }}
-          </strong>
-        </div>
-      </section>
-
-      <ArtForm
-        ref="paymentFormRef"
-        v-model="form"
-        :items="paymentItems"
-        :span="8"
-        :gutter="16"
-        :show-reset="false"
-        :show-submit="false"
-      />
-
-      <section>
-        <ArtSectionTitle>报价附件</ArtSectionTitle>
-        <p class="mb-3 mt-1 text-sm text-[var(--art-gray-600)]">
-          可附报价清单或说明文件，最多 6 个，单个不超过 20 MB。
-        </p>
-        <ArtUploadFile
-          ref="attachmentRef"
-          v-model="form.attachmentUrls"
-          multiple
-          :limit="6"
-          :file-size="20 * 1024 * 1024"
-          :resource-tenant-id="order.tenantId || ''"
-          accept=".pdf,.doc,.docx,.xls,.xlsx,.zip,image/*"
-        />
-      </section>
+            <div
+              class="mt-3 flex flex-wrap items-baseline justify-end gap-x-3 border-t border-[var(--art-gray-200)] pt-3 text-sm"
+            >
+              <span class="text-[var(--art-gray-700)]">报价费用与补充费用合计（含税）</span>
+              <strong class="text-lg tabular-nums text-[var(--el-color-primary)]">
+                ¥{{
+                  formatNumberValue(totalAmount, 'zh-CN', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  })
+                }}
+              </strong>
+            </div>
+          </section>
+        </template>
+        <template #attachmentUrls>
+          <section>
+            <ArtSectionTitle>报价附件</ArtSectionTitle>
+            <p class="mb-3 mt-1 text-sm text-[var(--art-gray-600)]">
+              可附报价清单或说明文件，最多 6 个，单个不超过 20 MB。
+            </p>
+            <ArtUploadFile
+              ref="attachmentRef"
+              v-model="form.attachmentUrls"
+              multiple
+              :limit="6"
+              :file-size="20 * 1024 * 1024"
+              :resource-tenant-id="order.tenantId || ''"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.zip,image/*"
+            /> </section
+        ></template>
+      </ArtForm>
     </div>
 
     <template #footer="{ loading, api }">
@@ -201,7 +190,9 @@
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { cloneDeep, isEqual, round, toNumber } from 'lodash-es'
-  import { ElMessage } from 'element-plus'
+  import { ElMessage, type FormRules } from 'element-plus'
+  import ArtTable, { type ArtTableExpose } from '@/components/core/tables/art-table/index.vue'
+  import type { ColumnOption } from '@/types'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
@@ -226,8 +217,10 @@
   const userStore = useUserStore()
   const { getDictMap } = storeToRefs(userStore)
   const dialogRef = ref<ArtDialogExpose<OrderRecord>>()
-  const feeFormRef = ref<InstanceType<typeof ArtForm>>()
-  const paymentFormRef = ref<InstanceType<typeof ArtForm>>()
+  const formRef = ref<InstanceType<typeof ArtForm>>()
+  const activeTab = ref('feeSection')
+  type SupplementaryItem = QuotePayload['supplementaryItems'][number]
+  const expenseTableRef = ref<ArtTableExpose<SupplementaryItem>>()
   const attachmentRef = ref<{ hasPendingUpload: () => boolean }>()
   const orderId = ref('')
   const order = ref<OrderRecord | null>(null)
@@ -259,16 +252,15 @@
     controls: false,
     class: 'w-full!'
   }
-  const feeItems: FormItem[] = [
-    { key: 'feeSection', label: '运输报价', type: 'divider', span: 24 },
+  const formItems: FormItem[] = [
+    { key: 'feeSection', label: '报价费用', type: 'tab' },
     { key: 'transportFee', label: '运输费（元）', type: 'number', props: moneyProps },
     { key: 'unloadingFee', label: '卸货费（元）', type: 'number', props: moneyProps },
     { key: 'deliveryFee', label: '送货费（元）', type: 'number', props: moneyProps },
     { key: 'insuranceFee', label: '保险费（元）', type: 'number', props: moneyProps },
-    { key: 'taxFee', label: '税费（元）', type: 'number', props: moneyProps }
-  ]
-  const paymentItems: FormItem[] = [
-    { key: 'paymentSection', label: '付款安排', type: 'divider', span: 24 },
+    { key: 'taxFee', label: '税费（元）', type: 'number', props: moneyProps },
+    { key: 'supplementaryItems', label: '', span: 24, labelWidth: 0 },
+    { key: 'paymentSection', label: '付款与附件', type: 'tab' },
     { key: 'prepayment', label: '预付款（元）', type: 'number', props: moneyProps },
     { key: 'arrivalPayment', label: '货到付款（元）', type: 'number', props: moneyProps },
     { key: 'collectPayment', label: '代收货款（元）', type: 'number', props: moneyProps },
@@ -278,7 +270,56 @@
       type: 'input',
       span: 24,
       props: { type: 'textarea', rows: 3, maxlength: 500, showWordLimit: true }
-    }
+    },
+    { key: 'attachmentUrls', label: '', span: 24, labelWidth: 0 }
+  ]
+
+  const validAmount = (value: unknown): boolean =>
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    value <= 9999999999.99 &&
+    round(value, 2) === value
+  const amountRules: FormRules<QuotePayload> = Object.fromEntries(
+    [
+      'transportFee',
+      'unloadingFee',
+      'deliveryFee',
+      'insuranceFee',
+      'taxFee',
+      'prepayment',
+      'arrivalPayment',
+      'collectPayment'
+    ].map((key) => [
+      key,
+      [
+        {
+          validator: (_rule: unknown, value: unknown, callback: (error?: Error) => void) =>
+            callback(
+              validAmount(value) ? undefined : new Error('费用金额须为非负数，最多保留两位小数')
+            ),
+          trigger: ['blur', 'change']
+        }
+      ]
+    ])
+  )
+  const expenseColumns: ColumnOption<SupplementaryItem>[] = [
+    { prop: 'code', label: '费用项目', minWidth: 150, useSlot: true },
+    {
+      prop: 'amount',
+      label: '金额（元）',
+      width: 190,
+      useSlot: true,
+      required: true,
+      headerTooltip: '金额须为非负数，最多保留两位小数；计入本次报价总额。',
+      rules: {
+        validator: ({ value }) => validAmount(value),
+        message: ({ rowIndex }) =>
+          '第 ' + (rowIndex + 1) + ' 项补充费用须为非负数，最多保留两位小数'
+      }
+    },
+    { prop: 'remark', label: '费用说明', minWidth: 220, useSlot: true },
+    { prop: 'operation', label: '操作', width: 68, fixed: 'right', useSlot: true }
   ]
 
   function createInitialForm(): QuotePayload {
@@ -367,29 +408,6 @@
   }
 
   function validateAmounts(): boolean {
-    const amounts = [
-      form.value.transportFee,
-      form.value.unloadingFee,
-      form.value.deliveryFee,
-      form.value.insuranceFee,
-      form.value.taxFee,
-      form.value.prepayment,
-      form.value.arrivalPayment,
-      form.value.collectPayment,
-      ...form.value.supplementaryItems.map((item) => item.amount)
-    ]
-    if (
-      amounts.some(
-        (amount) =>
-          !Number.isFinite(amount) ||
-          amount < 0 ||
-          amount > 9999999999.99 ||
-          round(amount, 2) !== amount
-      )
-    ) {
-      ElMessage.warning('费用金额须为非负数，最多保留两位小数')
-      return false
-    }
     if (totalAmount.value > 9999999999.99) {
       ElMessage.warning('报价总额不能超过 9,999,999,999.99 元')
       return false
@@ -409,11 +427,14 @@
       return false
     }
     try {
-      const [feesValid, paymentValid] = await Promise.all([
-        validateArtFormForSubmit(feeFormRef.value),
-        validateArtFormForSubmit(paymentFormRef.value)
-      ])
-      if (!feesValid || !paymentValid) return false
+      if (!(await validateArtFormForSubmit(formRef.value))) return false
+      const result = await expenseTableRef.value?.validate({ focus: false })
+      if (result && !result.valid) {
+        await formRef.value?.focusField('supplementaryItems')
+        if (result.firstError) await expenseTableRef.value?.validateField(result.firstError.prop)
+        ElMessage.warning(result.firstError?.message || '请检查补充费用金额')
+        return false
+      }
     } catch (error) {
       if (isCurrent()) notifyFriendlyError(error, '表单校验未完成，请稍后重试', 'warning')
       return false
@@ -429,6 +450,7 @@
     }
     if (!validateAmounts()) return false
     if (submitMode.value === 'submit' && totalAmount.value <= 0) {
+      await formRef.value?.focusField('transportFee')
       ElMessage.warning('提交报价前请填写费用金额')
       return false
     }
@@ -459,6 +481,7 @@
   }
 
   async function handleOpen(row: OrderRecord): Promise<void> {
+    activeTab.value = 'feeSection'
     if (!row.id) return
     orderId.value = row.id
     order.value = row

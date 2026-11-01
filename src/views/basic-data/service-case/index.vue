@@ -14,8 +14,7 @@
     </BusinessWorkspaceHeader>
     <ArtTableQuery
       ref="tableRef"
-      :model-value="search"
-      @update:model-value="replaceReactiveModel(search, $event)"
+      v-model="search"
       :search-items="searchItems"
       :api-fn="fetchTable"
       :columns-factory="columnsFactory"
@@ -30,33 +29,51 @@
       focusable
     />
     <ServiceCaseDialog ref="formDialogRef" @success="refresh" />
-    <ArtDialog ref="detailDialogRef" size="xl" :show-footer="false">
+    <ArtDialog
+      ref="detailDialogRef"
+      size="xl"
+      :show-footer="false"
+      @open="
+        () => {
+          activeDetailTab = 'base'
+        }
+      "
+    >
       <template v-if="detail">
-        <ArtSectionTitle>服务信息</ArtSectionTitle>
-        <ArtDescriptions :data="detail" :items="detailItems" :columns="3" />
-        <ArtSectionTitle class="mt-5">附件</ArtSectionTitle>
-        <ArtUploadFile
-          v-if="detail.attachments.length"
-          :model-value="detail.attachments"
-          title="附件"
-          :limit="10"
-          multiple
-          readonly
-        />
-        <ArtEmptyState
-          v-else
-          title="暂无附件"
-          description="补充案例附件后，可在此预览。"
-          :visual-size="72"
-          size="compact"
-        />
+        <ElTabs v-model="activeDetailTab">
+          <ElTabPane name="base" label="基础信息">
+            <ArtDescriptions :data="detail" :items="baseDetailItems" :columns="3" />
+          </ElTabPane>
+          <ElTabPane name="content" label="内容与处理">
+            <ArtDescriptions :data="detail" :items="contentDetailItems" :columns="1" />
+            <ArtSectionTitle class="mt-5">附件</ArtSectionTitle>
+            <ArtUploadFile
+              v-if="detail.attachments.length"
+              :model-value="detail.attachments"
+              title="附件"
+              :limit="10"
+              multiple
+              readonly
+            />
+            <ArtEmptyState
+              v-else
+              title="暂无附件"
+              description="补充案例附件后，可在此预览。"
+              :visual-size="72"
+              size="compact"
+            />
+          </ElTabPane>
+        </ElTabs>
       </template>
     </ArtDialog>
+    <MasterDataDeleteGuard ref="deleteGuardRef" />
   </div>
 </template>
 
 <script setup lang="tsx">
-  import { replaceReactiveModel } from '@/utils/form/model'
+  import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
+  import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
+
   import { storeToRefs } from 'pinia'
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
@@ -91,10 +108,11 @@
   const userStore = useUserStore()
   const { getDictMap } = storeToRefs(userStore)
   const tableRef = ref<ArtTableQueryExpose>()
+  const { deleteGuardRef, deleteRecords } = useRecordDeleteGuard('tms_service_case', '投诉咨询记录')
   const formDialogRef = ref<InstanceType<typeof ServiceCaseDialog>>()
   const detailDialogRef = ref<ArtDialogExpose<ServiceCaseRecord>>()
   const detail = ref<ServiceCaseRecord>()
-  const search = reactive<ServiceCaseSearch>({
+  const search = ref<ServiceCaseSearch>({
     serviceNo: '',
     waybillNo: '',
     complaintType: '',
@@ -184,6 +202,12 @@
     }
   ]
 
+  const activeDetailTab = ref('base')
+  const baseDetailItems = detailItems.filter((item) => !['content', 'remark'].includes(item.key))
+  const contentDetailItems = detailItems
+    .filter((item) => ['content', 'remark'].includes(item.key))
+    .map((item) => ({ ...item, span: 1 }))
+
   const columnsFactory = (): ColumnOption<ServiceCaseRecord>[] => [
     { type: 'selection', width: 50, fixed: 'left', reserveSelection: true },
     { type: 'globalIndex', label: '序号', width: 68, fixed: 'left' },
@@ -264,14 +288,24 @@
     {
       permission: 'TmsServiceCase:Delete',
       type: 'delete',
-      content: ({ selectedCount }: { selectedCount: number }) =>
-        `确定删除选中的 ${selectedCount} 条服务记录吗？`,
+      confirm: false,
       onClick: async ({ selectedRows, api }) => {
-        await deleteTmsBasicRecords(
-          'tms_service_case',
-          (selectedRows as ServiceCaseRecord[]).map((row) => row.id)
-        )
-        await api.refreshRemove()
+        const resources = (selectedRows as ServiceCaseRecord[]).map((row) => ({
+          id: row.id,
+          label: row.serviceNo || '投诉咨询记录'
+        }))
+        await deleteRecords({
+          resources,
+          permission: 'TmsServiceCase:Delete',
+          remove: () =>
+            deleteTmsBasicRecords(
+              'tms_service_case',
+              resources.map((resource) => resource.id)
+            ),
+          onDeleted: async () => {
+            await api.refreshRemove()
+          }
+        })
       }
     },
     {
@@ -292,7 +326,7 @@
         { key: 'status', title: '状态' }
       ],
       exportApi: async ({ maxRows }) => ({
-        data: (await fetchServiceCaseList({ ...search, from: 0, to: maxRows - 1 })).data ?? []
+        data: (await fetchServiceCaseList({ ...search.value, from: 0, to: maxRows - 1 })).data ?? []
       })
     }
   ])

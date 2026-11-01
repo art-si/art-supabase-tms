@@ -2,15 +2,13 @@
   <ArtDialog ref="dialogRef" size="xl">
     <ArtForm
       ref="formRef"
-      :model-value="form"
-      @update:model-value="replaceReactiveModel(form, $event)"
+      v-model:active-tab="activeTab"
+      v-model="form"
       :items="formItems"
       :rules="formRules"
       :span="8"
       :gutter="20"
       label-width="108px"
-      :show-reset="false"
-      :show-submit="false"
     >
       <template #addressPicker>
         <ArtAddressPicker
@@ -36,7 +34,7 @@
 
 <script setup lang="ts">
   import { toTenantSelectOptions } from '@/utils/tenant-display'
-  import { replaceReactiveModel } from '@/utils/form/model'
+
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { normalizeNullableNumber, normalizeNullableText } from '@/utils/form/normalize'
@@ -49,13 +47,14 @@
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import { useDocumentNumberRule } from '@/hooks/core/useDocumentNumberRule'
   import { useTenantScopeFormPolicy } from '@/hooks/core/useTenantScopeFormPolicy'
-  import { addCustomer, editCustomer, fetchCustomerOptions } from '@tms/api'
+  import { addCustomer, editCustomer, fetchCustomerList } from '@tms/api'
   import type { MasterGroup } from '@/api/master-groups'
   import { fetchRegionOptions } from '@/api/region-options'
   import { useUserStore } from '@/store/modules/user'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import { canEditField, canViewField } from '@/utils/field-permission'
   import TreeUtils from '@/utils/tree'
+  import { loadAllDocumentPages } from '@/utils/business/document-detail-list'
 
   defineOptions({ name: 'TmsCustomerDialog' })
 
@@ -82,6 +81,7 @@
   const tenantScopeStore = useTenantScopeStore()
   const { tenantOptions } = storeToRefs(tenantScopeStore)
   const { defaultWriteTenantId, shouldExposeTenantField } = useTenantScopeFormPolicy()
+  const activeTab = ref('baseSection')
   const dialogRef = ref<ArtDialogExpose<CustomerDialogOpenData>>()
   const formRef = ref<DialogExposeForm>()
   const groups = ref<MasterGroup[]>([])
@@ -89,7 +89,7 @@
   const groupOptions = computed(() =>
     groupTree.listToTree(
       groups.value
-        .filter((group) => group.tenantId === form.tenantId)
+        .filter((group) => group.tenantId === form.value.tenantId)
         .map((group) => ({
           id: group.id,
           parentId: group.parentId,
@@ -148,14 +148,14 @@
     isRecordOwner: true
   })
 
-  const form = reactive<CustomerForm>(createInitialForm())
-  const customerNumber = useDocumentNumberRule('master.customer', () => form.tenantId)
+  const form = ref<CustomerForm>(createInitialForm())
+  const customerNumber = useDocumentNumberRule('master.customer', () => form.value.tenantId)
 
   const canViewCustomerField = (field: Api.Tms.BasicData.CustomerFieldKey): boolean =>
-    canViewField(form.fieldAccess, field)
+    canViewField(form.value.fieldAccess, field)
 
   const canEditCustomerField = (field: Api.Tms.BasicData.CustomerFieldKey): boolean =>
-    canEditField(form.fieldAccess, field)
+    canEditField(form.value.fieldAccess, field)
 
   const formRules = computed<FormRules<CustomerForm>>(() => ({
     tenantId: shouldExposeTenantField.value
@@ -168,7 +168,7 @@
     customerCode: [
       {
         validator: (_rule, value, callback) =>
-          customerNumber.manualRequired(Boolean(form.id)) && !String(value || '').trim()
+          customerNumber.manualRequired(Boolean(form.value.id)) && !String(value || '').trim()
             ? callback(new Error('请输入客户编号'))
             : callback(),
         trigger: 'blur'
@@ -191,8 +191,16 @@
     remark: [{ max: 500, message: '备注不能超过 500 个字符', trigger: 'blur' }]
   }))
 
+  const parentUnitTree = new TreeUtils({ parentKey: 'parentUnitId' })
+  const loadParentUnitOptions = async () => {
+    const tenantId = form.value.tenantId
+    const currentId = form.value.id ?? ''
+    const customers = await loadAllDocumentPages(fetchCustomerList, {})
+    const tree = parentUnitTree.listToTree(customers.filter((item) => item.tenantId === tenantId))
+    return parentUnitTree.removeNode(tree, currentId).tree
+  }
   const formItems = computed<FormItem[]>(() => [
-    { label: '基础信息', key: 'baseSection', type: 'divider', span: 24 },
+    { label: '基础信息', key: 'baseSection', type: 'tab', span: 24 },
     ...(shouldExposeTenantField.value
       ? [
           {
@@ -201,10 +209,14 @@
             type: 'select' as const,
             options: tenantChoices.value,
             props: {
-              disabled: Boolean(form.id),
+              disabled: Boolean(form.value.id),
               filterable: true,
               placeholder: '请选择客户所属租户',
-              onChange: () => (form.groupId = null)
+              onChange: () => {
+                form.value.groupId = null
+                form.value.parentUnitId = null
+                void formRef.value?.reloadOptions('parentUnitId')
+              }
             }
           }
         ]
@@ -215,7 +227,7 @@
       type: 'input',
       props: {
         maxlength: 30,
-        ...customerNumber.inputProps(Boolean(form.id), '请输入客户编号')
+        ...customerNumber.inputProps(Boolean(form.value.id), '请输入客户编号')
       },
       description: customerNumber.description.value
     },
@@ -233,7 +245,7 @@
       props: {
         clearable: true,
         filterable: true,
-        placeholder: form.tenantId ? '请选择客户分组' : '请先选择所属租户'
+        placeholder: form.value.tenantId ? '请选择客户分组' : '请先选择所属租户'
       },
       description: '选填；分组与左侧导航保持一致。'
     },
@@ -250,15 +262,13 @@
     {
       label: '上级单位',
       key: 'parentUnitId',
-      type: 'select',
-      api: fetchCustomerOptions,
+      type: 'treeSelect',
+      api: loadParentUnitOptions,
       immediate: false,
-      beforeFetch: () => ({ excludeId: form.id, includeDisabled: true }),
-      resultField: 'data',
       labelField: 'customerName',
       valueField: 'id',
       labelFn: (option) => {
-        const customer = option as Api.Tms.BasicData.CustomerOption
+        const customer = option as Customer
         const code = customer.customerCode ? `（${customer.customerCode}）` : ''
         const status = customer.enabled === false ? ' · 已停用' : ''
         return `${customer.customerName}${code}${status}`
@@ -266,6 +276,7 @@
       props: {
         clearable: true,
         filterable: true,
+        checkStrictly: true,
         placeholder: '请选择上级客户单位'
       },
       description: '选填；不选择则作为一级客户单位。'
@@ -328,7 +339,7 @@
         placeholder: '请输入备注信息'
       }
     },
-    { label: '联系人信息', key: 'contactSection', type: 'divider', span: 24 },
+    { label: '联系人信息', key: 'contactSection', type: 'tab', span: 24 },
     {
       label: '姓名',
       key: 'contactName',
@@ -370,7 +381,9 @@
       type: 'input',
       props: { maxlength: 20, placeholder: '请输入 QQ' }
     },
-    { label: '财务信息', key: 'financeSection', type: 'divider', span: 24 },
+    ...(canViewCustomerField('taxNo') || canViewCustomerField('bankAccount')
+      ? [{ label: '财务信息', key: 'financeSection', type: 'tab', span: 24 } satisfies FormItem]
+      : []),
     {
       label: '发票抬头',
       key: 'invoiceTitle',
@@ -409,8 +422,8 @@
   ])
 
   const replaceForm = (nextForm: CustomerForm): void => {
-    Object.keys(form).forEach((key) => delete form[key as keyof CustomerForm])
-    Object.assign(form, nextForm)
+    Object.keys(form.value).forEach((key) => delete form.value[key as keyof CustomerForm])
+    Object.assign(form.value, nextForm)
   }
 
   const buildSubmitPayload = (data: CustomerForm): Customer => {
@@ -496,8 +509,8 @@
     }
 
     try {
-      const payload = buildSubmitPayload(structuredClone(toRaw(form)))
-      const type = form.id ? 'edit' : 'add'
+      const payload = buildSubmitPayload(structuredClone(toRaw(form.value)))
+      const type = form.value.id ? 'edit' : 'add'
       if (type === 'edit') await editCustomer(payload)
       else await addCustomer(payload)
       emit('success', type)
@@ -509,6 +522,7 @@
   }
 
   const handleOpen = async (data: CustomerDialogOpenData): Promise<void> => {
+    activeTab.value = 'baseSection'
     await resetForm()
     groups.value = data.groups
     const row = data.row
@@ -523,8 +537,8 @@
     } else if (data.initialGroupId) {
       const selectedGroup = groups.value.find((group) => group.id === data.initialGroupId)
       if (selectedGroup) {
-        form.tenantId = selectedGroup.tenantId
-        form.groupId = selectedGroup.id
+        form.value.tenantId = selectedGroup.tenantId
+        form.value.groupId = selectedGroup.id
       }
     }
 

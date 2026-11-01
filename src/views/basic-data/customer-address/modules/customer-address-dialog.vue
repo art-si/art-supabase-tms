@@ -50,15 +50,12 @@
     </div>
     <ArtForm
       ref="formRef"
-      :model-value="form"
-      @update:model-value="replaceReactiveModel(form, $event)"
+      v-model="form"
       :items="formItems"
       :rules="formRules"
       :span="8"
       :gutter="20"
       label-width="100px"
-      :show-reset="false"
-      :show-submit="false"
     >
       <template #addressPicker>
         <ArtAddressPicker
@@ -83,7 +80,6 @@
 </template>
 
 <script setup lang="ts">
-  import { replaceReactiveModel } from '@/utils/form/model'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { normalizeNullableNumber, normalizeNullableText } from '@/utils/form/normalize'
@@ -183,13 +179,13 @@
     isRecordOwner: true
   })
 
-  const form = reactive<CustomerAddressForm>(createInitialForm())
+  const form = ref<CustomerAddressForm>(createInitialForm())
 
   const canViewAddressField = (field: Api.Tms.BasicData.CustomerAddressFieldKey): boolean =>
-    canViewField(form.fieldAccess, field)
+    canViewField(form.value.fieldAccess, field)
 
   const canEditAddressField = (field: Api.Tms.BasicData.CustomerAddressFieldKey): boolean =>
-    canEditField(form.fieldAccess, field)
+    canEditField(form.value.fieldAccess, field)
 
   const formRules = computed<FormRules<CustomerAddressForm>>(() => ({
     tenantId: shouldExposeTenantField.value
@@ -251,7 +247,7 @@
                 value: tenant.id
               })),
               filterable: true,
-              disabled: Boolean(form.id),
+              disabled: Boolean(form.value.id),
               placeholder: '请选择地址所属租户'
             }
           }
@@ -360,7 +356,7 @@
   ])
 
   const replaceForm = (nextForm: CustomerAddressForm): void => {
-    Object.assign(form, createInitialForm(), nextForm)
+    Object.assign(form.value, createInitialForm(), nextForm)
   }
 
   const recognizeInput = async (): Promise<void> => {
@@ -377,8 +373,8 @@
         recognitionHint.value = '未识别到有效信息，请检查文本后重试。'
         return
       }
-      Object.assign(form, recognized)
-      if (recognized.regionPath) form.region = recognized.regionPath.join('/')
+      Object.assign(form.value, recognized)
+      if (recognized.regionPath) form.value.region = recognized.regionPath.join('/')
       recognitionHint.value = `已识别 ${fields.length} 项，请核对后保存。`
       ElMessage.success('识别结果已填入表单')
     } catch {
@@ -503,8 +499,8 @@
     }
 
     try {
-      const payload = buildSubmitPayload(structuredClone(toRaw(form)))
-      const type = form.id ? 'edit' : 'add'
+      const payload = buildSubmitPayload(structuredClone(toRaw(form.value)))
+      const type = form.value.id ? 'edit' : 'add'
       if (type === 'edit') await editCustomerAddress(payload)
       else await addCustomerAddress(payload)
       emit('success', type)

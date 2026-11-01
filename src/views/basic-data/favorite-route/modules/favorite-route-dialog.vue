@@ -2,15 +2,12 @@
   <ArtDialog ref="dialogRef" size="lg">
     <ArtForm
       ref="formRef"
-      :model-value="form"
-      @update:model-value="replaceReactiveModel(form, $event)"
+      v-model="form"
       :items="formItems"
       :rules="formRules"
       :span="12"
       :gutter="20"
       label-width="108px"
-      :show-reset="false"
-      :show-submit="false"
     >
       <template #routePreview>
         <section class="favorite-route-dialog__preview" aria-label="线路预览">
@@ -73,7 +70,6 @@
 </template>
 
 <script setup lang="ts">
-  import { replaceReactiveModel } from '@/utils/form/model'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { normalizeNullableText } from '@/utils/form/normalize'
@@ -147,12 +143,12 @@
     remark: ''
   })
 
-  const form = reactive<FavoriteRouteForm>(createInitialForm())
+  const form = ref<FavoriteRouteForm>(createInitialForm())
   const originAddress = computed(() =>
-    addressOptions.origin.find((item) => item.id === form.originAddressId)
+    addressOptions.origin.find((item) => item.id === form.value.originAddressId)
   )
   const destinationAddress = computed(() =>
-    addressOptions.destination.find((item) => item.id === form.destinationAddressId)
+    addressOptions.destination.find((item) => item.id === form.value.destinationAddressId)
   )
   const canEstimate = computed(() =>
     Boolean(
@@ -164,7 +160,7 @@
     )
   )
   const estimateNote = computed(() => {
-    if (!form.originAddressId || !form.destinationAddressId) return ''
+    if (!form.value.originAddressId || !form.value.destinationAddressId) return ''
     const notes: Record<EstimateStatus, string> = {
       idle: canEstimate.value
         ? '可按当前装卸地址估算驾车里程和正常路况时长。'
@@ -224,7 +220,6 @@
   const fetchTenantOptions = () => fetchTenantList({ from: 0, to: 999 })
 
   const formItems = computed<FormItem[]>(() => [
-    { label: '线路信息', key: 'baseSection', type: 'divider', span: 24 },
     ...(isPlatformSuper.value
       ? [
           {
@@ -241,9 +236,9 @@
               return `${tenant.tenantName}（${tenant.tenantCode}）`
             },
             props: {
-              disabled: Boolean(form.id),
+              disabled: Boolean(form.value.id),
               filterable: true,
-              clearable: !form.id,
+              clearable: !form.value.id,
               onChange: handleTenantChange,
               placeholder: '请选择本次维护的数据租户'
             }
@@ -271,9 +266,9 @@
           : customer.customerName
       },
       immediate: false,
-      beforeFetch: () => ({ tenantId: form.tenantId }),
+      beforeFetch: () => ({ tenantId: form.value.tenantId }),
       props: {
-        disabled: isPlatformSuper.value && !form.tenantId,
+        disabled: isPlatformSuper.value && !form.value.tenantId,
         filterable: true,
         clearable: true,
         placeholder: '请选择客户'
@@ -296,10 +291,10 @@
       labelFn: getAddressLabel,
       optionComponent: FavoriteRouteAddressOption,
       immediate: false,
-      beforeFetch: () => ({ tenantId: form.tenantId, addressType: 'shipping' }),
+      beforeFetch: () => ({ tenantId: form.value.tenantId, addressType: 'shipping' }),
       afterFetch: (result) => syncAddressOptions('origin', result),
       props: {
-        disabled: isPlatformSuper.value && !form.tenantId,
+        disabled: isPlatformSuper.value && !form.value.tenantId,
         filterable: true,
         clearable: true,
         class: 'favorite-route-dialog__address-select',
@@ -319,10 +314,10 @@
       labelFn: getAddressLabel,
       optionComponent: FavoriteRouteAddressOption,
       immediate: false,
-      beforeFetch: () => ({ tenantId: form.tenantId, addressType: 'receiving' }),
+      beforeFetch: () => ({ tenantId: form.value.tenantId, addressType: 'receiving' }),
       afterFetch: (result) => syncAddressOptions('destination', result),
       props: {
-        disabled: isPlatformSuper.value && !form.tenantId,
+        disabled: isPlatformSuper.value && !form.value.tenantId,
         filterable: true,
         clearable: true,
         class: 'favorite-route-dialog__address-select',
@@ -332,7 +327,6 @@
         placeholder: '请选择收货地址'
       }
     },
-    { label: '运输参考', key: 'referenceSection', type: 'divider', span: 24 },
     {
       label: '线路里程',
       key: 'distanceKm',
@@ -382,7 +376,7 @@
   ])
 
   const reloadTenantScopedOptions = async (): Promise<void> => {
-    if (isPlatformSuper.value && !form.tenantId) {
+    if (isPlatformSuper.value && !form.value.tenantId) {
       Object.assign(addressOptions, { origin: [], destination: [] })
       return
     }
@@ -399,7 +393,7 @@
   }
 
   const handleTenantChange = async (): Promise<void> => {
-    Object.assign(form, {
+    Object.assign(form.value, {
       customerId: '',
       originAddressId: '',
       destinationAddressId: '',
@@ -414,7 +408,7 @@
 
   const handleEndpointChange = async (): Promise<void> => {
     resetEstimate()
-    if (!form.originAddressId || !form.destinationAddressId) return
+    if (!form.value.originAddressId || !form.value.destinationAddressId) return
     await nextTick()
     await calculateRouteEstimate()
   }
@@ -438,7 +432,7 @@
     try {
       const result = await estimateDrivingRoute(origin, destination)
       if (requestId !== estimateRequestId) return
-      Object.assign(form, result)
+      Object.assign(form.value, result)
       estimate.status = 'ready'
     } catch {
       if (requestId === estimateRequestId) estimate.status = 'unavailable'
@@ -446,7 +440,7 @@
   }
 
   const buildPayload = (): FavoriteRoute => {
-    const payload = omit(cloneDeep(toRaw(form)), [
+    const payload = omit(cloneDeep(toRaw(form.value)), [
       'routePreview',
       'tenant',
       'customer',
@@ -458,9 +452,9 @@
       'updateTime'
     ]) as FavoriteRoute
     payload.routeName = payload.routeName.trim()
-    payload.distanceKm = form.distanceKm || null
-    payload.estimatedMinutes = form.estimatedMinutes || null
-    payload.remark = normalizeNullableText(form.remark)
+    payload.distanceKm = form.value.distanceKm || null
+    payload.estimatedMinutes = form.value.estimatedMinutes || null
+    payload.remark = normalizeNullableText(form.value.remark)
     if (!isPlatformSuper.value || payload.id) delete payload.tenantId
     return payload
   }
@@ -487,7 +481,7 @@
   }
 
   const handleOpen = async (row?: FavoriteRoute, tenantId?: string): Promise<void> => {
-    Object.assign(form, createInitialForm(), row ? cloneDeep(toRaw(row)) : {}, {
+    Object.assign(form.value, createInitialForm(), row ? cloneDeep(toRaw(row)) : {}, {
       tenantId: row?.tenantId || tenantId || getUserInfo.value.tenantId || ''
     })
     Object.assign(addressOptions, { origin: [], destination: [] })

@@ -51,8 +51,6 @@
           :gutter="24"
           label-width="98px"
           root-class="carrier-price-edit__form"
-          :show-reset="false"
-          :show-submit="false"
         />
 
         <div
@@ -101,8 +99,6 @@
               :span="24"
               label-position="top"
               root-class="carrier-price-edit__form"
-              :show-reset="false"
-              :show-submit="false"
             />
           </div>
 
@@ -132,8 +128,6 @@
               :gutter="16"
               label-position="top"
               root-class="carrier-price-edit__form"
-              :show-reset="false"
-              :show-submit="false"
             />
           </div>
         </div>
@@ -175,8 +169,6 @@
             :gutter="24"
             label-width="98px"
             root-class="carrier-price-edit__form carrier-price-edit__fee-form"
-            :show-reset="false"
-            :show-submit="false"
           />
         </template>
       </PriceCargoSection>
@@ -201,8 +193,6 @@
           :gutter="24"
           label-width="98px"
           root-class="carrier-price-edit__form"
-          :show-reset="false"
-          :show-submit="false"
         />
       </ArtSectionCard>
     </div>
