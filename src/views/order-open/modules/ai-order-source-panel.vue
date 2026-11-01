@@ -20,31 +20,14 @@
       </div>
     </template>
 
-    <div class="ai-order-source__input-area">
-      <div>
-        <span class="ai-order-source__field-label">文字资料</span>
-        <ArtForm
-          v-model="model"
-          :items="items"
-          :span="24"
-          label-width="0"
-          root-class="ai-order-source__form"
-        />
-      </div>
-
-      <div class="ai-order-source__upload">
-        <span class="ai-order-source__field-label">订单图片</span>
-        <ArtUploadImage
-          v-model="model.imageUrls"
-          title="上传订单"
-          :size="88"
-          :limit="4"
-          :resource-tenant-id="resourceTenantId"
-          multiple
-        />
-        <small>最多 4 张，建议上传清晰完整的委托单</small>
-      </div>
-    </div>
+    <ArtForm
+      v-model="model"
+      :items="items"
+      :span="24"
+      :gutter="16"
+      label-position="top"
+      root-class="ai-order-source__form"
+    />
 
     <ElAlert
       v-if="errorMessage"
@@ -88,7 +71,6 @@
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
-  import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
   import { AI_ORDER_PROMPT_PLACEHOLDER } from './ai-order-examples'
   import type { AiOrderInputModel } from './ai-order-types'
 
@@ -110,12 +92,12 @@
   }>()
   const emit = defineEmits<{ analyze: []; 'generate-example': [] }>()
 
-  const items: FormItem[] = [
+  const items = computed<FormItem[]>(() => [
     {
-      label: '',
+      label: '文字资料',
       key: 'prompt',
-      type: 'input',
-      span: 24,
+      type: 'textarea',
+      span: 20,
       props: {
         type: 'textarea',
         rows: 6,
@@ -124,8 +106,16 @@
         resize: 'none',
         placeholder: AI_ORDER_PROMPT_PLACEHOLDER
       }
+    },
+    {
+      key: 'imageUrls',
+      label: '订单图片',
+      type: 'uploadImage',
+      span: 4,
+      description: '最多 4 张，建议上传清晰完整的委托单',
+      props: { title: '上传订单', size: 88, limit: 4, resourceTenantId, multiple: true }
     }
-  ]
+  ])
 </script>
 
 <style scoped lang="scss">
@@ -150,34 +140,6 @@
     &__example-button {
       flex: none;
       font-weight: 500;
-    }
-
-    &__input-area {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 112px;
-      gap: 16px;
-      align-items: start;
-      min-width: 0;
-    }
-
-    &__field-label {
-      display: block;
-      margin-bottom: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--el-text-color-primary);
-    }
-
-    &__upload {
-      display: grid;
-      justify-items: start;
-
-      small {
-        margin-top: 8px;
-        font-size: 11px;
-        line-height: 1.45;
-        color: var(--el-text-color-placeholder);
-      }
     }
 
     &__actions {
@@ -220,14 +182,6 @@
       &__actions {
         flex-direction: column;
         align-items: stretch;
-      }
-
-      &__input-area {
-        grid-template-columns: 1fr;
-      }
-
-      &__upload {
-        grid-template-columns: 1fr;
       }
 
       :deep(.ai-order-source__form .el-textarea__inner) {

@@ -21,19 +21,21 @@
         </template>
         <template #meta>
           <div class="order-open__document-meta">
-            <label class="order-open__document-number">
-              <span>运单号</span>
-              <ElInput
-                v-if="isNewOrder && orderNumberRule && !orderNumberRule.autoEnabled"
-                v-model="form.data.orderNo"
-                size="small"
-                maxlength="50"
-                placeholder="请手工填写运单号"
-              />
-              <strong v-else translate="no">{{
+            <ArtForm
+              v-if="isNewOrder && orderNumberRule && !orderNumberRule.autoEnabled"
+              v-model="form.data"
+              :items="orderNumberItems"
+              :span="24"
+              label-position="left"
+              label-width="48px"
+              root-class="order-open__number-form"
+            />
+            <div v-else class="order-open__document-number"
+              ><span>运单号</span
+              ><strong translate="no">{{
                 form.data.orderNo || orderNumberRule?.preview || '保存后自动生成'
-              }}</strong>
-            </label>
+              }}</strong></div
+            >
             <span class="order-open__time">
               <ArtSvgIcon icon="ri:calendar-line" aria-hidden="true" />
               {{ page.nowText }}
@@ -288,33 +290,7 @@
                 >重新计算公里数</ElButton
               ></div
             >
-            <div class="order-open__journey-grid">
-              <label
-                >公里数
-                <ElInput
-                  :model-value="form.data.distanceKm == null ? '' : `${form.data.distanceKm} km`"
-                  readonly
-                  :placeholder="distanceStatus"
-              /></label>
-              <label
-                >发货时间
-                <ElDatePicker
-                  v-model="form.data.departureAt"
-                  type="datetime"
-                  value-format="YYYY-MM-DDTHH:mm:ssZ"
-                  placeholder="请选择发货时间"
-                  class="w-full!"
-              /></label>
-              <label
-                >到货时间
-                <ElDatePicker
-                  v-model="form.data.arrivalAt"
-                  type="datetime"
-                  value-format="YYYY-MM-DDTHH:mm:ssZ"
-                  placeholder="请选择到货时间"
-                  class="w-full!"
-              /></label>
-            </div>
+            <ArtForm v-model="form.data" :items="journeyItems" :span="8" label-position="top" />
           </div>
         </ArtSectionCard>
       </div>
@@ -495,14 +471,7 @@
           >
             <ArtSectionTitle :show-line="false">业务附件</ArtSectionTitle>
             <p>可上传货物、包装或交接凭证，最多 3 张。</p>
-            <ArtUploadImage
-              v-model="form.data.imageUrls"
-              title="上传业务图片"
-              :size="112"
-              :limit="3"
-              multiple
-              :readonly="!canEditOrderField('proofAttachments')"
-            />
+            <ArtForm v-model="form.data" :items="attachmentItems" :span="24" label-position="top" />
           </section>
         </div>
       </ArtSectionCard>
@@ -720,7 +689,6 @@
   import ArtIconButton from '@/components/core/widget/art-icon-button/index.vue'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
-  import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
   import ArtAddressPicker from '@/components/core/forms/art-address-picker/index.vue'
   import { fetchRegionOptions } from '@/api/region-options'
   import { useAmapDrivingEstimate } from '@/hooks/core/useAmapDrivingEstimate'
@@ -1489,6 +1457,62 @@
     }
   }
 
+  const orderNumberItems: FormItem[] = [
+    {
+      key: 'orderNo',
+      label: '运单号',
+      type: 'input',
+      props: { size: 'small', maxlength: 50, placeholder: '请手工填写运单号' }
+    }
+  ]
+  const journeyItems = computed<FormItem[]>(() => [
+    {
+      key: 'distanceKm',
+      label: '公里数',
+      type: 'input',
+      props: {
+        modelValue: form.data.distanceKm == null ? '' : form.data.distanceKm + ' km',
+        readonly: true,
+        placeholder: distanceStatus.value
+      }
+    },
+    {
+      key: 'departureAt',
+      label: '发货时间',
+      type: 'date',
+      props: {
+        type: 'datetime',
+        valueFormat: 'YYYY-MM-DDTHH:mm:ssZ',
+        placeholder: '请选择发货时间',
+        class: 'w-full!'
+      }
+    },
+    {
+      key: 'arrivalAt',
+      label: '到货时间',
+      type: 'date',
+      props: {
+        type: 'datetime',
+        valueFormat: 'YYYY-MM-DDTHH:mm:ssZ',
+        placeholder: '请选择到货时间',
+        class: 'w-full!'
+      }
+    }
+  ])
+  const attachmentItems = computed<FormItem[]>(() => [
+    {
+      key: 'imageUrls',
+      label: '业务图片',
+      type: 'uploadImage',
+      props: {
+        title: '上传业务图片',
+        size: 112,
+        limit: 3,
+        multiple: true,
+        readonly: !canEditOrderField('proofAttachments')
+      }
+    }
+  ])
   async function loadNumberRules(): Promise<void> {
     const { data } = await fetchDocumentNumberRulesByKeys(['tms.order'])
     numberRules.value = Object.fromEntries((data ?? []).map((rule) => [rule.ruleKey, rule]))

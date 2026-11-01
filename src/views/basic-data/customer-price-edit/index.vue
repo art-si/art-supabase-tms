@@ -316,7 +316,7 @@
 
     <ArtTableSingleSelect
       ref="addressSelectRef"
-      v-model="addressSelector.value"
+      v-model="addressSelector"
       v-model:selected-data="addressSelector.selectedRows"
       :api-fn="fetchAddressSelectorData"
       :columns="addressSelector.columns"

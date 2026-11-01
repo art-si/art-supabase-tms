@@ -41,14 +41,7 @@
 
     <div class="receipt-ocr__body">
       <div class="receipt-ocr__upload">
-        <ArtUploadImage
-          v-model="imageUrls"
-          title="上传回单"
-          :size="88"
-          :limit="3"
-          :resource-tenant-id="order.tenantId || ''"
-          multiple
-        />
+        <ArtForm v-model="uploadForm" :items="uploadItems" :span="24" label-position="top" />
         <div>
           <strong>{{
             imageUrls.length ? `已上传 ${imageUrls.length} 张` : '上传 1–3 张回单'
@@ -75,7 +68,7 @@
             <ElTag type="info" effect="plain" round>可信度 {{ confidencePercent }}%</ElTag>
           </div>
           <div class="receipt-ocr__result-actions">
-            <ElInput
+            <ArtForm
               v-if="
                 result.assessment.signals.length &&
                 isPlatformSuper &&
@@ -83,9 +76,10 @@
                 !workOrderNumber.automatic.value &&
                 !workOrder
               "
-              v-model="manualWorkOrderNo"
-              maxlength="50"
-              placeholder="请输入异常工单号"
+              v-model="manualForm"
+              :items="manualItems"
+              :span="24"
+              label-position="top"
             />
             <ElButton
               v-if="result.assessment.signals.length && isPlatformSuper"
@@ -153,7 +147,7 @@
   import { createDateTimeFormatter } from '@/utils/ui/format'
   import { ElMessage } from 'element-plus'
   import ArtSvgIcon from '@/components/core/base/art-svg-icon/index.vue'
-  import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
+  import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import OcrOriginalText from '@/components/business/ocr-original-text/index.vue'
   import { analyzeWaybillReceiptByAi, createReceiptExceptionWorkOrder } from '@tms/api'
   import { useUserStore } from '@/store/modules/user'
@@ -197,6 +191,44 @@
       emit('update:modelValue', value)
     }
   })
+  const uploadForm = reactive({
+    get imageUrls() {
+      return imageUrls.value
+    },
+    set imageUrls(value: string[]) {
+      imageUrls.value = value
+    }
+  })
+  const uploadItems = computed<FormItem[]>(() => [
+    {
+      key: 'imageUrls',
+      label: '回单图片',
+      type: 'uploadImage',
+      props: {
+        title: '上传回单',
+        size: 88,
+        limit: 3,
+        resourceTenantId: props.order.tenantId || '',
+        multiple: true
+      }
+    }
+  ])
+  const manualForm = reactive({
+    get manualWorkOrderNo() {
+      return manualWorkOrderNo.value
+    },
+    set manualWorkOrderNo(value: string) {
+      manualWorkOrderNo.value = value
+    }
+  })
+  const manualItems: FormItem[] = [
+    {
+      key: 'manualWorkOrderNo',
+      label: '异常工单号',
+      type: 'input',
+      props: { maxlength: 50, placeholder: '请输入异常工单号' }
+    }
+  ]
   const confidencePercent = computed(() => Math.round((result.value?.confidence ?? 0) * 100))
   const riskTagType = computed(() => {
     const level = result.value?.assessment.riskLevel

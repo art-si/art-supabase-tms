@@ -239,263 +239,14 @@
         :closable="false"
       />
       <ArtForm
-        :model-value="forms[activeSection]"
-        :items="[]"
-        custom-layout
+        v-model="applicationForm"
+        :items="applicationItems"
+        :span="12"
+        :gutter="20"
         label-position="top"
+        tenant-scope-mode="manual"
         class="certification-form"
-      >
-        <ElFormItem
-          v-if="tenantScope.isAllTenants && !currentRecord"
-          label="目标租户"
-          required
-          class="max-w-80"
-        >
-          <ElSelect v-model="formTenantId" placeholder="请选择目标租户" filterable>
-            <ElOption
-              v-for="tenant in tenantScope.tenantOptions"
-              :key="tenant.id"
-              :label="tenant.tenantName"
-              :value="tenant.id"
-            />
-          </ElSelect>
-        </ElFormItem>
-        <ElFormItem v-else-if="tenantScope.isAllTenants" label="目标租户" class="max-w-80">
-          <ElInput :model-value="tenantLabel(formTenantId)" disabled />
-        </ElFormItem>
-
-        <template v-if="activeSection === 'enterprise'">
-          <div class="certification-form-grid">
-            <ElFormItem label="企业名称" required
-              ><ElInput v-model="forms.enterprise.companyName" maxlength="100"
-            /></ElFormItem>
-            <ElFormItem label="企业简称" required
-              ><ElInput v-model="forms.enterprise.shortName" maxlength="50"
-            /></ElFormItem>
-            <ElFormItem label="统一社会信用代码" required
-              ><ElInput v-model="forms.enterprise.socialCreditCode" maxlength="18"
-            /></ElFormItem>
-            <ElFormItem label="注册资本（万元）"
-              ><ElInput v-model="forms.enterprise.registeredCapital" maxlength="18"
-            /></ElFormItem>
-            <ElFormItem label="法定代表人" required
-              ><ElInput v-model="forms.enterprise.legalRepresentative" maxlength="40"
-            /></ElFormItem>
-            <ElFormItem label="法定代表人身份证号" required
-              ><ElInput
-                v-model="forms.enterprise.legalRepresentativeIdNo"
-                maxlength="18"
-                autocomplete="off"
-            /></ElFormItem>
-            <ElFormItem label="营业期限"
-              ><div class="flex w-full items-center gap-3"
-                ><ElDatePicker
-                  v-model="forms.enterprise.businessLicenseExpiresOn"
-                  type="date"
-                  value-format="YYYY-MM-DD"
-                  :disabled="forms.enterprise.businessLicenseLongTerm"
-                  class="min-w-0 flex-1!"
-                /><ElCheckbox v-model="forms.enterprise.businessLicenseLongTerm"
-                  >长期有效</ElCheckbox
-                ></div
-              ></ElFormItem
-            >
-            <ElFormItem label="身份证有效期"
-              ><div class="flex w-full items-center gap-3"
-                ><ElDatePicker
-                  v-model="forms.enterprise.legalIdExpiresOn"
-                  type="date"
-                  value-format="YYYY-MM-DD"
-                  :disabled="forms.enterprise.legalIdLongTerm"
-                  class="min-w-0 flex-1!"
-                /><ElCheckbox v-model="forms.enterprise.legalIdLongTerm">长期有效</ElCheckbox></div
-              ></ElFormItem
-            >
-            <ElFormItem label="邀请码"
-              ><ElInput v-model="forms.enterprise.invitationCode" maxlength="40"
-            /></ElFormItem>
-            <ElFormItem label="法定代表人详细地址"
-              ><ElInput v-model="forms.enterprise.legalAddress" maxlength="200"
-            /></ElFormItem>
-          </div>
-          <div class="certification-upload-grid">
-            <ElFormItem label="营业执照" required
-              ><ArtUploadImage
-                v-model="forms.enterprise.businessLicenseUrl"
-                title="营业执照"
-                :limit="1"
-                :resource-tenant-id="formTenantId"
-                :upload-request="uploadImage"
-                :show-resource-picker="false"
-            /></ElFormItem>
-            <ElFormItem label="身份证人像面" required
-              ><ArtUploadImage
-                v-model="forms.enterprise.idFrontUrl"
-                title="身份证人像面"
-                :limit="1"
-                :resource-tenant-id="formTenantId"
-                :upload-request="uploadImage"
-                :show-resource-picker="false"
-            /></ElFormItem>
-            <ElFormItem label="身份证国徽面" required
-              ><ArtUploadImage
-                v-model="forms.enterprise.idBackUrl"
-                title="身份证国徽面"
-                :limit="1"
-                :resource-tenant-id="formTenantId"
-                :upload-request="uploadImage"
-                :show-resource-picker="false"
-            /></ElFormItem>
-          </div>
-        </template>
-
-        <template v-else-if="activeSection === 'authorization'">
-          <div class="certification-form-grid">
-            <ElFormItem label="被授权人姓名" required
-              ><ElInput v-model="forms.authorization.authorizerName" maxlength="40"
-            /></ElFormItem>
-            <ElFormItem label="被授权人身份证号" required
-              ><ElInput
-                v-model="forms.authorization.authorizedPersonIdNo"
-                maxlength="18"
-                autocomplete="off"
-            /></ElFormItem>
-          </div>
-          <div class="certification-upload-grid">
-            <ElFormItem label="授权委托书" required
-              ><ArtUploadImage
-                v-model="forms.authorization.authorizationUrl"
-                title="授权委托书"
-                :limit="1"
-                :resource-tenant-id="formTenantId"
-                :upload-request="uploadImage"
-                :show-resource-picker="false"
-            /></ElFormItem>
-            <ElFormItem label="身份证人像面" required
-              ><ArtUploadImage
-                v-model="forms.authorization.idFrontUrl"
-                title="身份证人像面"
-                :limit="1"
-                :resource-tenant-id="formTenantId"
-                :upload-request="uploadImage"
-                :show-resource-picker="false"
-            /></ElFormItem>
-            <ElFormItem label="身份证国徽面" required
-              ><ArtUploadImage
-                v-model="forms.authorization.idBackUrl"
-                title="身份证国徽面"
-                :limit="1"
-                :resource-tenant-id="formTenantId"
-                :upload-request="uploadImage"
-                :show-resource-picker="false"
-            /></ElFormItem>
-          </div>
-        </template>
-
-        <template v-else-if="activeSection === 'account'">
-          <div class="certification-form-grid">
-            <ElFormItem label="开户许可证" required
-              ><ArtUploadFile
-                v-model="forms.account.openingPermitUrls"
-                title="上传开户许可证"
-                accept=".pdf,image/*"
-                :limit="3"
-                multiple
-                :resource-tenant-id="formTenantId"
-                :upload-request="uploadDocument"
-                :show-resource-picker="false"
-                :file-size="15 * 1024 * 1024"
-            /></ElFormItem>
-            <ElFormItem label="线上支付确认书" required
-              ><ArtUploadFile
-                v-model="forms.account.agreementUrls"
-                title="上传已签署协议"
-                accept=".pdf,image/*"
-                :limit="3"
-                multiple
-                :resource-tenant-id="formTenantId"
-                :upload-request="uploadDocument"
-                :show-resource-picker="false"
-                :file-size="15 * 1024 * 1024"
-            /></ElFormItem>
-            <ElFormItem label="联系邮箱" required
-              ><ElInput v-model="forms.account.email" type="email" maxlength="120"
-            /></ElFormItem>
-          </div>
-          <p class="text-xs text-[var(--el-text-color-secondary)]"
-            >协议模板尚未由企业法务提供，当前请上传已确认的协议文件。</p
-          >
-        </template>
-
-        <template v-else-if="activeSection === 'road_permit'">
-          <div class="certification-form-grid">
-            <ElFormItem label="业户名称" required
-              ><ElInput v-model="forms.road_permit.operatorName" maxlength="100"
-            /></ElFormItem>
-            <ElFormItem label="许可证号" required
-              ><ElInput v-model="forms.road_permit.permitNo" maxlength="80"
-            /></ElFormItem>
-            <ElFormItem label="有效期至" required
-              ><div class="flex w-full items-center gap-3"
-                ><ElDatePicker
-                  v-model="forms.road_permit.expiresOn"
-                  type="date"
-                  value-format="YYYY-MM-DD"
-                  :disabled="forms.road_permit.longTerm"
-                  class="min-w-0 flex-1!"
-                /><ElCheckbox v-model="forms.road_permit.longTerm">长期有效</ElCheckbox></div
-              ></ElFormItem
-            >
-          </div>
-          <ElFormItem label="道路运输经营许可证" required
-            ><ArtUploadImage
-              v-model="forms.road_permit.permitImageUrl"
-              title="道路运输经营许可证"
-              :limit="1"
-              :resource-tenant-id="formTenantId"
-              :upload-request="uploadImage"
-              :show-resource-picker="false"
-          /></ElFormItem>
-        </template>
-
-        <template v-else>
-          <div class="certification-form-grid">
-            <ElFormItem label="法人是签署受托人"
-              ><ElRadioGroup v-model="forms.e_signature.legalIsDelegate"
-                ><ElRadio :value="true">是</ElRadio
-                ><ElRadio :value="false">否</ElRadio></ElRadioGroup
-              ></ElFormItem
-            >
-            <ElFormItem label="认证方式"
-              ><ElRadioGroup v-model="forms.e_signature.authMethod"
-                ><ElRadio value="phone">手机号认证</ElRadio
-                ><ElRadio value="face">人脸认证</ElRadio></ElRadioGroup
-              ></ElFormItem
-            >
-            <ElFormItem label="公司名称" required
-              ><ElInput v-model="forms.e_signature.companyName" maxlength="100"
-            /></ElFormItem>
-            <ElFormItem label="统一社会信用代码" required
-              ><ElInput v-model="forms.e_signature.socialCreditCode" maxlength="18"
-            /></ElFormItem>
-            <ElFormItem label="法人姓名" required
-              ><ElInput v-model="forms.e_signature.legalName" maxlength="40"
-            /></ElFormItem>
-            <ElFormItem label="身份证号" required
-              ><ElInput v-model="forms.e_signature.legalIdNo" maxlength="18" autocomplete="off"
-            /></ElFormItem>
-            <ElFormItem label="法人手机号" required
-              ><ElInput v-model="forms.e_signature.legalPhone" maxlength="11" autocomplete="off"
-            /></ElFormItem>
-          </div>
-          <p class="text-xs text-[var(--el-text-color-secondary)]"
-            >短信验证码与人脸认证需由签章服务提供；本页提交后状态仅为待审核。</p
-          >
-          <ElCheckbox v-model="esigAcknowledged" class="mt-3! whitespace-normal!"
-            >我已知悉此处仅提交申请资料，正式电子签协议、身份核验和签章须在服务接入后另行完成。</ElCheckbox
-          >
-        </template>
-      </ArtForm>
+      />
     </ArtDialog>
 
     <ArtDialog ref="reviewDialogRef" width="580px" :on-confirm="submitReview">
@@ -506,30 +257,13 @@
         show-icon
         :closable="false"
       />
-      <ArtForm :model-value="reviewForm" :items="[]" custom-layout label-position="top">
-        <ElFormItem label="审核结果" required>
-          <ElRadioGroup v-model="reviewForm.decision">
-            <ElRadio value="approved">资料通过</ElRadio>
-            <ElRadio value="rejected">驳回申请</ElRadio>
-          </ElRadioGroup>
-        </ElFormItem>
-        <ElFormItem label="审核说明" :required="reviewForm.decision === 'rejected'">
-          <ElInput
-            v-model="reviewForm.note"
-            type="textarea"
-            :rows="3"
-            maxlength="500"
-            show-word-limit
-            placeholder="驳回时请写明需要补正的资料"
-          />
-        </ElFormItem>
-      </ArtForm>
+      <ArtForm :model-value="reviewForm" :items="reviewItems" :span="24" label-position="top" />
     </ArtDialog>
   </div>
 </template>
 
 <script setup lang="ts">
-  import { computed, onMounted, reactive, ref, watch } from 'vue'
+  import { computed, onMounted, reactive, ref, toRefs, watch } from 'vue'
   import { ElMessage } from 'element-plus'
   import { useAuth } from '@/hooks/core/useAuth'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
@@ -542,7 +276,7 @@
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
   import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
   import ArtUploadFile from '@/components/core/forms/art-upload-file/index.vue'
-  import ArtForm from '@/components/core/forms/art-form/index.vue'
+  import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import BusinessWorkspaceHeader from '@/components/business/business-workspace-header/index.vue'
   import {
     fetchCompanyCertification,
@@ -926,6 +660,480 @@
       reviewing.value = false
     }
   }
+
+  const applicationForm = computed<Record<string, unknown>>({
+    get: () =>
+      reactive({
+        ...toRefs(forms[activeSection.value]),
+        targetTenantId: formTenantId,
+        esigAcknowledged
+      }),
+    set: (value) => {
+      const { targetTenantId, esigAcknowledged: ack, ...payload } = value
+      formTenantId.value = typeof targetTenantId === 'string' ? targetTenantId : ''
+      esigAcknowledged.value = ack === true
+      Object.assign(forms[activeSection.value], payload)
+    }
+  })
+  const applicationItems = computed<FormItem[]>(() => {
+    const bySection: Record<CertificationSection, FormItem[]> = {
+      enterprise: [
+        {
+          key: 'companyName',
+          label: '企业名称',
+          type: 'input',
+          span: 12,
+          formItemProps: { required: true },
+          props: { maxlength: '100' }
+        },
+        {
+          key: 'shortName',
+          label: '企业简称',
+          type: 'input',
+          span: 12,
+          formItemProps: { required: true },
+          props: { maxlength: '50' }
+        },
+        {
+          key: 'socialCreditCode',
+          label: '统一社会信用代码',
+          type: 'input',
+          span: 12,
+          formItemProps: { required: true },
+          props: { maxlength: '18' }
+        },
+        {
+          key: 'registeredCapital',
+          label: '注册资本（万元）',
+          type: 'input',
+          span: 12,
+          formItemProps: { required: false },
+          props: { maxlength: '18' }
+        },
+        {
+          key: 'legalRepresentative',
+          label: '法定代表人',
+          type: 'input',
+          span: 12,
+          formItemProps: { required: true },
+          props: { maxlength: '40' }
+        },
+        {
+          key: 'legalRepresentativeIdNo',
+          label: '法定代表人身份证号',
+          type: 'input',
+          span: 12,
+          formItemProps: { required: true },
+          props: { maxlength: '18', autocomplete: 'off' }
+        },
+        {
+          key: 'businessLicenseExpiresOn',
+          label: '营业期限',
+          type: 'date',
+          span: 12,
+          formItemProps: { required: false },
+          props: {
+            type: 'date',
+            valueFormat: 'YYYY-MM-DD',
+            disabled: forms.enterprise.businessLicenseLongTerm,
+            class: 'min-w-0 flex-1!'
+          }
+        },
+        {
+          key: 'businessLicenseLongTerm',
+          label: '营业期限长期有效',
+          type: 'checkbox',
+          span: 12,
+          formItemProps: { required: false },
+          props: {}
+        },
+        {
+          key: 'legalIdExpiresOn',
+          label: '身份证有效期',
+          type: 'date',
+          span: 12,
+          formItemProps: { required: false },
+          props: {
+            type: 'date',
+            valueFormat: 'YYYY-MM-DD',
+            disabled: forms.enterprise.legalIdLongTerm,
+            class: 'min-w-0 flex-1!'
+          }
+        },
+        {
+          key: 'legalIdLongTerm',
+          label: '身份证有效期长期有效',
+          type: 'checkbox',
+          span: 12,
+          formItemProps: { required: false },
+          props: {}
+        },
+        {
+          key: 'invitationCode',
+          label: '邀请码',
+          type: 'input',
+          span: 12,
+          formItemProps: { required: false },
+          props: { maxlength: '40' }
+        },
+        {
+          key: 'legalAddress',
+          label: '法定代表人详细地址',
+          type: 'input',
+          span: 12,
+          formItemProps: { required: false },
+          props: { maxlength: '200' }
+        },
+        {
+          key: 'businessLicenseUrl',
+          label: '营业执照',
+          type: 'uploadImage',
+          span: 8,
+          formItemProps: { required: true },
+          props: {
+            title: '营业执照',
+            limit: 1,
+            resourceTenantId: formTenantId.value,
+            uploadRequest: uploadImage,
+            showResourcePicker: false
+          }
+        },
+        {
+          key: 'idFrontUrl',
+          label: '身份证人像面',
+          type: 'uploadImage',
+          span: 8,
+          formItemProps: { required: true },
+          props: {
+            title: '身份证人像面',
+            limit: 1,
+            resourceTenantId: formTenantId.value,
+            uploadRequest: uploadImage,
+            showResourcePicker: false
+          }
+        },
+        {
+          key: 'idBackUrl',
+          label: '身份证国徽面',
+          type: 'uploadImage',
+          span: 8,
+          formItemProps: { required: true },
+          props: {
+            title: '身份证国徽面',
+            limit: 1,
+            resourceTenantId: formTenantId.value,
+            uploadRequest: uploadImage,
+            showResourcePicker: false
+          }
+        }
+      ],
+      authorization: [
+        {
+          key: 'authorizerName',
+          label: '被授权人姓名',
+          type: 'input',
+          span: 12,
+          formItemProps: { required: true },
+          props: { maxlength: '40' }
+        },
+        {
+          key: 'authorizedPersonIdNo',
+          label: '被授权人身份证号',
+          type: 'input',
+          span: 12,
+          formItemProps: { required: true },
+          props: { maxlength: '18', autocomplete: 'off' }
+        },
+        {
+          key: 'authorizationUrl',
+          label: '授权委托书',
+          type: 'uploadImage',
+          span: 8,
+          formItemProps: { required: true },
+          props: {
+            title: '授权委托书',
+            limit: 1,
+            resourceTenantId: formTenantId.value,
+            uploadRequest: uploadImage,
+            showResourcePicker: false
+          }
+        },
+        {
+          key: 'idFrontUrl',
+          label: '身份证人像面',
+          type: 'uploadImage',
+          span: 8,
+          formItemProps: { required: true },
+          props: {
+            title: '身份证人像面',
+            limit: 1,
+            resourceTenantId: formTenantId.value,
+            uploadRequest: uploadImage,
+            showResourcePicker: false
+          }
+        },
+        {
+          key: 'idBackUrl',
+          label: '身份证国徽面',
+          type: 'uploadImage',
+          span: 8,
+          formItemProps: { required: true },
+          props: {
+            title: '身份证国徽面',
+            limit: 1,
+            resourceTenantId: formTenantId.value,
+            uploadRequest: uploadImage,
+            showResourcePicker: false
+          }
+        }
+      ],
+      account: [
+        {
+          key: 'openingPermitUrls',
+          label: '开户许可证',
+          type: 'uploadFile',
+          span: 12,
+          formItemProps: { required: true },
+          props: {
+            title: '上传开户许可证',
+            accept: '.pdf,image/*',
+            limit: 3,
+            multiple: true,
+            resourceTenantId: formTenantId.value,
+            uploadRequest: uploadDocument,
+            showResourcePicker: false,
+            fileSize: 15 * 1024 * 1024
+          }
+        },
+        {
+          key: 'agreementUrls',
+          label: '线上支付确认书',
+          type: 'uploadFile',
+          span: 12,
+          formItemProps: { required: true },
+          props: {
+            title: '上传已签署协议',
+            accept: '.pdf,image/*',
+            limit: 3,
+            multiple: true,
+            resourceTenantId: formTenantId.value,
+            uploadRequest: uploadDocument,
+            showResourcePicker: false,
+            fileSize: 15 * 1024 * 1024
+          }
+        },
+        {
+          key: 'email',
+          label: '联系邮箱',
+          type: 'input',
+          span: 12,
+          formItemProps: { required: true },
+          props: { type: 'email', maxlength: '120' }
+        }
+      ],
+      road_permit: [
+        {
+          key: 'operatorName',
+          label: '业户名称',
+          type: 'input',
+          span: 12,
+          formItemProps: { required: true },
+          props: { maxlength: '100' }
+        },
+        {
+          key: 'permitNo',
+          label: '许可证号',
+          type: 'input',
+          span: 12,
+          formItemProps: { required: true },
+          props: { maxlength: '80' }
+        },
+        {
+          key: 'expiresOn',
+          label: '有效期至',
+          type: 'date',
+          span: 12,
+          formItemProps: { required: true },
+          props: {
+            type: 'date',
+            valueFormat: 'YYYY-MM-DD',
+            disabled: forms.road_permit.longTerm,
+            class: 'min-w-0 flex-1!'
+          }
+        },
+        {
+          key: 'longTerm',
+          label: '有效期至长期有效',
+          type: 'checkbox',
+          span: 12,
+          formItemProps: { required: true },
+          props: {}
+        },
+        {
+          key: 'permitImageUrl',
+          label: '道路运输经营许可证',
+          type: 'uploadImage',
+          span: 12,
+          formItemProps: { required: true },
+          props: {
+            title: '道路运输经营许可证',
+            limit: 1,
+            resourceTenantId: formTenantId.value,
+            uploadRequest: uploadImage,
+            showResourcePicker: false
+          }
+        }
+      ],
+      e_signature: [
+        {
+          key: 'legalIsDelegate',
+          label: '法人是签署受托人',
+          type: 'radioGroup',
+          span: 12,
+          formItemProps: { required: false },
+          props: {
+            options: [
+              { label: '是', value: true },
+              { label: '否', value: false }
+            ]
+          }
+        },
+        {
+          key: 'authMethod',
+          label: '认证方式',
+          type: 'radioGroup',
+          span: 12,
+          formItemProps: { required: false },
+          props: {
+            options: [
+              { label: '手机号认证', value: 'phone' },
+              { label: '人脸认证', value: 'face' }
+            ]
+          }
+        },
+        {
+          key: 'companyName',
+          label: '公司名称',
+          type: 'input',
+          span: 12,
+          formItemProps: { required: true },
+          props: { maxlength: '100' }
+        },
+        {
+          key: 'socialCreditCode',
+          label: '统一社会信用代码',
+          type: 'input',
+          span: 12,
+          formItemProps: { required: true },
+          props: { maxlength: '18' }
+        },
+        {
+          key: 'legalName',
+          label: '法人姓名',
+          type: 'input',
+          span: 12,
+          formItemProps: { required: true },
+          props: { maxlength: '40' }
+        },
+        {
+          key: 'legalIdNo',
+          label: '身份证号',
+          type: 'input',
+          span: 12,
+          formItemProps: { required: true },
+          props: { maxlength: '18', autocomplete: 'off' }
+        },
+        {
+          key: 'legalPhone',
+          label: '法人手机号',
+          type: 'input',
+          span: 12,
+          formItemProps: { required: true },
+          props: { maxlength: '11', autocomplete: 'off' }
+        }
+      ]
+    }
+    return [
+      ...(tenantScope.isAllTenants
+        ? [
+            {
+              key: 'targetTenantId',
+              label: '目标租户',
+              type: currentRecord.value ? 'text' : 'select',
+              span: 24,
+              formItemProps: { required: !currentRecord.value },
+              options: tenantScope.tenantOptions.map((item) => ({
+                label: item.tenantName,
+                value: item.id
+              })),
+              props: currentRecord.value
+                ? { formatter: () => tenantLabel(formTenantId.value) }
+                : { filterable: true, placeholder: '请选择目标租户' }
+            }
+          ]
+        : []),
+      ...bySection[activeSection.value],
+      ...(activeSection.value === 'account'
+        ? [
+            {
+              key: 'serviceNotice',
+              label: '',
+              type: 'text',
+              span: 24,
+              props: { formatter: () => '协议模板尚未由企业法务提供，当前请上传已确认的协议文件。' }
+            }
+          ]
+        : []),
+      ...(activeSection.value === 'e_signature'
+        ? [
+            {
+              key: 'serviceNotice',
+              label: '',
+              type: 'text',
+              span: 24,
+              props: {
+                formatter: () => '短信验证码与人脸认证需由签章服务提供；本页提交后状态仅为待审核。'
+              }
+            },
+            {
+              key: 'esigAcknowledged',
+              label: '服务接入说明',
+              type: 'checkbox',
+              span: 24,
+              props: {
+                label:
+                  '我已知悉此处仅提交申请资料，正式电子签协议、身份核验和签章须在服务接入后另行完成。',
+                class: 'whitespace-normal!'
+              }
+            }
+          ]
+        : [])
+    ]
+  })
+  const reviewItems = computed<FormItem[]>(() => [
+    {
+      key: 'decision',
+      label: '审核结果',
+      type: 'radioGroup',
+      formItemProps: { required: true },
+      options: [
+        { label: '资料通过', value: 'approved' },
+        { label: '驳回申请', value: 'rejected' }
+      ]
+    },
+    {
+      key: 'note',
+      label: '审核说明',
+      type: 'textarea',
+      formItemProps: { required: reviewForm.decision === 'rejected' },
+      props: {
+        rows: 3,
+        maxlength: 500,
+        showWordLimit: true,
+        placeholder: '驳回时请写明需要补正的资料'
+      }
+    }
+  ])
 
   function valid(): boolean {
     if (!formTenantId.value) {

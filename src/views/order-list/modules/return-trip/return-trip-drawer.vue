@@ -112,36 +112,13 @@
             subtitle="信息费、平台技术服务费及返程专属费用仅归集本子单；共享成本按比例分摊或全部留在主单。"
             preserve-content-structure
           >
-            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <label v-for="field in moneyFields" :key="field.key" class="block">
-                <span class="mb-1.5 block text-sm text-[var(--el-text-color-regular)]">{{
-                  field.label
-                }}</span>
-                <ElInputNumber
-                  v-model="form[field.key]"
-                  class="w-full!"
-                  :min="0"
-                  :max="9999999999.99"
-                  :precision="2"
-                  :controls="false"
-                />
-              </label>
-            </div>
-            <div class="mt-5 border-t border-[var(--el-border-color-light)] pt-4">
-              <ElRadioGroup v-model="allocationMode" aria-label="共用成本归集方式">
-                <ElRadio value="master">全部归集主单</ElRadio>
-                <ElRadio value="allocate">按比例分摊</ElRadio>
-              </ElRadioGroup>
-              <div v-if="allocationMode === 'allocate'" class="mt-3 flex items-center gap-2">
-                <ElInputNumber
-                  v-model="form.sharedCostAllocationPct"
-                  :min="0"
-                  :max="100"
-                  :precision="2"
-                />
-                <span class="text-sm text-[var(--el-text-color-secondary)]">% 分摊至返程</span>
-              </div>
-            </div>
+            <ArtForm v-model="form" :items="moneyItems" :span="8" label-position="top" />
+            <ArtForm
+              v-model="allocationForm"
+              :items="allocationItems"
+              :span="12"
+              label-position="top"
+            />
             <ElAlert
               v-if="sharedTollError"
               class="mt-4"
@@ -215,14 +192,7 @@
           </ArtSectionCard>
 
           <ArtSectionCard title="备注" preserve-content-structure>
-            <ElInput
-              v-model="form.remark"
-              type="textarea"
-              :rows="3"
-              maxlength="500"
-              show-word-limit
-              placeholder="补充返程配货说明"
-            />
+            <ArtForm v-model="form" :items="remarkItems" :span="24" label-position="top" />
           </ArtSectionCard>
         </ElTabPane>
       </ElTabs>
@@ -312,6 +282,53 @@
     { key: 'technicalServiceFee', label: '平台技术服务费（元）' },
     { key: 'directTollFee', label: '返程专属路桥费（元）' },
     { key: 'directMiscFee', label: '返程其他费用（元）' }
+  ]
+  const moneyItems: FormItem[] = moneyFields.map((field) => ({
+    key: field.key,
+    label: field.label,
+    type: 'number',
+    props: { class: 'w-full!', min: 0, max: 9999999999.99, precision: 2, controls: false }
+  }))
+  const allocationForm = reactive({
+    get allocationMode() {
+      return allocationMode.value
+    },
+    set allocationMode(value: 'master' | 'allocate') {
+      allocationMode.value = value
+    },
+    get sharedCostAllocationPct() {
+      return form.value.sharedCostAllocationPct
+    },
+    set sharedCostAllocationPct(value: number) {
+      form.value.sharedCostAllocationPct = value
+    }
+  })
+  const allocationItems = computed<FormItem[]>(() => [
+    {
+      key: 'allocationMode',
+      label: '共用成本归集方式',
+      type: 'radioGroup',
+      span: 24,
+      options: [
+        { label: '全部归集主单', value: 'master' },
+        { label: '按比例分摊', value: 'allocate' }
+      ]
+    },
+    {
+      key: 'sharedCostAllocationPct',
+      label: '分摊至返程（%）',
+      type: 'number',
+      hidden: allocationMode.value !== 'allocate',
+      props: { min: 0, max: 100, precision: 2 }
+    }
+  ])
+  const remarkItems: FormItem[] = [
+    {
+      key: 'remark',
+      label: '返程配货说明',
+      type: 'textarea',
+      props: { rows: 3, maxlength: 500, showWordLimit: true, placeholder: '补充返程配货说明' }
+    }
   ]
   const routeFormItems = computed<FormItem[]>(() => [
     {

@@ -5,24 +5,20 @@
         <strong>运输配置</strong>
         <p>选择运输类型与计费口径，现场要求会随单传递给调度。</p>
       </div>
-      <ElSegmented
-        v-model="config.loadType"
-        :options="loadTypeOptions"
-        @change="handleLoadTypeChange"
-      />
     </div>
 
     <ArtForm
-      v-if="config.loadType === 'ftl'"
-      ref="vehicleFormRef"
+      ref="settingsFormRef"
       v-model="config"
-      :rules="vehicleRules"
-      :validate-on-rule-change="false"
+      :items="settingItems"
+      :rules="combinedRules"
+      :span="6"
+      :gutter="16"
       label-position="top"
-      custom-layout
-      form-class="order-config__vehicle-form"
+      root-class="order-config__settings-form p-0!"
+      :validate-on-rule-change="false"
     >
-      <ElFormItem prop="vehicleType" class="order-config__vehicle-validation">
+      <template #vehicleType>
         <div class="order-config__vehicle">
           <div class="order-config__section-heading">
             <div>
@@ -98,76 +94,8 @@
             >
           </div>
         </div>
-      </ElFormItem>
-    </ArtForm>
-
-    <ArtForm
-      ref="settingsFormRef"
-      v-model="config"
-      :items="settingItems"
-      :rules="settingRules"
-      :span="6"
-      :gutter="16"
-      label-position="top"
-      root-class="order-config__settings-form p-0!"
-      :validate-on-rule-change="false"
-    >
-      <template #tempMinC>
-        <div class="order-config__temperature">
-          <ElInputNumber
-            v-model="config.tempMinC"
-            :controls="false"
-            :min="-80"
-            :max="80"
-            placeholder="最低温"
-            @change="validateTemperature"
-          />
-          <span>至</span>
-          <ElInputNumber
-            v-model="config.tempMaxC"
-            :controls="false"
-            :min="-80"
-            :max="80"
-            placeholder="最高温"
-            @change="validateTemperature"
-          />
-        </div>
       </template>
     </ArtForm>
-
-    <div class="order-config__bottom">
-      <div class="order-config__remark">
-        <label for="order-config-remark">备注</label>
-        <ElInput
-          id="order-config-remark"
-          v-model="config.remark"
-          type="textarea"
-          :rows="4"
-          maxlength="200"
-          show-word-limit
-          placeholder="补充包装、交接或特殊运输说明"
-        />
-      </div>
-      <div class="order-config__attachments">
-        <div class="order-config__section-heading">
-          <div>
-            <strong>业务附件</strong>
-            <span>支持图片、文档及压缩包，最多 6 个，单个不超过 2 MB</span>
-          </div>
-        </div>
-        <ArtUploadFile
-          ref="attachmentUploadRef"
-          v-model="config.attachmentUrls"
-          title="上传附件"
-          multiple
-          :limit="6"
-          :file-size="2 * 1024 * 1024"
-          :resource-tenant-id="resourceTenantId"
-          accept=".jpg,.jpeg,.png,.gif,.bmp,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar"
-          :readonly="!canEditAttachments"
-        />
-      </div>
-    </div>
   </div>
 </template>
 
@@ -177,14 +105,12 @@
   import { uniqBy } from 'lodash-es'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
-  import ArtUploadFile from '@/components/core/forms/art-upload-file/index.vue'
   import { fetchTmsVehicleTypeProfiles, type TmsVehicleTypeProfile } from '@tms/api'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
   import VehicleTypeArt from '@/components/business/vehicle-type-profile-picker/vehicle-type-art.vue'
 
   const config = defineModel<Api.Tms.Order.OrderConfig>({ required: true })
-  defineProps<{ canEditAttachments: boolean; resourceTenantId: string }>()
-  const vehicleFormRef = ref<InstanceType<typeof ArtForm>>()
+  const props = defineProps<{ canEditAttachments: boolean; resourceTenantId: string }>()
   const settingsFormRef = ref<InstanceType<typeof ArtForm>>()
   const attachmentUploadRef = ref<{ hasPendingUpload: () => boolean }>()
   const vehicleProfiles = ref<TmsVehicleTypeProfile[]>([])
@@ -257,7 +183,22 @@
           ]
         : []
   }))
+  const combinedRules = computed<FormRules>(() => ({
+    ...settingRules.value,
+    ...(config.value.loadType === 'ftl' ? vehicleRules.value : {})
+  }))
   const settingItems = computed<FormItem[]>(() => [
+    {
+      key: 'loadType',
+      label: '运输类型',
+      type: 'segment',
+      span: 24,
+      options: loadTypeOptions,
+      props: { onChange: handleLoadTypeChange }
+    },
+    ...(config.value.loadType === 'ftl'
+      ? [{ key: 'vehicleType', label: '', type: 'vehicleProfile', span: 24 }]
+      : []),
     ...(config.value.loadType === 'ftl'
       ? [
           {
@@ -300,8 +241,27 @@
       ? [
           {
             key: 'tempMinC',
-            label: '温度阈值（℃）',
-            type: 'input' as const
+            label: '最低温度（℃）',
+            type: 'number' as const,
+            props: {
+              controls: false,
+              min: -80,
+              max: 80,
+              placeholder: '最低温',
+              onChange: validateTemperature
+            }
+          },
+          {
+            key: 'tempMaxC',
+            label: '最高温度（℃）',
+            type: 'number' as const,
+            props: {
+              controls: false,
+              min: -80,
+              max: 80,
+              placeholder: '最高温',
+              onChange: validateTemperature
+            }
           }
         ]
       : []),
@@ -369,7 +329,37 @@
             props: { maxlength: 80 }
           }
         ]
-      : [])
+      : []),
+    {
+      key: 'remark',
+      label: '备注',
+      type: 'textarea',
+      span: 12,
+      props: {
+        id: 'order-config-remark',
+        rows: 4,
+        maxlength: 200,
+        showWordLimit: true,
+        placeholder: '补充包装、交接或特殊运输说明'
+      }
+    },
+    {
+      key: 'attachmentUrls',
+      label: '业务附件',
+      type: 'uploadFile',
+      span: 12,
+      description: '支持图片、文档及压缩包，最多 6 个，单个不超过 2 MB',
+      props: {
+        ref: attachmentUploadRef,
+        title: '上传附件',
+        multiple: true,
+        limit: 6,
+        fileSize: 2 * 1024 * 1024,
+        resourceTenantId: props.resourceTenantId,
+        accept: '.jpg,.jpeg,.png,.gif,.bmp,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar',
+        readonly: !props.canEditAttachments
+      }
+    }
   ])
 
   async function loadProfiles(): Promise<void> {
@@ -394,7 +384,7 @@
       vehicleVolumeM3: profile.volumeM3,
       vehicleLoadTons: profile.loadTons
     })
-    vehicleFormRef.value?.clearValidate('vehicleType')
+    settingsFormRef.value?.clearValidate('vehicleType')
   }
 
   function selectVehicleCategory(category: string): void {
@@ -406,7 +396,7 @@
       vehicleVolumeM3: null,
       vehicleLoadTons: null
     })
-    vehicleFormRef.value?.clearValidate('vehicleType')
+    settingsFormRef.value?.clearValidate('vehicleType')
   }
 
   function isSelectedVehicle(profile: TmsVehicleTypeProfile): boolean {
@@ -499,13 +489,6 @@
       return false
     }
     let valid = true
-    if (config.value.loadType === 'ftl') {
-      try {
-        await vehicleFormRef.value?.validate()
-      } catch {
-        valid = false
-      }
-    }
     try {
       await settingsFormRef.value?.validate()
     } catch {

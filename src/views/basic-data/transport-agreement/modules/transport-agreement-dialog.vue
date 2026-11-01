@@ -24,48 +24,6 @@
           placeholder="请输入运输责任、费用及履约约定…"
         />
       </template>
-      <template #idCardImages>
-        <ArtUploadImage
-          v-model="form.idCardImages"
-          :resource-tenant-id="form.tenantId"
-          :readonly="!form.tenantId"
-          title="身份证"
-          :size="104"
-          :limit="3"
-          multiple
-        />
-      </template>
-      <template #registrationImages>
-        <ArtUploadImage
-          v-model="form.registrationImages"
-          :resource-tenant-id="form.tenantId"
-          :readonly="!form.tenantId"
-          title="行驶证"
-          :size="104"
-          :limit="3"
-          multiple
-        />
-      </template>
-      <template #driverLicenseImage>
-        <ArtUploadImage
-          v-model="form.driverLicenseImage"
-          :resource-tenant-id="form.tenantId"
-          :readonly="!form.tenantId"
-          title="驾驶证"
-          :size="104"
-          :limit="1"
-        />
-      </template>
-      <template #roadPermitImage>
-        <ArtUploadImage
-          v-model="form.roadPermitImage"
-          :resource-tenant-id="form.tenantId"
-          :readonly="!form.tenantId"
-          title="道路运输证"
-          :size="104"
-          :limit="1"
-        />
-      </template>
     </ArtForm>
   </ArtDialog>
 </template>
@@ -78,7 +36,6 @@
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtTiptapEditor from '@/components/core/forms/art-tiptap-editor/index.vue'
-  import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
   import { useUserStore } from '@/store/modules/user'
   import {
     addTransportAgreement,
@@ -253,10 +210,60 @@
     },
     { label: '协议内容', key: 'contentHtml', span: 24 },
     { label: '证件附件', key: 'documentsSection', type: 'tab', span: 24 },
-    { label: '身份证（最多 3 张）', key: 'idCardImages', span: 12 },
-    { label: '行驶证（最多 3 张）', key: 'registrationImages', span: 12 },
-    { label: '驾驶证', key: 'driverLicenseImage', span: 12 },
-    { label: '道路运输证', key: 'roadPermitImage', span: 12 },
+    {
+      label: '身份证（最多 3 张）',
+      key: 'idCardImages',
+      span: 12,
+      type: 'uploadImage',
+      props: {
+        resourceTenantId: form.value.tenantId,
+        readonly: !form.value.tenantId,
+        title: '身份证',
+        size: 104,
+        limit: 3,
+        multiple: true
+      }
+    },
+    {
+      label: '行驶证（最多 3 张）',
+      key: 'registrationImages',
+      span: 12,
+      type: 'uploadImage',
+      props: {
+        resourceTenantId: form.value.tenantId,
+        readonly: !form.value.tenantId,
+        title: '行驶证',
+        size: 104,
+        limit: 3,
+        multiple: true
+      }
+    },
+    {
+      label: '驾驶证',
+      key: 'driverLicenseImage',
+      span: 12,
+      type: 'uploadImage',
+      props: {
+        resourceTenantId: form.value.tenantId,
+        readonly: !form.value.tenantId,
+        title: '驾驶证',
+        size: 104,
+        limit: 1
+      }
+    },
+    {
+      label: '道路运输证',
+      key: 'roadPermitImage',
+      span: 12,
+      type: 'uploadImage',
+      props: {
+        resourceTenantId: form.value.tenantId,
+        readonly: !form.value.tenantId,
+        title: '道路运输证',
+        size: 104,
+        limit: 1
+      }
+    },
     { label: '签署信息', key: 'signSection', type: 'tab', span: 24 },
     {
       label: '甲方（盖章）',

@@ -35,28 +35,13 @@
           </span>
         </div>
       </div>
-      <div v-if="allowOverride" class="grid gap-2">
-        <label
-          for="dispatch-certificate-override-reason"
-          class="text-sm font-medium text-[var(--el-text-color-primary)]"
-          >强制派车原因 <span class="text-[var(--el-color-danger)]">*</span></label
-        >
-        <ElInput
-          id="dispatch-certificate-override-reason"
-          v-model="reason"
-          type="textarea"
-          :rows="3"
-          :maxlength="300"
-          show-word-limit
-          placeholder="请说明业务必要性、临时处置及后续换证责任（至少 10 字）"
-          aria-describedby="dispatch-certificate-override-help"
-        />
-        <span
-          id="dispatch-certificate-override-help"
-          class="text-xs text-[var(--el-text-color-secondary)]"
-          >确认后将继续本次配载，并记录强制派车审计日志。</span
-        >
-      </div>
+      <ArtForm
+        v-if="allowOverride"
+        :model-value="overrideForm"
+        :items="overrideItems"
+        :span="24"
+        root-class="p-0! md:p-0!"
+      />
       <ElAlert
         v-else-if="!hasRevoked"
         title="当前账号无强制派车权限，请联系车管完成换证或由有权限的调度负责人处理。"
@@ -70,6 +55,8 @@
 
 <script setup lang="ts">
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
+  import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
+  import { h } from 'vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import { useAuth } from '@/hooks/core/useAuth'
   import { ElMessage } from 'element-plus'
@@ -81,6 +68,29 @@
   const dialogRef = ref<ArtDialogExpose<DispatchCertificateRiskCheck>>()
   const risks = ref<DispatchCertificateRiskCheck['risks']>([])
   const reason = ref('')
+  const overrideForm = reactive({ reason })
+  const overrideItems: FormItem[] = [
+    {
+      key: 'reason',
+      label: '强制派车原因',
+      type: 'textarea',
+      formItemProps: { required: true },
+      props: {
+        id: 'dispatch-certificate-override-reason',
+        rows: 3,
+        maxlength: 300,
+        showWordLimit: true,
+        placeholder: '请说明业务必要性、临时处置及后续换证责任（至少 10 字）',
+        'aria-describedby': 'dispatch-certificate-override-help'
+      },
+      description: () =>
+        h(
+          'span',
+          { id: 'dispatch-certificate-override-help' },
+          '确认后将继续本次配载，并记录强制派车审计日志。'
+        )
+    }
+  ]
   const allowOverride = ref(false)
   const hasRevoked = computed(() => risks.value.some((risk) => risk.riskKind === 'revoked'))
   let submitOverride: ((reason: string) => Promise<boolean>) | undefined

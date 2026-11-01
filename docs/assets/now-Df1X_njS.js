@@ -1,0 +1,1 @@
+import{dt as e}from"./_baseUniq-8jtP9ue6.js";var t=function(){return e.Date.now()};export{t};

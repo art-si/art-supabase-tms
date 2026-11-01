@@ -19,17 +19,7 @@
         <span>运单号：{{ dialog.rows[0]?.orderNo || '-' }}</span>
       </div>
 
-      <div class="dispatch-dialog__mode" role="group" aria-label="调度对象">
-        <span>调度对象</span>
-        <ElRadioGroup v-model="form.data.dispatchMode" @change="handleModeChange">
-          <ElRadioButton
-            v-for="option in dispatchModeOptions"
-            :key="option.value"
-            :value="option.value"
-            >{{ option.label }}</ElRadioButton
-          >
-        </ElRadioGroup>
-      </div>
+      <ArtForm v-model="form.data" :items="dispatchModeItems" :span="24" label-position="top" />
 
       <section
         v-if="dialog.mode === 'single' && form.data.dispatchMode === 'self_operated'"
@@ -124,81 +114,6 @@
         label-width="112px"
         root-class="dispatch-dialog__form"
       >
-        <template #dispatchCarrierId>
-          <ArtTableSingleSelect
-            :model-value="form.data.dispatchCarrierId ?? undefined"
-            @update:model-value="(value) => (form.data.dispatchCarrierId = String(value ?? ''))"
-            v-model:selected-data="form.selectedCarriers"
-            title="选择承运方"
-            placeholder="请选择承运方"
-            search-placeholder="请输入承运方名称或联系人"
-            row-key="id"
-            label-key="companyName"
-            description-key="contactName"
-            empty-text="暂无可调度承运方"
-            empty-description="请先在承运商管理中维护并启用承运方。"
-            :api-fn="fetchCarrierSelectData"
-            :columns="form.carrierColumns"
-            :show-pagination="true"
-            @confirm="handleCarrierConfirm"
-            @clear="handleCarrierClear"
-          />
-        </template>
-        <template #dispatchDriverId>
-          <ArtTableSingleSelect
-            :model-value="form.data.dispatchDriverId ?? undefined"
-            @update:model-value="(value) => (form.data.dispatchDriverId = String(value ?? ''))"
-            v-model:selected-data="selectedDriverRows"
-            :title="
-              form.data.dispatchMode === 'individual_driver' ? '选择个体司机' : '选择自营司机'
-            "
-            :placeholder="
-              form.data.dispatchMode === 'individual_driver' ? '请选择个体司机' : '请选择自营司机'
-            "
-            search-placeholder="请输入司机姓名"
-            row-key="id"
-            label-key="driverName"
-            description-key="phone"
-            :empty-text="
-              form.data.dispatchMode === 'individual_driver' ? '暂无个体司机档案' : '暂无可调度司机'
-            "
-            empty-description="请先在司机管理中维护并启用司机档案。"
-            :api-fn="
-              form.data.dispatchMode === 'individual_driver'
-                ? fetchIndividualSelectData
-                : fetchDriverSelectData
-            "
-            :columns="
-              form.data.dispatchMode === 'individual_driver'
-                ? form.individualColumns
-                : form.driverColumns
-            "
-            :show-pagination="true"
-            @confirm="handleDriverConfirm"
-            @clear="handleDriverClear"
-          />
-        </template>
-        <template #dispatchVehicleId>
-          <ArtTableSingleSelect
-            v-model="form.data.dispatchVehicleId"
-            v-model:selected-data="form.selectedVehicles"
-            title="选择配载车辆"
-            placeholder="请选择车辆"
-            search-placeholder="请输入车牌号或车型"
-            row-key="id"
-            label-key="plateNo"
-            description-key="vehicleType"
-            empty-text="暂无可配载车辆"
-            empty-description="当前没有符合配载条件的车辆，请先完善车辆档案并确认车辆处于可用状态。"
-            :api-fn="fetchVehicleSelectData"
-            :columns="form.vehicleColumns"
-            :show-pagination="true"
-            @confirm="handleVehicleConfirm"
-            @clear="handleVehicleClear"
-          >
-            <template #empty><TmsDataSourceEmptyActions source="vehicle" /></template>
-          </ArtTableSingleSelect>
-        </template>
       </ArtForm>
 
       <div v-if="form.selectedCarrier" class="dispatch-dialog__selection art-card-xs">
@@ -316,6 +231,7 @@
 </template>
 
 <script setup lang="ts">
+  import { h } from 'vue'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
   import { normalizeNullableText } from '@/utils/form/normalize'
@@ -335,7 +251,6 @@
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
   import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
   import TmsDataSourceEmptyActions from '../../components/tms-data-source-empty-actions.vue'
   import DispatchCertificateRiskDialog from './dispatch-certificate-risk-dialog.vue'
@@ -468,23 +383,108 @@
       {
         label: '承运方',
         key: 'dispatchCarrierId',
-        type: 'input',
+        type: 'dataSelect',
         span: 24,
-        hidden: form.data.dispatchMode !== 'carrier'
+        hidden: form.data.dispatchMode !== 'carrier',
+        props: {
+          mode: 'table',
+          multiple: false,
+          modelValue: form.data.dispatchCarrierId ?? undefined,
+          'onUpdate:modelValue': (value: unknown) =>
+            (form.data.dispatchCarrierId = String(value ?? '')),
+          selectedData: form.selectedCarriers,
+          'onUpdate:selectedData': (value: typeof form.selectedCarriers) => {
+            form.selectedCarriers = value
+          },
+          title: '选择承运方',
+          placeholder: '请选择承运方',
+          searchPlaceholder: '请输入承运方名称或联系人',
+          rowKey: 'id',
+          labelKey: 'companyName',
+          descriptionKey: 'contactName',
+          emptyText: '暂无可调度承运方',
+          emptyDescription: '请先在承运商管理中维护并启用承运方。',
+          apiFn: fetchCarrierSelectData,
+          columns: form.carrierColumns,
+          showPagination: true,
+          onConfirm: handleCarrierConfirm,
+          onClear: handleCarrierClear,
+          showSelectedPanel: false
+        }
       },
       {
         label: form.data.dispatchMode === 'individual_driver' ? '个体司机' : '自营司机',
         key: 'dispatchDriverId',
-        type: 'input',
+        type: 'dataSelect',
         span: form.data.dispatchMode === 'self_operated' ? 12 : 24,
-        hidden: form.data.dispatchMode === 'carrier'
+        hidden: form.data.dispatchMode === 'carrier',
+        props: {
+          mode: 'table',
+          multiple: false,
+          modelValue: form.data.dispatchDriverId ?? undefined,
+          'onUpdate:modelValue': (value: unknown) =>
+            (form.data.dispatchDriverId = String(value ?? '')),
+          selectedData: selectedDriverRows.value,
+          'onUpdate:selectedData': (value: typeof selectedDriverRows.value) => {
+            selectedDriverRows.value = value
+          },
+          title: form.data.dispatchMode === 'individual_driver' ? '选择个体司机' : '选择自营司机',
+          placeholder:
+            form.data.dispatchMode === 'individual_driver' ? '请选择个体司机' : '请选择自营司机',
+          searchPlaceholder: '请输入司机姓名',
+          rowKey: 'id',
+          labelKey: 'driverName',
+          descriptionKey: 'phone',
+          emptyText:
+            form.data.dispatchMode === 'individual_driver' ? '暂无个体司机档案' : '暂无可调度司机',
+          emptyDescription: '请先在司机管理中维护并启用司机档案。',
+          apiFn:
+            form.data.dispatchMode === 'individual_driver'
+              ? fetchIndividualSelectData
+              : fetchDriverSelectData,
+          columns:
+            form.data.dispatchMode === 'individual_driver'
+              ? form.individualColumns
+              : form.driverColumns,
+          showPagination: true,
+          onConfirm: handleDriverConfirm,
+          onClear: handleDriverClear,
+          showSelectedPanel: false
+        }
       },
       {
         label: '车辆',
         key: 'dispatchVehicleId',
-        type: 'input',
+        type: 'dataSelect',
         span: 12,
-        hidden: form.data.dispatchMode !== 'self_operated'
+        hidden: form.data.dispatchMode !== 'self_operated',
+        props: {
+          mode: 'table',
+          multiple: false,
+          modelValue: form.data.dispatchVehicleId,
+          'onUpdate:modelValue': (value: typeof form.data.dispatchVehicleId) => {
+            form.data.dispatchVehicleId = value
+          },
+          selectedData: form.selectedVehicles,
+          'onUpdate:selectedData': (value: typeof form.selectedVehicles) => {
+            form.selectedVehicles = value
+          },
+          title: '选择配载车辆',
+          placeholder: '请选择车辆',
+          searchPlaceholder: '请输入车牌号或车型',
+          rowKey: 'id',
+          labelKey: 'plateNo',
+          descriptionKey: 'vehicleType',
+          emptyText: '暂无可配载车辆',
+          emptyDescription: '当前没有符合配载条件的车辆，请先完善车辆档案并确认车辆处于可用状态。',
+          apiFn: fetchVehicleSelectData,
+          columns: form.vehicleColumns,
+          showPagination: true,
+          onConfirm: handleVehicleConfirm,
+          onClear: handleVehicleClear,
+          showSelectedPanel: false
+        },
+        slots: { empty: () => h(TmsDataSourceEmptyActions, { source: 'vehicle' }) }
       },
       {
         label: '计划发车时间',
@@ -644,6 +644,15 @@
     })
   }
 
+  const dispatchModeItems = computed<FormItem[]>(() => [
+    {
+      key: 'dispatchMode',
+      label: '调度对象',
+      type: 'radioGroup',
+      options: dispatchModeOptions.value,
+      props: { optionType: 'button', onChange: handleModeChange }
+    }
+  ])
   function handleModeChange(): void {
     Object.assign(form.data, {
       dispatchCarrierId: null,

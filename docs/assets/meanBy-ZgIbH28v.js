@@ -1,0 +1,1 @@
+import{s as e}from"./_baseUniq-8jtP9ue6.js";import{t}from"./_baseSum-D65xQ18S.js";var n=NaN;function r(e,r){var i=e==null?0:e.length;return i?t(e,r)/i:n}function i(t,n){return r(t,e(n,2))}export{i as t};

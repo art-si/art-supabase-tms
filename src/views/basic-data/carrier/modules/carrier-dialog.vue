@@ -10,17 +10,6 @@
       :gutter="20"
       label-width="118px"
     >
-      <template #businessLicenseUrl>
-        <ArtUploadImage
-          v-if="canViewCarrierAttachments"
-          v-model="form.businessLicenseUrl"
-          title="营业执照"
-          :size="104"
-          :limit="1"
-          :resource-tenant-id="form.tenantId || ''"
-          :readonly="!canEditCarrierField('attachments')"
-        />
-      </template>
       <template #addressPicker>
         <ArtAddressPicker
           v-if="canViewCarrierField('addressDetail')"
@@ -46,7 +35,6 @@
   import ArtAddressPicker from '@/components/core/forms/art-address-picker/index.vue'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import { useDocumentNumberRule } from '@/hooks/core/useDocumentNumberRule'
-  import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
   import { addCarrier, editCarrier, fetchCarrierParentOptions } from '@tms/api'
   import { fetchRegionOptions } from '@/api/region-options'
   import { useUserStore } from '@/store/modules/user'
@@ -303,7 +291,15 @@
       label: '营业执照',
       key: 'businessLicenseUrl',
       span: 24,
-      hidden: !canViewCarrierAttachments.value
+      hidden: !canViewCarrierAttachments.value,
+      type: 'uploadImage',
+      props: {
+        title: '营业执照',
+        size: 104,
+        limit: 1,
+        resourceTenantId: form.value.tenantId || '',
+        readonly: !canEditCarrierField('attachments')
+      }
     },
     {
       label: '备注信息',

@@ -1,1 +1,0 @@
-import{it as e}from"./_baseForOwn-BkTLsIQZ.js";var t=function(){return e.Date.now()};export{t};

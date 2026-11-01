@@ -36,33 +36,14 @@
         </ArtSectionCard>
 
         <ArtSectionCard title="调整当前货段提成" preserve-content-structure>
-          <div class="grid gap-4">
-            <label class="grid gap-1.5 text-sm text-[var(--el-text-color-regular)]">
-              <span>本次拟调整金额（元）</span>
-              <ElInputNumber
-                v-model="amount"
-                class="w-full!"
-                :min="0"
-                :max="1000000000"
-                :precision="2"
-                :controls="false"
-                :disabled="saving || !canOverride"
-              />
-            </label>
-            <label class="grid gap-1.5 text-sm text-[var(--el-text-color-regular)]">
-              <span>调整原因</span>
-              <ElInput
-                v-model="reason"
-                type="textarea"
-                :rows="3"
-                minlength="5"
-                maxlength="500"
-                show-word-limit
-                :disabled="saving || !canOverride"
-                placeholder="说明线路、车型或费用变化的原因（至少 5 字）"
-              />
-            </label>
-          </div>
+          <ArtForm
+            ref="formRef"
+            v-model="currentDraft"
+            :items="items"
+            :span="24"
+            :disabled="saving || !canOverride"
+            label-position="top"
+          />
           <p class="mb-0 mt-3 text-xs text-[var(--el-text-color-secondary)]">
             每次仅保存当前货段。切换货段保留本窗口未保存内容；关闭窗口后，未保存内容会丢弃。
           </p>
@@ -101,6 +82,7 @@
 
 <script setup lang="ts">
   import { ElMessage, ElSegmented } from 'element-plus'
+  import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
@@ -126,6 +108,7 @@
   const { hasAuth } = useAuth()
   const canOverride = computed(() => hasAuth('TmsWaybillDetail:OverrideCommission'))
   const dialogRef = ref<ArtDialogExpose>()
+  const formRef = ref<InstanceType<typeof ArtForm>>()
   const selectedLegKind = ref<WaybillCommissionLegKind>('forward')
   const availableLegKinds = ref<WaybillCommissionLegKind[]>(['forward'])
   const summaries = ref<Partial<Record<WaybillCommissionLegKind, WaybillCommissionSummary>>>({})
@@ -135,18 +118,27 @@
   })
   const draftInitialized = reactive({ forward: false, return: false })
   const summary = computed(() => summaries.value[selectedLegKind.value])
-  const amount = computed({
-    get: () => drafts[selectedLegKind.value].amount,
-    set: (value: number | null) => {
-      drafts[selectedLegKind.value].amount = value
+  const currentDraft = computed(() => drafts[selectedLegKind.value])
+  const items: FormItem[] = [
+    {
+      key: 'amount',
+      label: '本次拟调整金额（元）',
+      type: 'number',
+      props: { class: 'w-full!', min: 0, max: 1000000000, precision: 2, controls: false }
+    },
+    {
+      key: 'reason',
+      label: '调整原因',
+      type: 'textarea',
+      props: {
+        rows: 3,
+        minlength: 5,
+        maxlength: 500,
+        showWordLimit: true,
+        placeholder: '说明线路、车型或费用变化的原因（至少 5 字）'
+      }
     }
-  })
-  const reason = computed({
-    get: () => drafts[selectedLegKind.value].reason,
-    set: (value: string) => {
-      drafts[selectedLegKind.value].reason = value
-    }
-  })
+  ]
   const loading = ref(false)
   const saving = ref(false)
   const loadError = ref<Error | null>(null)
@@ -159,7 +151,13 @@
     isCurrent: isCurrentDialog
   } = useArtOverlaySession(() => Boolean(unref(dialogRef.value?.visible)))
   const confirmDisabled = computed(
-    () => loading.value || saving.value || !!loadError.value || !summary.value || !canOverride.value
+    () =>
+      loading.value ||
+      saving.value ||
+      !!loadError.value ||
+      !summary.value ||
+      !canOverride.value ||
+      !formRef.value?.readyToSubmit
   )
   watch(confirmDisabled, (value) => dialogRef.value?.setOptions({ confirmDisabled: value }))
   const legLabel = computed(() => (selectedLegKind.value === 'return' ? '返程配货' : '正向货'))

@@ -24,16 +24,6 @@
           placeholder="请输入合同正文与约定条款…"
         />
       </template>
-      <template #attachments>
-        <ArtUploadFile
-          v-model="form.attachments"
-          title="选择或拖入合同附件"
-          :resource-tenant-id="form.tenantId"
-          :disabled="!form.tenantId"
-          :limit="10"
-          multiple
-        />
-      </template>
     </ArtForm>
   </ArtDialog>
 </template>
@@ -46,7 +36,6 @@
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtTiptapEditor from '@/components/core/forms/art-tiptap-editor/index.vue'
-  import ArtUploadFile from '@/components/core/forms/art-upload-file/index.vue'
   import { normalizeNullableText } from '@/utils/form/normalize'
   import { useUserStore } from '@/store/modules/user'
   import {
@@ -141,7 +130,19 @@
       }
     },
     { label: '合同内容', key: 'contentHtml', span: 24 },
-    { label: '附件', key: 'attachments', span: 24 },
+    {
+      label: '附件',
+      key: 'attachments',
+      span: 24,
+      type: 'uploadFile',
+      props: {
+        title: '选择或拖入合同附件',
+        resourceTenantId: form.value.tenantId,
+        disabled: !form.value.tenantId,
+        limit: 10,
+        multiple: true
+      }
+    },
     { label: '签署双方', key: 'partySection', type: 'tab', span: 24 },
     { label: '甲方公司', key: 'partyACompany', type: 'input', props: { maxlength: 120 } },
     { label: '甲方代表人', key: 'partyARepresentative', type: 'input', props: { maxlength: 80 } },

@@ -1,33 +1,12 @@
 <template>
-  <ArtDialog ref="dialogRef" size="sm">
-    <div class="print-count-dialog">
-      <div class="print-count-dialog__row">
-        <span class="print-count-dialog__label">打印数量</span>
-        <ElRadioGroup v-model="form.option">
-          <ElRadio v-if="printKind === 'label'" value="cargo_quantity">同货品数量</ElRadio>
-          <ElRadio value="1">1张</ElRadio>
-          <ElRadio value="2">2张</ElRadio>
-          <ElRadio value="3">3张</ElRadio>
-          <ElRadio value="custom">自定义</ElRadio>
-        </ElRadioGroup>
-      </div>
-
-      <ElInputNumber
-        v-if="form.option === 'custom'"
-        v-model="form.customCount"
-        :min="1"
-        :max="100"
-        :precision="0"
-        controls-position="right"
-        class="print-count-dialog__custom"
-        placeholder="请输入打印数量"
-      />
-    </div>
+  <ArtDialog ref="dialogRef" size="sm" :confirm-disabled="!formRef?.readyToSubmit">
+    <ArtForm ref="formRef" v-model="form" :items="items" :span="24" label-position="top" />
   </ArtDialog>
 </template>
 
 <script setup lang="ts">
   import { ElMessage } from 'element-plus'
+  import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
 
@@ -51,12 +30,40 @@
   }>()
 
   const dialogRef = ref<ArtDialogExpose<PrintOpenData>>()
+  const formRef = ref<InstanceType<typeof ArtForm>>()
   const printKind = ref<PrintKind>('waybill')
   const form = reactive<FormGroup>({
     option: '1',
     customCount: null
   })
 
+  const items = computed<FormItem[]>(() => [
+    {
+      key: 'option',
+      label: '打印数量',
+      type: 'radioGroup',
+      options: [
+        ...(printKind.value === 'label' ? [{ label: '同货品数量', value: 'cargo_quantity' }] : []),
+        { label: '1张', value: '1' },
+        { label: '2张', value: '2' },
+        { label: '3张', value: '3' },
+        { label: '自定义', value: 'custom' }
+      ]
+    },
+    {
+      key: 'customCount',
+      label: '自定义打印数量',
+      type: 'number',
+      hidden: form.option !== 'custom',
+      props: {
+        min: 1,
+        max: 100,
+        precision: 0,
+        controlsPosition: 'right',
+        placeholder: '请输入打印数量'
+      }
+    }
+  ])
   function resolveCount(data?: PrintOpenData): number {
     if (form.option === 'cargo_quantity') return Math.max(1, Math.floor(data?.cargoQuantity || 1))
     if (form.option === 'custom') return Math.max(0, Math.floor(form.customCount || 0))
@@ -92,27 +99,3 @@
 
   defineExpose({ handleOpen })
 </script>
-
-<style scoped lang="scss">
-  .print-count-dialog {
-    padding: 6px 8px 18px;
-
-    &__row {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      min-height: 40px;
-    }
-
-    &__label {
-      flex: 0 0 72px;
-      color: var(--el-text-color-regular);
-    }
-
-    &__custom {
-      width: 320px !important;
-      margin-top: 18px;
-      margin-left: 84px;
-    }
-  }
-</style>

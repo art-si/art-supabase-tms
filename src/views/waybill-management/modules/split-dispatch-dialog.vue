@@ -14,130 +14,79 @@
             {{ source?.cargoItems?.length ?? 0 }} 行货物 · {{ parts.length }} 个执行批次
           </span>
         </div>
-        <ElRadioGroup v-model="basis" aria-label="拆单口径">
-          <ElRadioButton v-for="option in basisOptions" :key="option.value" :value="option.value">{{
-            option.label
-          }}</ElRadioButton>
-        </ElRadioGroup>
       </div>
 
-      <ElScrollbar class="max-w-full rounded border border-[var(--el-border-color-lighter)]">
-        <table class="w-full min-w-[640px] border-collapse text-left text-sm">
-          <thead class="bg-[var(--el-fill-color-light)]">
-            <tr>
-              <th class="p-3">货物行 / SKU</th>
-              <th class="p-3">可分配{{ basisLabel }}</th>
-              <th v-for="(part, index) in parts" :key="part.key" class="p-3">
-                批次 {{ index + 1 }}
-              </th>
-              <th class="p-3">未分配</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="(item, lineIndex) in cargoItems"
-              :key="`${item.cargoId || item.cargoName}-${lineIndex}`"
-              class="border-t border-[var(--el-border-color-lighter)]"
-            >
-              <th class="p-3 font-medium">
-                <span class="block">{{ item.cargoName || `第 ${lineIndex + 1} 行货物` }}</span>
-                <small class="text-[var(--el-text-color-secondary)]">{{
-                  item.cargoCode || item.specModel || '无 SKU'
-                }}</small>
-              </th>
-              <td class="p-3 tabular-nums">{{ basisValue(item) }}</td>
-              <td v-for="part in parts" :key="part.key" class="p-3">
-                <ElInputNumber
-                  v-model="part.amounts[lineIndex]"
-                  :min="0"
-                  :max="basisValue(item)"
-                  :precision="basis === 'quantity' ? 3 : 4"
-                  :controls="false"
-                  class="w-28!"
-                  :aria-label="`${item.cargoName || `第 ${lineIndex + 1} 行货物`}在批次${parts.indexOf(part) + 1}的分配量`"
-                />
-              </td>
-              <td
-                class="p-3 tabular-nums"
-                :class="remaining(lineIndex) < 0 ? 'text-[var(--el-color-danger)]' : ''"
-              >
-                {{ remaining(lineIndex) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </ElScrollbar>
-      <p v-if="validationError" role="alert" class="m-0 text-sm text-[var(--el-color-danger)]">
-        {{ validationError }}
-      </p>
-      <ElAlert
-        v-else-if="hasRemainder"
-        type="warning"
-        :closable="false"
-        show-icon
-        title="仍有货量未调度；提交后原始单保留在待运载列表，可继续安排后续批次。"
-      />
-
-      <ArtSectionCard
-        v-for="(part, index) in parts"
-        :key="part.key"
-        :title="`执行批次 ${index + 1}`"
-        preserve-content-structure
+      <ArtForm
+        :model-value="splitForm"
+        :items="splitItems"
+        :span="12"
+        :gutter="16"
+        root-class="p-0! md:p-0!"
       >
-        <template #actions>
+        <template #allocations>
+          <ElScrollbar class="max-w-full rounded border border-[var(--el-border-color-lighter)]">
+            <table class="w-full min-w-[640px] border-collapse text-left text-sm">
+              <thead class="bg-[var(--el-fill-color-light)]">
+                <tr>
+                  <th class="p-3">货物行 / SKU</th>
+                  <th class="p-3">可分配{{ basisLabel }}</th>
+                  <th v-for="(part, index) in parts" :key="part.key" class="p-3">
+                    批次 {{ index + 1 }}
+                  </th>
+                  <th class="p-3">未分配</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(item, lineIndex) in cargoItems"
+                  :key="`${item.cargoId || item.cargoName}-${lineIndex}`"
+                  class="border-t border-[var(--el-border-color-lighter)]"
+                >
+                  <th class="p-3 font-medium">
+                    <span class="block">{{ item.cargoName || `第 ${lineIndex + 1} 行货物` }}</span>
+                    <small class="text-[var(--el-text-color-secondary)]">{{
+                      item.cargoCode || item.specModel || '无 SKU'
+                    }}</small>
+                  </th>
+                  <td class="p-3 tabular-nums">{{ basisValue(item) }}</td>
+                  <td v-for="part in parts" :key="part.key" class="p-3">
+                    <ElInputNumber
+                      v-model="part.amounts[lineIndex]"
+                      :min="0"
+                      :max="basisValue(item)"
+                      :precision="basis === 'quantity' ? 3 : 4"
+                      :controls="false"
+                      class="w-28!"
+                      :aria-label="`${item.cargoName || `第 ${lineIndex + 1} 行货物`}在批次${parts.indexOf(part) + 1}的分配量`"
+                    />
+                  </td>
+                  <td
+                    class="p-3 tabular-nums"
+                    :class="remaining(lineIndex) < 0 ? 'text-[var(--el-color-danger)]' : ''"
+                  >
+                    {{ remaining(lineIndex) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </ElScrollbar>
+          <p v-if="validationError" role="alert" class="m-0 text-sm text-[var(--el-color-danger)]">
+            {{ validationError }}
+          </p>
+          <ElAlert
+            v-else-if="hasRemainder"
+            type="warning"
+            :closable="false"
+            show-icon
+            title="仍有货量未调度；提交后原始单保留在待运载列表，可继续安排后续批次。"
+          />
+        </template>
+        <template v-for="(part, index) in parts" :key="part.key" #[`part_${part.key}Actions`]>
           <ElButton v-if="parts.length > minimumParts" link type="danger" @click="removePart(index)"
-            ><template #icon><ArtSvgIcon icon="ri:delete-bin-line" /></template>移除批次</ElButton
+            ><ArtSvgIcon icon="ri:delete-bin-line" />移除批次</ElButton
           >
         </template>
-        <div class="grid min-w-0 gap-4 md:grid-cols-2">
-          <div class="md:col-span-2">
-            <label class="mb-2 block text-sm text-[var(--el-text-color-regular)]">执行车辆</label>
-            <ArtTableSingleSelect
-              v-model="part.vehicleId"
-              v-model:selected-data="part.selectedVehicles"
-              title="选择执行车辆"
-              placeholder="请选择车辆"
-              row-key="id"
-              label-key="plateNo"
-              description-key="companyName"
-              :api-fn="fetchVehicleSelectData"
-              :columns="vehicleColumns"
-              :show-pagination="true"
-            />
-          </div>
-          <div>
-            <label class="mb-2 block text-sm text-[var(--el-text-color-regular)]">计划发车</label>
-            <ElDatePicker
-              v-model="part.departure"
-              type="datetime"
-              value-format="YYYY-MM-DD HH:mm:ss"
-              class="w-full!"
-            />
-          </div>
-          <div>
-            <label class="mb-2 block text-sm text-[var(--el-text-color-regular)]">计划到达</label>
-            <ElDatePicker
-              v-model="part.arrival"
-              type="datetime"
-              value-format="YYYY-MM-DD HH:mm:ss"
-              class="w-full!"
-            />
-          </div>
-          <div v-if="deliveryAddresses.length" class="md:col-span-2">
-            <label class="mb-2 block text-sm text-[var(--el-text-color-regular)]"
-              >本批次送达地址</label
-            >
-            <ElSelect v-model="part.receivingAddressId" class="w-full" placeholder="请选择送达地址">
-              <ElOption
-                v-for="address in deliveryAddresses"
-                :key="address.id"
-                :value="address.id || ''"
-                :label="`${address.contactName} · ${address.region}${address.addressDetail}`"
-              />
-            </ElSelect>
-          </div>
-        </div>
-      </ArtSectionCard>
+      </ArtForm>
       <ElButton plain type="primary" class="justify-self-start" @click="addPart"
         >添加执行批次</ElButton
       >
@@ -154,10 +103,9 @@
     DataSelectFetchParams,
     DataSelectRecord
   } from '@/components/core/forms/art-data-select/types'
-  import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
+  import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
-  import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import DispatchCertificateRiskDialog from './dispatch-certificate-risk-dialog.vue'
   import { ElMessage } from 'element-plus'
@@ -199,6 +147,77 @@
       ['quantity', 'weight', 'volume'].includes(option.value)
     )
   )
+  const splitForm = reactive({ basis, parts })
+  const splitItems = computed<FormItem[]>(() => [
+    {
+      key: 'basis',
+      label: '拆单口径',
+      type: 'radioGroup',
+      span: 24,
+      options: basisOptions.value,
+      props: { optionType: 'button', 'aria-label': '拆单口径' }
+    },
+    { key: 'allocations', label: '货量分配', type: 'splitAllocations', span: 24 },
+    ...parts.value.flatMap((part, index): FormItem[] => [
+      { key: `part_${part.key}`, label: `执行批次 ${index + 1}`, type: 'divider', span: 24 },
+      {
+        key: `parts.${index}.vehicleId`,
+        label: '执行车辆',
+        type: 'dataSelect',
+        span: 24,
+        props: {
+          mode: 'table',
+          multiple: false,
+          showSelectedPanel: false,
+          modelValue: part.vehicleId,
+          'onUpdate:modelValue': (value: string | number | undefined) => {
+            part.vehicleId = String(value ?? '')
+          },
+          selectedData: part.selectedVehicles,
+          'onUpdate:selectedData': (rows: DataSelectRecord[]) => {
+            part.selectedVehicles = rows
+          },
+          title: '选择执行车辆',
+          placeholder: '请选择车辆',
+          rowKey: 'id',
+          labelKey: 'plateNo',
+          descriptionKey: 'companyName',
+          apiFn: fetchVehicleSelectData,
+          columns: vehicleColumns,
+          showPagination: true
+        }
+      },
+      {
+        key: `parts.${index}.departure`,
+        label: '计划发车',
+        type: 'date',
+        props: { type: 'datetime', valueFormat: 'YYYY-MM-DD HH:mm:ss', class: 'w-full!' }
+      },
+      {
+        key: `parts.${index}.arrival`,
+        label: '计划到达',
+        type: 'date',
+        props: { type: 'datetime', valueFormat: 'YYYY-MM-DD HH:mm:ss', class: 'w-full!' }
+      },
+      {
+        key: `parts.${index}.receivingAddressId`,
+        label: '本批次送达地址',
+        type: 'select',
+        span: 24,
+        hidden: !deliveryAddresses.value.length,
+        options: deliveryAddresses.value.map((address) => ({
+          value: address.id || '',
+          label: `${address.contactName} · ${address.region}${address.addressDetail}`
+        })),
+        props: {
+          placeholder: '请选择送达地址',
+          class: 'w-full',
+          clearable: false,
+          filterable: false
+        }
+      }
+    ])
+  ])
   const nextKey = ref(0)
   const minimumParts = computed(() => (source.value?.dispatchStatus === 'partial' ? 1 : 2))
   const cargoItems = computed(

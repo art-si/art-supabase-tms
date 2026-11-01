@@ -1,1 +1,0 @@
-import{Fi as e,wr as t}from"./scroll-BTb_c6jR.js";import{c as n}from"./art-table-BuydhCIX.js";import{t as r}from"./tenant-scope-CfkMjXio.js";function i(i){let a=r();return t(()=>n({effectiveTenantId:a.effectiveTenantId,requestedTenantId:e(i),isPlatformSuper:a.isPlatformScope}))}export{i as t};

@@ -1,7 +1,7 @@
 <template>
   <ArtTableSingleSelect
     ref="selectRef"
-    v-model="selector.value"
+    v-model="selector"
     v-model:selected-data="selector.selectedRows"
     :api-fn="fetchSelectorData"
     :columns="selector.columns"

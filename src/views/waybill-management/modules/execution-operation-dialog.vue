@@ -42,39 +42,6 @@
         label-position="top"
         class="execution-dialog__form art-card-xs"
       >
-        <template #photoUrls>
-          <ArtUploadImage
-            v-model="form.data.photoUrls"
-            :resource-tenant-id="attachmentTenantId"
-            :disabled="!attachmentTenantId"
-            :title="action === 'completion' ? '收车照片' : '发车照片'"
-            :size="92"
-            :limit="5"
-            multiple
-          />
-        </template>
-        <template #receiptUrls>
-          <ArtUploadImage
-            v-model="form.data.receiptUrls"
-            :resource-tenant-id="attachmentTenantId"
-            :disabled="!attachmentTenantId"
-            title="签收回单"
-            :size="92"
-            :limit="5"
-            multiple
-          />
-        </template>
-        <template #signatureUrls>
-          <ArtUploadImage
-            v-model="form.data.signatureUrls"
-            :resource-tenant-id="attachmentTenantId"
-            :disabled="!attachmentTenantId"
-            title="签字确认照片"
-            :size="92"
-            :limit="3"
-            multiple
-          />
-        </template>
       </ArtForm>
       <section v-if="action === 'signature'" class="execution-dialog__sources art-card-xs">
         <div class="execution-dialog__sources-heading">
@@ -84,47 +51,7 @@
           </div>
           <ElTag type="info" size="small">{{ receiptAllocations.length }} 张原始单</ElTag>
         </div>
-        <div
-          v-for="item in receiptAllocations"
-          :key="item.allocationId"
-          class="execution-dialog__source"
-        >
-          <div class="execution-dialog__source-title">
-            <strong>{{ item.orderNo }}</strong>
-            <span>{{ item.customerName || '未关联客户' }} · 配载 {{ item.quantity }} 件</span>
-          </div>
-          <div class="execution-dialog__source-inputs">
-            <label>
-              <span>实收件数</span>
-              <ElInputNumber
-                v-model="item.signedQuantity"
-                :min="0"
-                :max="item.quantity"
-                :precision="3"
-                controls-position="right"
-              />
-            </label>
-            <label>
-              <span>异常件数</span>
-              <ElInputNumber
-                v-model="item.exceptionQuantity"
-                :min="0"
-                :max="item.quantity"
-                :precision="3"
-                controls-position="right"
-              />
-            </label>
-          </div>
-          <ElInput
-            v-if="item.exceptionQuantity > 0"
-            v-model="item.exceptionNote"
-            type="textarea"
-            :rows="2"
-            :maxlength="300"
-            show-word-limit
-            placeholder="说明破损、短少等异常，便于按原始单追责"
-          />
-        </div>
+        <ArtForm v-model="receiptForm" :items="receiptItems" :span="12" label-position="top" />
       </section>
     </div>
   </ArtDialog>
@@ -141,7 +68,6 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import {
     completeWaybillExecution,
@@ -207,6 +133,45 @@
   const action = ref<ExecutionAction>('departure')
   const context = shallowRef<Api.Tms.Waybill.ExecutionContext>()
   const receiptAllocations = ref<ReceiptAllocationForm[]>([])
+  const receiptForm = reactive({
+    get items() {
+      return receiptAllocations.value
+    },
+    set items(value: ReceiptAllocationForm[]) {
+      receiptAllocations.value = value
+    }
+  })
+  const receiptItems = computed<FormItem[]>(() =>
+    receiptAllocations.value.flatMap((item, index): FormItem[] => [
+      { key: 'receipt-' + item.allocationId, label: item.orderNo, type: 'divider', span: 24 },
+      {
+        key: 'items.' + index + '.signedQuantity',
+        label: '实收件数',
+        type: 'number',
+        description: (item.customerName || '未关联客户') + ' · 配载 ' + item.quantity + ' 件',
+        props: { min: 0, max: item.quantity, precision: 3, controlsPosition: 'right' }
+      },
+      {
+        key: 'items.' + index + '.exceptionQuantity',
+        label: '异常件数',
+        type: 'number',
+        props: { min: 0, max: item.quantity, precision: 3, controlsPosition: 'right' }
+      },
+      {
+        key: 'items.' + index + '.exceptionNote',
+        label: '异常说明',
+        type: 'textarea',
+        span: 24,
+        hidden: item.exceptionQuantity <= 0,
+        props: {
+          rows: 2,
+          maxlength: 300,
+          showWordLimit: true,
+          placeholder: '说明破损、短少等异常，便于按原始单追责'
+        }
+      }
+    ])
+  )
 
   const actionMetaMap = {
     departure: {
@@ -317,8 +282,34 @@
             type: 'input',
             props: { maxlength: 50, placeholder: '请输入实际签收人' }
           },
-          { label: '签收回单', key: 'receiptUrls', span: 24 },
-          { label: '签字确认照片', key: 'signatureUrls', span: 24 },
+          {
+            label: '签收回单',
+            key: 'receiptUrls',
+            span: 24,
+            type: 'uploadImage',
+            props: {
+              resourceTenantId: attachmentTenantId.value,
+              disabled: !attachmentTenantId.value,
+              title: '签收回单',
+              size: 92,
+              limit: 5,
+              multiple: true
+            }
+          },
+          {
+            label: '签字确认照片',
+            key: 'signatureUrls',
+            span: 24,
+            type: 'uploadImage',
+            props: {
+              resourceTenantId: attachmentTenantId.value,
+              disabled: !attachmentTenantId.value,
+              title: '签字确认照片',
+              size: 92,
+              limit: 3,
+              multiple: true
+            }
+          },
           remark
         ]
       }
@@ -377,7 +368,16 @@
         {
           label: action.value === 'departure' ? '发车照片' : '收车照片',
           key: 'photoUrls',
-          span: 24
+          span: 24,
+          type: 'uploadImage',
+          props: {
+            resourceTenantId: attachmentTenantId.value,
+            disabled: !attachmentTenantId.value,
+            title: action.value === 'completion' ? '收车照片' : '发车照片',
+            size: 92,
+            limit: 5,
+            multiple: true
+          }
         },
         remark
       ]

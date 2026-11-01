@@ -94,36 +94,6 @@
           label-position="top"
           class="cargo-operation-dialog__form art-card-xs"
         >
-          <template #photoUrls>
-            <ArtUploadImage
-              v-model="form.data.photoUrls"
-              :resource-tenant-id="attachmentTenantId"
-              :disabled="
-                !attachmentTenantId ||
-                !context?.operation ||
-                context.operation.operationStatus === 'completed'
-              "
-              :title="`${operationTitle}照片`"
-              :size="92"
-              :limit="5"
-              multiple
-            />
-          </template>
-          <template #weighbridgeTicketUrls>
-            <ArtUploadImage
-              v-model="form.data.weighbridgeTicketUrls"
-              :resource-tenant-id="attachmentTenantId"
-              :disabled="
-                !attachmentTenantId ||
-                !context?.operation ||
-                context.operation.operationStatus === 'completed'
-              "
-              :title="`${operationTitle}磅单`"
-              :size="92"
-              :limit="3"
-              multiple
-            />
-          </template>
         </ArtForm>
       </div>
     </ArtAsyncState>
@@ -155,7 +125,6 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import {
     checkInWaybillCargoOperation,
@@ -336,8 +305,40 @@
         props: { emptyText: '--', class: 'font-medium text-theme' },
         description: '以服务端首次打卡时间为准，提交资料不会覆盖。'
       },
-      { label: `${operationTitle.value}照片`, key: 'photoUrls', span: 24 },
-      { label: `${operationTitle.value}磅单`, key: 'weighbridgeTicketUrls', span: 24 },
+      {
+        label: `${operationTitle.value}照片`,
+        key: 'photoUrls',
+        span: 24,
+        type: 'uploadImage',
+        props: {
+          resourceTenantId: attachmentTenantId.value,
+          disabled:
+            !attachmentTenantId.value ||
+            !context.value?.operation ||
+            context.value.operation.operationStatus === 'completed',
+          title: `${operationTitle.value}照片`,
+          size: 92,
+          limit: 5,
+          multiple: true
+        }
+      },
+      {
+        label: `${operationTitle.value}磅单`,
+        key: 'weighbridgeTicketUrls',
+        span: 24,
+        type: 'uploadImage',
+        props: {
+          resourceTenantId: attachmentTenantId.value,
+          disabled:
+            !attachmentTenantId.value ||
+            !context.value?.operation ||
+            context.value.operation.operationStatus === 'completed',
+          title: `${operationTitle.value}磅单`,
+          size: 92,
+          limit: 3,
+          multiple: true
+        }
+      },
       {
         label: '备注',
         key: 'remark',

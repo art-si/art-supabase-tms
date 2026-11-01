@@ -58,15 +58,7 @@
         </ElButton>
       </div>
 
-      <ArtForm
-        v-if="!loadFailed"
-        ref="formRef"
-        :model-value="form"
-        custom-layout
-        label-position="top"
-        form-class="space-y-4"
-        :disabled="saving"
-      >
+      <div v-if="!loadFailed" class="space-y-4">
         <section
           v-for="(entry, index) in form.entries"
           :key="entry.localKey"
@@ -129,135 +121,43 @@
             </div>
           </div>
 
-          <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
-            <div class="min-w-0">
-              <h4 class="mb-3 text-sm font-semibold text-[var(--el-text-color-primary)]">
-                司机与车辆安排
-              </h4>
-              <div class="grid gap-x-4 sm:grid-cols-2 lg:grid-cols-3">
-                <ElFormItem
-                  label="司机姓名"
-                  :prop="`entries.${index}.driverName`"
-                  :rules="requiredRule"
+          <ArtForm
+            ref="formRefs"
+            :model-value="form"
+            :items="entryItems(entry, index)"
+            :span="8"
+            :gutter="16"
+            :disabled="saving"
+            label-position="top"
+            root-class="p-0! md:p-0!"
+          >
+            <template #[`entries.${index}.selectedWaybillIds`]>
+              <div class="flex w-full flex-col gap-2">
+                <ElTag
+                  v-for="id in entry.selectedWaybillIds"
+                  :key="id"
+                  size="small"
+                  type="info"
+                  class="max-w-full self-start"
                 >
-                  <ElInput
-                    v-model="entry.driverName"
-                    :disabled="!canEditEntry(entry)"
-                    maxlength="60"
-                    placeholder="请输入司机姓名"
-                  />
-                </ElFormItem>
-                <ElFormItem
-                  label="联系电话"
-                  :prop="`entries.${index}.driverPhone`"
-                  :rules="phoneRule"
+                  <span class="block truncate" :title="candidateName(id)">{{
+                    candidateName(id)
+                  }}</span>
+                </ElTag>
+                <ElButton
+                  v-if="canEditEntry(entry)"
+                  size="small"
+                  type="primary"
+                  plain
+                  class="mt-1 w-full!"
+                  @click="chooseChildren(entry)"
                 >
-                  <ElInput
-                    v-model="entry.driverPhone"
-                    :disabled="!canEditEntry(entry)"
-                    maxlength="24"
-                    placeholder="请输入联系电话"
-                  />
-                </ElFormItem>
-                <ElFormItem label="车牌号" :prop="`entries.${index}.plateNo`" :rules="requiredRule">
-                  <ElInput
-                    v-model="entry.plateNo"
-                    :disabled="!canEditEntry(entry)"
-                    maxlength="24"
-                    placeholder="请输入车牌号"
-                  />
-                </ElFormItem>
-                <ElFormItem label="载重（吨）">
-                  <ElInputNumber
-                    v-model="entry.loadCapacityTon"
-                    :disabled="!canEditEntry(entry)"
-                    :min="0.01"
-                    :precision="2"
-                    :controls="false"
-                    class="w-full!"
-                    placeholder="可选"
-                  />
-                </ElFormItem>
-                <ElFormItem label="车长（米）">
-                  <ElInputNumber
-                    v-model="entry.vehicleLengthM"
-                    :disabled="!canEditEntry(entry)"
-                    :min="0.01"
-                    :precision="2"
-                    :controls="false"
-                    class="w-full!"
-                    placeholder="可选"
-                  />
-                </ElFormItem>
-                <ElFormItem
-                  label="进场日期与时间"
-                  :prop="`entries.${index}.scheduledAt`"
-                  :rules="requiredRule"
-                >
-                  <ElDatePicker
-                    v-model="entry.scheduledAt"
-                    :disabled="!canEditEntry(entry)"
-                    type="datetime"
-                    value-format="YYYY-MM-DD HH:mm:ss"
-                    format="YYYY-MM-DD HH:mm"
-                    class="w-full!"
-                    placeholder="请选择预约进场时间"
-                  />
-                </ElFormItem>
-                <ElFormItem label="备注" class="sm:col-span-2 lg:col-span-3">
-                  <ElInput
-                    v-model="entry.remark"
-                    :disabled="!canEditEntry(entry)"
-                    maxlength="300"
-                    show-word-limit
-                    placeholder="可补充预约要求"
-                  />
-                </ElFormItem>
+                  <ArtSvgIcon icon="ri:list-check-2" aria-hidden="true" />
+                  选择子单
+                </ElButton>
               </div>
-            </div>
-
-            <div
-              class="order-first self-start rounded-lg border border-[var(--el-border-color-lighter)] bg-[var(--art-gray-100)] p-3 xl:order-last"
-            >
-              <ElFormItem
-                :label="`已选择子单 · ${entry.selectedWaybillIds.length} 张`"
-                :prop="`entries.${index}.selectedWaybillIds`"
-                :rules="requiredChildrenRule"
-                class="mb-0!"
-              >
-                <div class="flex w-full flex-col gap-2">
-                  <ElTag
-                    v-for="id in entry.selectedWaybillIds"
-                    :key="id"
-                    size="small"
-                    type="info"
-                    class="max-w-full self-start"
-                  >
-                    <span class="block truncate" :title="candidateName(id)">{{
-                      candidateName(id)
-                    }}</span>
-                  </ElTag>
-                  <ElButton
-                    v-if="canEditEntry(entry)"
-                    size="small"
-                    type="primary"
-                    plain
-                    class="mt-1 w-full!"
-                    @click="chooseChildren(entry)"
-                  >
-                    <ArtSvgIcon icon="ri:list-check-2" aria-hidden="true" />
-                    选择子单
-                  </ElButton>
-                </div>
-              </ElFormItem>
-            </div>
-          </div>
-
-          <div v-if="entry.id" class="mt-2 border-t border-[var(--el-border-color-lighter)] pt-4">
-            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <div class="min-w-0 flex-1">
-                <ArtSectionTitle title="到场信息" :show-line="false" />
-              </div>
+            </template>
+            <template #[`arrival_${entry.localKey}Actions`]>
               <ElButton
                 v-if="canArrival && entry.status !== 'completed'"
                 v-auth="permissions.arrival"
@@ -267,74 +167,10 @@
                 @click="saveArrival(entry)"
                 >保存到场信息</ElButton
               >
-            </div>
-            <div class="grid gap-x-4 sm:grid-cols-2 lg:grid-cols-3">
-              <ElFormItem label="到场车牌">
-                <ElInput
-                  v-model="entry.arrivalPlateNo"
-                  :disabled="!canArrival || entry.status === 'completed'"
-                  maxlength="24"
-                  placeholder="默认使用预约车牌"
-                />
-              </ElFormItem>
-              <ElFormItem label="进场时间">
-                <ElDatePicker
-                  v-model="entry.arrivedAt"
-                  :disabled="!canArrival || entry.status === 'completed'"
-                  type="datetime"
-                  value-format="YYYY-MM-DD HH:mm:ss"
-                  format="YYYY-MM-DD HH:mm"
-                  class="w-full!"
-                  placeholder="请选择进场时间"
-                />
-              </ElFormItem>
-              <template v-if="kind === 'pickup'">
-                <ElFormItem label="装货开始时间">
-                  <ElDatePicker
-                    v-model="entry.loadingStartedAt"
-                    :disabled="!canArrival || entry.status === 'completed'"
-                    type="datetime"
-                    value-format="YYYY-MM-DD HH:mm:ss"
-                    format="YYYY-MM-DD HH:mm"
-                    class="w-full!"
-                    placeholder="可选"
-                  />
-                </ElFormItem>
-                <ElFormItem label="装货结束时间">
-                  <ElDatePicker
-                    v-model="entry.loadingFinishedAt"
-                    :disabled="!canArrival || entry.status === 'completed'"
-                    type="datetime"
-                    value-format="YYYY-MM-DD HH:mm:ss"
-                    format="YYYY-MM-DD HH:mm"
-                    class="w-full!"
-                    placeholder="可选"
-                  />
-                </ElFormItem>
-                <ElFormItem label="离场时间">
-                  <ElDatePicker
-                    v-model="entry.departedAt"
-                    :disabled="!canArrival || entry.status === 'completed'"
-                    type="datetime"
-                    value-format="YYYY-MM-DD HH:mm:ss"
-                    format="YYYY-MM-DD HH:mm"
-                    class="w-full!"
-                    placeholder="可选"
-                  />
-                </ElFormItem>
-              </template>
-              <ElFormItem v-else label="月台信息">
-                <ElInput
-                  v-model="entry.dockName"
-                  :disabled="!canArrival || entry.status === 'completed'"
-                  maxlength="100"
-                  placeholder="请输入月台或卸货位"
-                />
-              </ElFormItem>
-            </div>
-          </div>
+            </template>
+          </ArtForm>
         </section>
-      </ArtForm>
+      </div>
 
       <ArtEmptyState
         v-if="!loadFailed && !form.entries.length"
@@ -354,7 +190,7 @@
   import { createDateTimeFormatter } from '@/utils/ui/format'
   import dayjs from 'dayjs'
   import { ElMessage, type FormItemRule } from 'element-plus'
-  import ArtForm from '@/components/core/forms/art-form/index.vue'
+  import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtDrawer from '@/components/core/drawers/art-drawer/index.vue'
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
   import type { ArtDrawerExpose } from '@/components/core/drawers/art-drawer/types'
@@ -416,7 +252,7 @@
       anchorWaybillId: string
     }) => Promise<void>
   }>()
-  const formRef = ref<InstanceType<typeof ArtForm>>()
+  const formRefs = ref<InstanceType<typeof ArtForm>[]>([])
   const waybill = ref<AppointmentListRow | null>(null)
   const candidates = ref<AppointmentCandidate[]>([])
   const form = reactive<{ entries: EditableEntry[] }>({ entries: [] })
@@ -470,6 +306,138 @@
   const canEditEntry = (entry: EditableEntry): boolean =>
     entry.status !== 'completed' && (entry.id ? canEdit.value : canAdd.value)
 
+  function entryItems(entry: EditableEntry, index: number): FormItem[] {
+    const key = (field: string) => `entries.${index}.${field}`
+    const disabled = !canEditEntry(entry)
+    const arrivalDisabled = !canArrival.value || entry.status === 'completed'
+    const dateProps = {
+      type: 'datetime',
+      valueFormat: 'YYYY-MM-DD HH:mm:ss',
+      format: 'YYYY-MM-DD HH:mm',
+      class: 'w-full!'
+    }
+    return [
+      { key: `driver_${entry.localKey}`, label: '司机与车辆安排', type: 'divider', span: 24 },
+      {
+        key: key('driverName'),
+        label: '司机姓名',
+        type: 'input',
+        formItemProps: { rules: requiredRule },
+        props: { disabled, maxlength: 60, placeholder: '请输入司机姓名' }
+      },
+      {
+        key: key('driverPhone'),
+        label: '联系电话',
+        type: 'input',
+        formItemProps: { rules: phoneRule },
+        props: { disabled, maxlength: 24, placeholder: '请输入联系电话' }
+      },
+      {
+        key: key('plateNo'),
+        label: '车牌号',
+        type: 'input',
+        formItemProps: { rules: requiredRule },
+        props: { disabled, maxlength: 24, placeholder: '请输入车牌号' }
+      },
+      {
+        key: key('loadCapacityTon'),
+        label: '载重（吨）',
+        type: 'number',
+        props: {
+          disabled,
+          min: 0.01,
+          precision: 2,
+          controls: false,
+          class: 'w-full!',
+          placeholder: '可选'
+        }
+      },
+      {
+        key: key('vehicleLengthM'),
+        label: '车长（米）',
+        type: 'number',
+        props: {
+          disabled,
+          min: 0.01,
+          precision: 2,
+          controls: false,
+          class: 'w-full!',
+          placeholder: '可选'
+        }
+      },
+      {
+        key: key('scheduledAt'),
+        label: '进场日期与时间',
+        type: 'date',
+        formItemProps: { rules: requiredRule },
+        props: { ...dateProps, disabled, placeholder: '请选择预约进场时间' }
+      },
+      {
+        key: key('remark'),
+        label: '备注',
+        type: 'input',
+        span: 24,
+        props: { disabled, maxlength: 300, showWordLimit: true, placeholder: '可补充预约要求' }
+      },
+      {
+        key: key('selectedWaybillIds'),
+        label: `已选择子单 · ${entry.selectedWaybillIds.length} 张`,
+        type: 'appointmentChildren',
+        span: 24,
+        formItemProps: { rules: requiredChildrenRule }
+      },
+      ...(entry.id
+        ? [
+            { key: `arrival_${entry.localKey}`, label: '到场信息', type: 'divider', span: 24 },
+            {
+              key: key('arrivalPlateNo'),
+              label: '到场车牌',
+              type: 'input',
+              props: { disabled: arrivalDisabled, maxlength: 24, placeholder: '默认使用预约车牌' }
+            },
+            {
+              key: key('arrivedAt'),
+              label: '进场时间',
+              type: 'date',
+              props: { ...dateProps, disabled: arrivalDisabled, placeholder: '请选择进场时间' }
+            },
+            ...(props.kind === 'pickup'
+              ? [
+                  {
+                    key: key('loadingStartedAt'),
+                    label: '装货开始时间',
+                    type: 'date',
+                    props: { ...dateProps, disabled: arrivalDisabled, placeholder: '可选' }
+                  },
+                  {
+                    key: key('loadingFinishedAt'),
+                    label: '装货结束时间',
+                    type: 'date',
+                    props: { ...dateProps, disabled: arrivalDisabled, placeholder: '可选' }
+                  },
+                  {
+                    key: key('departedAt'),
+                    label: '离场时间',
+                    type: 'date',
+                    props: { ...dateProps, disabled: arrivalDisabled, placeholder: '可选' }
+                  }
+                ]
+              : [
+                  {
+                    key: key('dockName'),
+                    label: '月台信息',
+                    type: 'input',
+                    props: {
+                      disabled: arrivalDisabled,
+                      maxlength: 100,
+                      placeholder: '请输入月台或卸货位'
+                    }
+                  }
+                ])
+          ]
+        : [])
+    ]
+  }
   function toEditable(record: AppointmentRecord): EditableEntry {
     return {
       ...record,
@@ -501,7 +469,7 @@
       form.entries = records.map(toEditable)
       if (!form.entries.length && canAdd.value) addEntry()
       await nextTick()
-      formRef.value?.clearValidate()
+      formRefs.value.forEach((instance) => instance.clearValidate())
     } catch {
       loadFailed.value = true
     } finally {
@@ -594,7 +562,9 @@
       return false
     }
     if (!form.entries.length) return true
-    const valid = await formRef.value?.validate()?.catch(() => false)
+    const valid = (
+      await Promise.all(formRefs.value.map((instance) => instance.validate().catch(() => false)))
+    ).every(Boolean)
     if (!valid) return false
     saving.value = true
     let savedCount = 0

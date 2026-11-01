@@ -16,16 +16,6 @@
       label-width="112px"
       scroll-to-error
     >
-      <template #attachments>
-        <ArtUploadFile
-          v-model="form.attachments"
-          :resource-tenant-id="form.tenantId || ''"
-          title="选择或拖入附件"
-          :limit="10"
-          :file-size="5 * 1024 * 1024"
-          multiple
-        />
-      </template>
     </ArtForm>
   </ArtDialog>
 </template>
@@ -38,7 +28,6 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import ArtUploadFile from '@/components/core/forms/art-upload-file/index.vue'
   import { useUserStore } from '@/store/modules/user'
   import { normalizeNullableText } from '@/utils/form/normalize'
   import {
@@ -117,7 +106,19 @@
       span: 24,
       props: { type: 'textarea', rows: 5, maxlength: 3000, showWordLimit: true }
     },
-    { label: '附件', key: 'attachments', span: 24 },
+    {
+      label: '附件',
+      key: 'attachments',
+      span: 24,
+      type: 'uploadFile',
+      props: {
+        resourceTenantId: form.value.tenantId || '',
+        title: '选择或拖入附件',
+        limit: 10,
+        fileSize: 5 * 1024 * 1024,
+        multiple: true
+      }
+    },
     {
       label: '备注',
       key: 'remark',

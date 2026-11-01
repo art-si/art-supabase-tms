@@ -201,31 +201,6 @@
           label-width="116px"
           tenant-scope-mode="manual"
         >
-          <template #employeeId>
-            <ArtTableSingleSelect
-              :model-value="form.employeeId || undefined"
-              :selected-data="employeeSelection.selectedRows"
-              :api-fn="fetchEmployeeSelectorData"
-              :columns="employeeSelection.columns"
-              title="从员工花名册选择"
-              subtitle="仅展示在职、试用且尚未建立司机档案的员工"
-              row-key="id"
-              :label-key="getEmployeeLabel"
-              :description-key="getEmployeeDescription"
-              placeholder="请选择员工，或直接填写司机资料"
-              search-placeholder="员工工号、姓名、所属组织或岗位"
-              empty-text="暂无可建档员工"
-              dialog-width="xl"
-              show-pagination
-              :page-size="10"
-              @update:model-value="handleEmployeeValueChange"
-              @update:selected-data="handleEmployeeRowsChange"
-              @confirm="handleEmployeeConfirm"
-              @clear="handleEmployeeClear"
-            >
-              <template #empty><TmsDataSourceEmptyActions source="employee" /></template>
-            </ArtTableSingleSelect>
-          </template>
         </ArtForm>
       </div>
     </div>
@@ -242,15 +217,7 @@
       :closable="false"
       show-icon
     />
-    <ElInput
-      v-model="reviewReason"
-      class="mt-4"
-      type="textarea"
-      :rows="3"
-      maxlength="500"
-      show-word-limit
-      :placeholder="reviewDecision === 'approved' ? '审核备注（可选）' : '填写撤销原因，至少六个字'"
-    />
+    <ArtForm v-model="reviewForm" :items="reviewItems" :span="24" label-position="top" />
   </ArtDialog>
   <ArtDialog ref="ocrReviewDialogRef" size="lg" aria-label="司机证件识别结果">
     <div class="driver-dialog__ocr-review">
@@ -286,7 +253,6 @@
     ElAlert,
     ElButton,
     ElCheckbox,
-    ElInput,
     ElMessage,
     ElTabPane,
     ElTabs,
@@ -300,7 +266,6 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
   import TmsDataSourceEmptyActions from '../../../components/tms-data-source-empty-actions.vue'
   import type {
     DataSelectColumn,
@@ -414,6 +379,28 @@
   const certificationError = ref(false)
   const reviewDecision = ref<'approved' | 'revoked'>('approved')
   const reviewReason = ref('')
+  const reviewForm = reactive({
+    get reviewReason() {
+      return reviewReason.value
+    },
+    set reviewReason(value: string) {
+      reviewReason.value = value
+    }
+  })
+  const reviewItems = computed<FormItem[]>(() => [
+    {
+      key: 'reviewReason',
+      label: reviewDecision.value === 'approved' ? '审核备注' : '撤销原因',
+      type: 'textarea',
+      props: {
+        rows: 3,
+        maxlength: 500,
+        showWordLimit: true,
+        placeholder:
+          reviewDecision.value === 'approved' ? '审核备注（可选）' : '填写撤销原因，至少六个字'
+      }
+    }
+  ])
   const router = useRouter()
   const { hasAuth } = useAuth()
   const canReviewCertification = computed(
@@ -1091,7 +1078,33 @@
       span: 24,
       hidden: Boolean(form.value.id),
       description:
-        '选择后回填共有身份信息并将员工岗位同步为司机；证照、承运商和司机类型仍需单独维护。'
+        '选择后回填共有身份信息并将员工岗位同步为司机；证照、承运商和司机类型仍需单独维护。',
+      type: 'dataSelect',
+      props: {
+        mode: 'table',
+        multiple: false,
+        modelValue: form.value.employeeId || undefined,
+        selectedData: employeeSelection.selectedRows,
+        apiFn: fetchEmployeeSelectorData,
+        columns: employeeSelection.columns,
+        title: '从员工花名册选择',
+        subtitle: '仅展示在职、试用且尚未建立司机档案的员工',
+        rowKey: 'id',
+        labelKey: getEmployeeLabel,
+        descriptionKey: getEmployeeDescription,
+        placeholder: '请选择员工，或直接填写司机资料',
+        searchPlaceholder: '员工工号、姓名、所属组织或岗位',
+        emptyText: '暂无可建档员工',
+        dialogWidth: 'xl',
+        showPagination: true,
+        pageSize: 10,
+        'onUpdate:modelValue': handleEmployeeValueChange,
+        'onUpdate:selectedData': handleEmployeeRowsChange,
+        onConfirm: handleEmployeeConfirm,
+        onClear: handleEmployeeClear,
+        showSelectedPanel: false
+      },
+      slots: { empty: () => h(TmsDataSourceEmptyActions, { source: 'employee' }) }
     },
     {
       label: '姓名',
