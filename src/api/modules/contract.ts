@@ -5,8 +5,6 @@ import { useSupabase } from '@/hooks/core/useSupabase'
 import { withRequestOptions } from '@/api/providers/supabase/query'
 import type { ApiRequestOptions } from '@/types/api/request'
 import { startWorkflow } from '@/api/workflow'
-import { useTenantScopeStore } from '@/store/modules/tenant-scope'
-import { useUserStore } from '@/store/modules/user'
 
 type Contract = Api.Tms.BasicData.Contract
 type ContractSearchParams = Api.Tms.BasicData.ContractSearchParams
@@ -29,18 +27,6 @@ interface ImportContractResult {
 
 const { supabase, keysToSnakeDeep, responseHandle } = useSupabase()
 
-const assertContractCreateTenantSupported = (requestedTenantId?: string): void => {
-  const homeTenantId = useUserStore().getUserInfo.tenantId
-  const selectedTenantId = useTenantScopeStore().effectiveTenantId
-  if (!homeTenantId) throw new Error('无法确定账号所属租户，请刷新后重试')
-  if (requestedTenantId && requestedTenantId !== homeTenantId) {
-    throw new Error('当前合同服务暂不支持跨租户新增或导入，请切换至所属租户后重试')
-  }
-  if (selectedTenantId && selectedTenantId !== homeTenantId) {
-    throw new Error('当前合同服务暂不支持跨租户新增或导入，请切换至所属租户后重试')
-  }
-}
-
 const CONTRACT_PAYLOAD_KEYS = [
   'contractNo',
   'contractName',
@@ -55,6 +41,7 @@ const CONTRACT_PAYLOAD_KEYS = [
   'waybillNo',
   'customerSignatory',
   'billingMethod',
+  'billingUnit',
   'contractAmount',
   'transportUnitPrice',
   'roadConsumptionRate',
@@ -134,7 +121,7 @@ const toContractListRpcParams = (
   const requestedTo = purpose === 'export' ? Math.max((params.maxRows ?? 10000) - 1, 0) : params.to
   return {
     ...buildSupabaseRpcRange(from, requestedTo ?? 9),
-    p_contract_status: params.contractStatus || null,
+    p_contract_status: params.lifecycleStatus || null,
     p_business_contract_type: params.businessContractType || null,
     p_contract_category: params.contractCategory || null,
     p_customer_id: params.customerId || null,
@@ -241,7 +228,6 @@ export async function fetchContractDetail(id: string) {
 }
 
 export async function addContract(params: Contract) {
-  assertContractCreateTenantSupported(params.tenantId)
   const result = await responseHandle<string>(
     () =>
       supabase.rpc('tms_create_contract_secure', {
@@ -252,13 +238,32 @@ export async function addContract(params: Contract) {
   return { ...result, data: result.data ? { id: result.data } : null }
 }
 
+export async function copyContract(sourceId: string) {
+  if (!sourceId) throw new Error('原合同 ID 不能为空')
+  return await responseHandle<string>(
+    () => supabase.rpc('tms_copy_contract_secure', { p_source_id: sourceId }),
+    { showMessage: true, showErrorMessage: false, breakReturn: true, message: '合同副本已创建' }
+  )
+}
+
+export async function terminateContract(id: string, reason: string) {
+  if (!id) throw new Error('合同 ID 不能为空')
+  return await responseHandle<boolean>(
+    () => supabase.rpc('tms_terminate_contract_secure', { p_id: id, p_reason: reason }),
+    { showMessage: true, showErrorMessage: false, breakReturn: true, message: '合同已终止' }
+  )
+}
+
 export async function submitContractForApproval(contract: Contract) {
   if (!contract.id) throw new Error('合同 ID 不能为空')
-  return await startWorkflow({
-    businessType: 'tms_contract',
-    businessId: contract.id,
-    businessTitle: `合同 ${contract.contractNo || contract.contractName || contract.id}`
-  })
+  return await startWorkflow(
+    {
+      businessType: 'tms_contract',
+      businessId: contract.id,
+      businessTitle: `合同 ${contract.contractNo || contract.contractName || contract.id}`
+    },
+    { showErrorMessage: false }
+  )
 }
 
 export async function editContract(params: Contract) {
@@ -300,8 +305,6 @@ export async function deleteContractBatch(ids: string[]) {
 }
 
 export async function importContracts(rows: Contract[]) {
-  assertContractCreateTenantSupported()
-  rows.forEach((row) => assertContractCreateTenantSupported(row.tenantId))
   const payload = rows.map((row) => keysToSnakeDeep(toContractPayload(row)))
   return await responseHandle<ImportContractResult>(
     () => supabase.rpc('tms_import_contracts_secure', { p_rows: payload }),

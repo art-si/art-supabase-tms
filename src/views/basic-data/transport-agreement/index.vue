@@ -1,6 +1,11 @@
 <template>
-  <div class="business-workspace-page art-full-height">
+  <div
+    :class="
+      embedded ? 'flex h-[460px] min-w-0 flex-col' : 'business-workspace-page art-full-height'
+    "
+  >
     <BusinessWorkspaceHeader
+      v-if="!embedded"
       eyebrow="TRANSPORT AGREEMENTS"
       title="运输协议"
       description="统一登记托运、承运与车辆信息，核查证件和双方签署资料。"
@@ -19,16 +24,16 @@
       :api-fn="fetchTable"
       :columns-factory="columnsFactory"
       :header-actions="headerActions"
-      header-actions-placement="workspace"
+      :header-actions-placement="embedded ? 'table' : 'workspace'"
       :search-bar-props="{ span: 8, labelWidth: 82, showExpand: true, defaultExpanded: false }"
       :table-props="{
         rowKey: 'id',
         emptyText: '暂无运输协议',
         emptyDescription: '登记协议后，可按承运方和车辆追溯签署资料。'
       }"
-      focusable
+      :focusable="!embedded"
     />
-    <TransportAgreementDialog ref="formDialogRef" @success="refresh" />
+    <TransportAgreementDialog ref="formDialogRef" :customer="customer" @success="refresh" />
     <ArtDialog
       ref="detailDialogRef"
       size="xl"
@@ -150,6 +155,12 @@
   import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
 
   import DOMPurify from 'dompurify'
+  import { useUserStore } from '@/store/modules/user'
+  import {
+    formatVehicleTypeDisplay,
+    getVehicleTypeFallbackLabel
+  } from '@/utils/business/vehicle-type-display'
+  import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
@@ -179,6 +190,9 @@
   import TransportAgreementDialog from './modules/transport-agreement-dialog.vue'
 
   defineOptions({ name: 'TmsTransportAgreement' })
+  const props = defineProps<{ embedded?: boolean; customer?: Api.Tms.BasicData.Customer }>()
+  const route = useRoute()
+  const userStore = useUserStore()
 
   const tableRef = ref<ArtTableQueryExpose>()
   const { deleteGuardRef, deleteRecords } = useRecordDeleteGuard(
@@ -236,7 +250,19 @@
     { key: 'startsOn', label: '协议开始时间', field: 'startsOn' },
     { key: 'endsOn', label: '协议结束时间', field: 'endsOn' },
     { key: 'status', label: '协议状态', field: 'status', dictCode: 'tmsTransportAgreementStatus' },
-    { key: 'vehicleType', label: '车型', field: 'vehicleType' },
+    {
+      key: 'vehicleType',
+      label: '车型',
+      field: 'vehicleType',
+      render: (_value, row) => (
+        <ArtDictDisplay
+          dictCode="vehicleType"
+          value={row.vehicleType}
+          display="text"
+          unknownText={getVehicleTypeFallbackLabel(row.vehicleType, { unknownText: '待核对' })}
+        />
+      )
+    },
     {
       key: 'vehicleLengthM',
       label: '车长',
@@ -289,7 +315,19 @@
       width: 110,
       dict: { code: 'tmsTransportAgreementStatus', display: 'auto' }
     },
-    { prop: 'vehicleType', label: '车型', width: 110 },
+    {
+      prop: 'vehicleType',
+      label: '车型',
+      width: 110,
+      formatter: (row) => (
+        <ArtDictDisplay
+          dictCode="vehicleType"
+          value={row.vehicleType}
+          display="text"
+          unknownText={getVehicleTypeFallbackLabel(row.vehicleType, { unknownText: '待核对' })}
+        />
+      )
+    },
     {
       prop: 'vehicleLengthM',
       label: '车长',
@@ -366,21 +404,42 @@
         { key: 'carrierName', title: '承运方' },
         { key: 'contactPhone', title: '联系电话' },
         { key: 'plateNo', title: '车牌号' },
-        { key: 'vehicleType', title: '车型' },
+        {
+          key: 'vehicleType',
+          title: '车型',
+          formatter: (value: unknown) =>
+            formatVehicleTypeDisplay(
+              value,
+              userStore.getDictItemByValue('vehicleType', typeof value === 'string' ? value : '')
+            )
+        },
         { key: 'vehicleLengthM', title: '车长（米）' },
         { key: 'partyASignedOn', title: '甲方签订日期' },
         { key: 'partyBSignedOn', title: '乙方签订日期' }
       ],
-      exportApi: async ({ maxRows }) => ({
-        data:
-          (await fetchTransportAgreementList({ ...search.value, from: 0, to: maxRows - 1 })).data ??
-          []
-      })
+      exportApi: async ({ maxRows }) => {
+        await userStore.ensureDictLoaded('vehicleType')
+        const result = await fetchTransportAgreementList({
+          ...search.value,
+          from: 0,
+          to: maxRows - 1,
+          customerId: props.customer?.id,
+          recordId: typeof route.query.recordId === 'string' ? route.query.recordId : undefined
+        })
+        if (result.error) throw result.error
+        return { data: result.data ?? [] }
+      }
     }
   ])
   const fetchTable = (params: TransportAgreementSearch & { current: number; size: number }) => {
     const { from, to } = buildSupabasePageRange({ current: params.current, size: params.size })
-    return fetchTransportAgreementList({ ...params, from, to })
+    return fetchTransportAgreementList({
+      ...params,
+      from,
+      to,
+      customerId: props.customer?.id,
+      recordId: typeof route.query.recordId === 'string' ? route.query.recordId : undefined
+    })
   }
   const showDetail = async (row: TransportAgreementRecord): Promise<void> => {
     detail.value = row
@@ -389,4 +448,8 @@
   const refresh = (mode: 'add' | 'edit'): void => {
     void (mode === 'add' ? tableRef.value?.refreshCreate() : tableRef.value?.refreshUpdate())
   }
+  watch(
+    () => route.query.recordId,
+    () => void nextTick().then(() => tableRef.value?.refreshCreate())
+  )
 </script>

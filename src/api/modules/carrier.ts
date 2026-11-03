@@ -1,22 +1,19 @@
 import { toDateStartTimestamp, toDateEndTimestamp } from '@/utils/time/date-boundary'
 import { normalizeNullableText } from '@/utils/form/normalize'
-import {
-  buildSupabaseRpcRange,
-  fetchAllRangePages,
-  normalizeSupabaseFunctionError
-} from '@/utils/supabase'
+import { buildSupabaseRpcRange, normalizeSupabaseFunctionError } from '@/utils/supabase'
 import { loadAllDocumentPages } from '@/utils/business/document-detail-list'
 import { useSupabase } from '@/hooks/core/useSupabase'
 import { normalizeBooleanFilter, withRequestOptions } from '@/api/providers/supabase/query'
 import type { ApiRequestOptions } from '@/types/api/request'
 import type { QueryResult } from '@/types/api/response'
-import { pickDefinedPayload } from './payload'
+import { pickDefinedPayload } from '@/utils/form/pick-defined-payload'
 
 type Carrier = Api.Tms.BasicData.Carrier
 type CarrierSearchParams = Api.Tms.BasicData.CarrierSearchParams
 type CarrierOption = Api.Tms.BasicData.CarrierOption
 
 interface CarrierOptionParams extends Partial<Pick<CarrierOption, 'carrierCode' | 'companyName'>> {
+  tenantId?: string | null
   excludeId?: string
   includeDisabled?: boolean
   ids?: string[]
@@ -62,6 +59,8 @@ const CARRIER_PAYLOAD_KEYS = [
   'bankName',
   'bankAccountName',
   'bankAccount',
+  'contacts',
+  'billingAccounts',
   'signedContract',
   'contractAttachmentUrl',
   'remark'
@@ -110,40 +109,38 @@ export async function fetchCarrierList(params: CarrierSearchParams, options?: Ap
   }
 }
 
-/** Parent maintenance needs full hierarchy and a concrete write tenant, unlike reference pickers. */
+type CarrierParentOption = Pick<
+  Carrier,
+  'parentUnitId' | 'carrierCode' | 'companyName' | 'enabled'
+> & { id: string }
+
+/** Parent maintenance needs the complete tenant hierarchy, not a capped reference picker. */
 export async function fetchCarrierParentOptions(params: {
   tenantId?: string | null
   recordId?: string
-}): Promise<Carrier[]> {
-  let tenantId = params.tenantId
-  const recordId = params.recordId
-  if (recordId) {
-    const record = await responseHandle<{ tenantId: string }>(
-      () => supabase.from('mdm_carrier').select('tenant_id').eq('id', recordId).single(),
-      { breakReturn: true, showErrorMessage: false }
-    )
-    tenantId = record.data?.tenantId
-  }
-  if (!tenantId) throw new Error('无法确认承运商所属租户，请刷新后重试')
+}): Promise<CarrierParentOption[]> {
+  const recordId = params.recordId || null
+  const targetTenantId = recordId ? null : params.tenantId || null
 
-  const [carriers, identities] = await Promise.all([
-    loadAllDocumentPages(fetchCarrierList, {}),
-    fetchAllRangePages<{ id: string }>(({ from, to }) =>
-      responseHandle<{ id: string }[]>(
+  return loadAllDocumentPages<CarrierParentOption, { from?: number; to?: number }>(
+    async ({ from, to }) => {
+      const { data, error } = await responseHandle<{
+        records: CarrierParentOption[]
+        total: number
+      }>(
         () =>
-          supabase
-            .from('mdm_carrier')
-            .select('id')
-            .eq('tenant_id', tenantId)
-            .order('id')
-            .range(from, to),
+          supabase.rpc('tms_list_carrier_parent_options_secure', {
+            p_target_tenant_id: targetTenantId,
+            p_record_id: recordId,
+            p_from: from ?? 0,
+            p_to: to ?? 499
+          }),
         { breakReturn: true, showErrorMessage: false }
       )
-    )
-  ])
-  if (identities.error) throw identities.error
-  const tenantRecordIds = new Set((identities.data ?? []).map((record) => record.id))
-  return carriers.filter((carrier) => carrier.id && tenantRecordIds.has(carrier.id))
+      return { data: data?.records, total: data?.total, error }
+    },
+    {}
+  )
 }
 
 export async function exportCarrierList(
@@ -169,6 +166,98 @@ export async function fetchCarrierDetail(id: string) {
   )
 }
 
+export async function fetchCarrierChildren(carrierId: string) {
+  return await responseHandle<{
+    contacts: Api.Tms.BasicData.CarrierContact[]
+    billingAccounts: Api.Tms.BasicData.CarrierBillingAccount[]
+  }>(() => supabase.rpc('tms_get_carrier_children_secure', { p_carrier_id: carrierId }), {
+    showErrorMessage: false,
+    breakReturn: true
+  })
+}
+
+export async function fetchCarrierDefaultBillingAccount(carrierId: string) {
+  return await responseHandle<Api.Tms.BasicData.CarrierBillingAccount | null>(
+    () =>
+      supabase.rpc('tms_get_carrier_default_billing_account_secure', { p_carrier_id: carrierId }),
+    { showErrorMessage: false, breakReturn: true }
+  )
+}
+
+export async function fetchCarrierBillingAccountsForDispatch(carrierId: string) {
+  return await responseHandle<Api.Tms.BasicData.CarrierBillingAccount[]>(
+    () =>
+      supabase.rpc('tms_list_carrier_billing_accounts_for_dispatch_secure', {
+        p_carrier_id: carrierId
+      }),
+    { showErrorMessage: false, breakReturn: true }
+  )
+}
+
+export interface CarrierBillingAccountReference {
+  waybillId: string
+  waybillNo: string
+  status: string
+  createTime: string
+}
+
+export async function fetchCarrierBillingAccountReferences(accountId: string) {
+  return await responseHandle<CarrierBillingAccountReference[]>(
+    () =>
+      supabase.rpc('tms_list_carrier_billing_account_references_secure', {
+        p_account_id: accountId
+      }),
+    { showErrorMessage: false, breakReturn: true }
+  )
+}
+
+export async function fetchWaybillCarrierBillingSnapshot(waybillId: string) {
+  return await responseHandle<Api.Tms.BasicData.CarrierBillingAccount | null>(
+    () =>
+      supabase.rpc('tms_get_waybill_carrier_billing_snapshot_secure', { p_waybill_id: waybillId }),
+    { showErrorMessage: false, breakReturn: true }
+  )
+}
+
+export interface CarrierWaybillSummary {
+  id: string
+  waybillNo: string
+  status: string
+  originCity?: string | null
+  destinationCity?: string | null
+  createTime?: string
+}
+
+export interface CarrierStatementSummary {
+  id: string
+  statementNo: string
+  status: string
+  periodStart: string
+  periodEnd: string
+  settledAmount?: number | null
+}
+
+export async function fetchCarrierWaybills(carrierId: string) {
+  return await responseHandle<CarrierWaybillSummary[]>(
+    () => supabase.rpc('tms_list_carrier_waybill_summaries_secure', { p_carrier_id: carrierId }),
+    { showErrorMessage: false, breakReturn: true }
+  )
+}
+
+export async function fetchCarrierStatements(carrierId: string) {
+  const result = await responseHandle<{ records: CarrierStatementSummary[]; total: number }>(
+    () =>
+      supabase.rpc('tms_list_carrier_statements_secure', {
+        p_carrier_id: carrierId,
+        p_from: 0,
+        p_to: 199,
+        p_purpose: 'list'
+      }),
+    { showErrorMessage: false, breakReturn: true }
+  )
+  return { ...result, data: result.data?.records ?? [], total: result.data?.total ?? 0 }
+}
+
 export async function analyzeCarrierPerformanceByAi(
   carrierId: string
 ): Promise<QueryResult<Api.Tms.BasicData.CarrierPerformanceAdvisorResponse>> {
@@ -191,6 +280,7 @@ export async function fetchCarrierOptions(
   const {
     carrierCode,
     companyName,
+    tenantId,
     excludeId,
     includeDisabled = false,
     ids,
@@ -204,7 +294,8 @@ export async function fetchCarrierOptions(
           p_include_disabled: includeDisabled,
           p_keyword: normalizeNullableText(String(companyName || carrierCode || '')),
           p_ids: ids?.length ? ids : null,
-          p_max_rows: maxRows
+          p_max_rows: maxRows,
+          p_tenant_id: tenantId || null
         }),
         options
       ),

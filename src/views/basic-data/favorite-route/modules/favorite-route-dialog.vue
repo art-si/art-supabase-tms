@@ -30,6 +30,16 @@
           <div class="favorite-route-dialog__path" aria-hidden="true">
             <span></span><span></span><span></span>
           </div>
+          <div v-if="form.waypointStationIds?.length" class="favorite-route-dialog__waypoints">
+            <strong>途经 {{ form.waypointStationIds.length }} 站</strong>
+            <span v-for="(stationId, index) in form.waypointStationIds" :key="stationId">
+              {{ index + 1 }}.
+              {{
+                stationOptions.find((item) => item.id === stationId)?.stationName || '待选择站点'
+              }}
+            </span>
+            <span v-if="form.returnTrip">返程按相反顺序经过这些站点</span>
+          </div>
           <div class="favorite-route-dialog__endpoint is-destination">
             <span><ArtSvgIcon icon="ri:logout-circle-r-line" /></span>
             <div>
@@ -65,6 +75,62 @@
           </div>
         </section>
       </template>
+      <template #waypointStationIds>
+        <div class="w-full min-w-0 space-y-2">
+          <div
+            v-for="(stationId, index) in form.waypointStationIds"
+            :key="index"
+            class="flex min-w-0 items-center gap-2"
+          >
+            <span class="w-14 shrink-0 text-xs text-gray-500">第 {{ index + 1 }} 站</span>
+            <ElSelect
+              :model-value="stationId"
+              filterable
+              clearable
+              class="min-w-0 flex-1"
+              placeholder="请选择途经点站点"
+              @change="(value: string) => setWaypoint(index, value)"
+            >
+              <ElOption
+                v-for="station in stationOptions"
+                :key="station.id"
+                :label="`${station.stationName}（${station.stationCode}）`"
+                :value="station.id"
+                :disabled="
+                  form.waypointStationIds?.includes(station.id) && station.id !== stationId
+                "
+              />
+            </ElSelect>
+            <ElButton
+              :disabled="index === 0"
+              aria-label="上移途经点"
+              @click="moveWaypoint(index, -1)"
+              >↑</ElButton
+            >
+            <ElButton
+              :disabled="index === (form.waypointStationIds?.length ?? 0) - 1"
+              aria-label="下移途经点"
+              @click="moveWaypoint(index, 1)"
+              >↓</ElButton
+            >
+            <ElButton
+              type="danger"
+              link
+              :aria-label="`删除第 ${index + 1} 个途经点`"
+              @click="removeWaypoint(index)"
+              >删除</ElButton
+            >
+          </div>
+          <ElButton
+            v-if="(form.waypointStationIds?.length ?? 0) < 3"
+            type="primary"
+            plain
+            @click="addWaypoint"
+            >添加途经点</ElButton
+          >
+          <p class="text-xs text-gray-500">最多 3 个，路线按当前顺序估算；返程按相反顺序经过。</p>
+        </div>
+      </template>
     </ArtForm>
   </ArtDialog>
 </template>
@@ -75,12 +141,14 @@
   import { normalizeNullableText } from '@/utils/form/normalize'
   import { normalizeCoordinatePair } from '@/utils/geo'
   import type { FormRules } from 'element-plus'
-  import { cloneDeep, omit } from 'lodash-es'
+  import { cloneDeep, omit, uniq } from 'lodash-es'
   import { storeToRefs } from 'pinia'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import { useAmapDrivingEstimate } from '@/hooks/core/useAmapDrivingEstimate'
+  import { fetchStationOptions } from '@tms/api'
+  import { ElButton, ElOption, ElSelect } from 'element-plus'
   import {
     addFavoriteRoute,
     editFavoriteRoute,
@@ -96,6 +164,7 @@
   type FavoriteRoute = Api.Tms.BasicData.FavoriteRoute
   type CustomerAddress = Api.Tms.BasicData.CustomerAddress
   type CustomerOption = Api.Tms.BasicData.CustomerOption
+  type StationOption = Api.Tms.Order.StationOption
   type TenantOption = Api.SystemManage.TenantListItem
   type FavoriteRouteForm = Omit<FavoriteRoute, 'distanceKm' | 'estimatedMinutes'> & {
     distanceKm: number | null
@@ -127,6 +196,7 @@
     origin: CustomerAddress[]
     destination: CustomerAddress[]
   }>({ origin: [], destination: [] })
+  const stationOptions = ref<StationOption[]>([])
   const estimate = reactive<EstimateGroup>({ status: 'idle' })
   let estimateRequestId = 0
 
@@ -137,6 +207,8 @@
     customerId: '',
     originAddressId: '',
     destinationAddressId: '',
+    waypointStationIds: [],
+    returnTrip: false,
     distanceKm: null,
     estimatedMinutes: null,
     enabled: true,
@@ -156,7 +228,11 @@
       normalizeCoordinatePair(
         destinationAddress.value?.longitude,
         destinationAddress.value?.latitude
-      )
+      ) &&
+      form.value.waypointStationIds?.every((id) => {
+        const station = stationOptions.value.find((item) => item.id === id)
+        return station && normalizeCoordinatePair(station.longitude, station.latitude)
+      })
     )
   )
   const estimateNote = computed(() => {
@@ -189,6 +265,19 @@
     customerId: [{ required: true, message: '请选择所属客户', trigger: 'change' }],
     originAddressId: [{ required: true, message: '请选择装货地址', trigger: 'change' }],
     destinationAddressId: [{ required: true, message: '请选择卸货地址', trigger: 'change' }],
+    waypointStationIds: [
+      {
+        validator: (_rule, value, callback) => {
+          const ids = Array.isArray(value) ? value : []
+          callback(
+            ids.length > 3 || ids.some((id) => !id) || uniq(ids).length !== ids.length
+              ? new Error('请选择 0 至 3 个不同的途经点')
+              : undefined
+          )
+        },
+        trigger: 'change'
+      }
+    ],
     distanceKm: [{ type: 'number', min: 0.01, message: '线路里程应大于 0 公里' }],
     estimatedMinutes: [{ type: 'number', min: 1, message: '预计时长应大于 0 分钟' }],
     remark: [{ max: 500, message: '备注不能超过 500 个字符', trigger: 'blur' }]
@@ -277,7 +366,7 @@
     {
       label: '',
       key: 'routePreview',
-      type: 'input',
+      type: 'slot',
       span: 24,
       labelWidth: 0
     },
@@ -326,6 +415,15 @@
         noDataText: '暂无可用卸货地址',
         placeholder: '请选择收货地址'
       }
+    },
+    { label: '途经点', key: 'waypointStationIds', type: 'slot', span: 24 },
+    {
+      label: '含返程',
+      key: 'returnTrip',
+      type: 'switch',
+      span: 12,
+      description: '开启后按卸货地、途经点逆序、装货地计算完整往返路线。',
+      props: { onChange: handleEndpointChange }
     },
     {
       label: '线路里程',
@@ -378,13 +476,16 @@
   const reloadTenantScopedOptions = async (): Promise<void> => {
     if (isPlatformSuper.value && !form.value.tenantId) {
       Object.assign(addressOptions, { origin: [], destination: [] })
+      stationOptions.value = []
       return
     }
-    await Promise.all([
+    const [, , , stations] = await Promise.all([
       formRef.value?.reloadOptions('customerId'),
       formRef.value?.reloadOptions('originAddressId'),
-      formRef.value?.reloadOptions('destinationAddressId')
+      formRef.value?.reloadOptions('destinationAddressId'),
+      fetchStationOptions({ tenantId: form.value.tenantId, stationType: 'transfer' })
     ])
+    stationOptions.value = stations.data ?? []
   }
 
   const resetEstimate = (): void => {
@@ -397,6 +498,8 @@
       customerId: '',
       originAddressId: '',
       destinationAddressId: '',
+      waypointStationIds: [],
+      returnTrip: false,
       distanceKm: null,
       estimatedMinutes: null
     })
@@ -411,6 +514,28 @@
     if (!form.value.originAddressId || !form.value.destinationAddressId) return
     await nextTick()
     await calculateRouteEstimate()
+  }
+
+  const addWaypoint = (): void => {
+    if ((form.value.waypointStationIds?.length ?? 0) >= 3) return
+    form.value.waypointStationIds = [...(form.value.waypointStationIds ?? []), '']
+    resetEstimate()
+  }
+  const setWaypoint = (index: number, id: string): void => {
+    form.value.waypointStationIds ??= []
+    form.value.waypointStationIds[index] = id
+    void handleEndpointChange()
+  }
+  const moveWaypoint = (index: number, direction: -1 | 1): void => {
+    const points = form.value.waypointStationIds ?? []
+    const next = index + direction
+    if (next < 0 || next >= points.length) return
+    ;[points[index], points[next]] = [points[next], points[index]]
+    void handleEndpointChange()
+  }
+  const removeWaypoint = (index: number): void => {
+    form.value.waypointStationIds?.splice(index, 1)
+    void handleEndpointChange()
   }
 
   const calculateRouteEstimate = async (): Promise<void> => {
@@ -430,9 +555,33 @@
     const requestId = ++estimateRequestId
     estimate.status = 'loading'
     try {
-      const result = await estimateDrivingRoute(origin, destination)
+      const waypoints = (form.value.waypointStationIds ?? []).map((id) => {
+        const station = stationOptions.value.find((item) => item.id === id)
+        return normalizeCoordinatePair(station?.longitude, station?.latitude)
+      })
+      if (waypoints.some((point) => !point)) {
+        estimate.status = 'idle'
+        return
+      }
+      const outbound = [
+        origin,
+        ...waypoints.filter((point): point is NonNullable<typeof point> => point !== null),
+        destination
+      ]
+      const routePoints = form.value.returnTrip
+        ? [...outbound, ...outbound.slice(0, -1).reverse()]
+        : outbound
+      const segments = await Promise.all(
+        routePoints
+          .slice(0, -1)
+          .map((point, index) => estimateDrivingRoute(point, routePoints[index + 1]))
+      )
       if (requestId !== estimateRequestId) return
-      Object.assign(form.value, result)
+      Object.assign(form.value, {
+        distanceKm:
+          Math.round(segments.reduce((sum, segment) => sum + segment.distanceKm, 0) * 100) / 100,
+        estimatedMinutes: segments.reduce((sum, segment) => sum + segment.estimatedMinutes, 0)
+      })
       estimate.status = 'ready'
     } catch {
       if (requestId === estimateRequestId) estimate.status = 'unavailable'

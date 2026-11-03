@@ -109,6 +109,7 @@ export function createInitialForm(): OrderForm {
     transferStation: '',
     deliveryMethod: 'door',
     shippingCustomerId: null,
+    invoiceAccountId: null,
     contractId: null,
     receivingCustomerId: null,
     shippingCustomerName: '',

@@ -1,4 +1,5 @@
 import { uniq } from 'lodash-es'
+import { getDictionaryDisplayLabel } from '@/utils/form/option'
 
 /** Older carrier records expose only the primary value. */
 export function carrierSelections(
@@ -6,6 +7,25 @@ export function carrierSelections(
   primary: string | undefined
 ): string[] {
   return values?.length ? [...values] : primary ? [primary] : []
+}
+
+/** Use visible labels for current taxonomy and a clear marker for historical unknown values. */
+export function carrierSelectionLabels(
+  values: readonly string[],
+  options: readonly { value: string; label?: string; name?: string }[],
+  unknownText = '待核对'
+): string {
+  return (
+    values
+      .map((value) =>
+        getDictionaryDisplayLabel(
+          options.find((option) => option.value === value),
+          value,
+          { unknownText }
+        )
+      )
+      .join('、') || '—'
+  )
 }
 
 /** Import accepts dictionary codes or visible labels separated by commas. */

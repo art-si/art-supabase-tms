@@ -7,7 +7,81 @@
       </div>
     </div>
 
+    <DefineVehicle>
+      <div class="order-config__vehicle">
+        <div class="order-config__section-heading">
+          <div
+            ><strong>选择车型</strong
+            ><span>先选车型，再选该车型的车长；容积和载重会自动带出</span></div
+          >
+          <ElButton v-if="vehicleError" link type="primary" @click="loadProfiles"
+            >重试加载</ElButton
+          >
+        </div>
+        <ArtAsyncState
+          v-if="vehicleLoading"
+          :loading="vehicleLoading"
+          :min-height="160"
+          size="compact"
+        />
+        <p v-else-if="vehicleError" class="order-config__hint is-error"
+          >车型规格加载失败，请重试。</p
+        >
+        <template v-else-if="vehicleCategories.length">
+          <div class="order-config__vehicle-grid" aria-label="车型">
+            <button
+              v-for="category in vehicleCategories"
+              :key="category"
+              type="button"
+              class="order-config__vehicle-card"
+              :class="{ 'is-selected': selectedVehicleCategory === category }"
+              :aria-pressed="selectedVehicleCategory === category"
+              @click="selectVehicleCategory(category)"
+            >
+              <VehicleTypeArt :category="category" /><strong>{{ category }}</strong>
+            </button>
+          </div>
+          <div class="order-config__lengths">
+            <div class="order-config__length-heading"
+              ><strong>车长</strong><span>{{ selectedVehicleCategory }}可选规格</span></div
+            >
+            <div class="order-config__length-options" aria-label="车长规格">
+              <button
+                v-for="profile in selectedVehicleProfiles"
+                :key="profile.id"
+                type="button"
+                class="order-config__length-option"
+                :class="{ 'is-selected': isSelectedVehicle(profile) }"
+                :aria-pressed="isSelectedVehicle(profile)"
+                :title="profileDetails(profile)"
+                @click="selectVehicle(profile)"
+                ><span>{{ profileOptionLabel(profile) }}</span></button
+              >
+            </div>
+          </div>
+        </template>
+        <ArtEmptyState
+          v-else
+          title="暂无已启用的车型规格"
+          description="请先在车辆档案维护车型。"
+          size="compact"
+          :visual-size="72"
+        />
+        <div v-if="config.vehicleType" class="order-config__metrics"
+          ><span>已选 {{ config.vehicleType }}</span
+          ><span
+            >车长 <strong>{{ metricText(config.vehicleLengthM, '米') }}</strong></span
+          ><span
+            >容积 <strong>{{ metricText(config.vehicleVolumeM3, '立方米') }}</strong></span
+          ><span
+            >载重 <strong>{{ metricText(config.vehicleLoadTons, '吨') }}</strong></span
+          ></div
+        >
+      </div>
+    </DefineVehicle>
+    <component v-if="externalFields" :is="externalFields" :items="embeddedItems" :actions="false" />
     <ArtForm
+      v-else
       ref="settingsFormRef"
       v-model="config"
       :items="settingItems"
@@ -18,83 +92,7 @@
       root-class="order-config__settings-form p-0!"
       :validate-on-rule-change="false"
     >
-      <template #vehicleType>
-        <div class="order-config__vehicle">
-          <div class="order-config__section-heading">
-            <div>
-              <strong>选择车型</strong>
-              <span>先选车型，再选该车型的车长；容积和载重会自动带出</span>
-            </div>
-            <ElButton v-if="vehicleError" link type="primary" @click="loadProfiles"
-              >重试加载</ElButton
-            >
-          </div>
-          <ArtAsyncState
-            v-if="vehicleLoading"
-            :loading="vehicleLoading"
-            :min-height="160"
-            size="compact"
-          />
-          <p v-else-if="vehicleError" class="order-config__hint is-error"
-            >车型规格加载失败，请重试。</p
-          >
-          <template v-else-if="vehicleCategories.length">
-            <div class="order-config__vehicle-grid" aria-label="车型">
-              <button
-                v-for="category in vehicleCategories"
-                :key="category"
-                type="button"
-                class="order-config__vehicle-card"
-                :class="{ 'is-selected': selectedVehicleCategory === category }"
-                :aria-pressed="selectedVehicleCategory === category"
-                @click="selectVehicleCategory(category)"
-              >
-                <VehicleTypeArt :category="category" />
-                <strong>{{ category }}</strong>
-              </button>
-            </div>
-            <div class="order-config__lengths">
-              <div class="order-config__length-heading">
-                <strong>车长</strong>
-                <span>{{ selectedVehicleCategory }}可选规格</span>
-              </div>
-              <div class="order-config__length-options" aria-label="车长规格">
-                <button
-                  v-for="profile in selectedVehicleProfiles"
-                  :key="profile.id"
-                  type="button"
-                  class="order-config__length-option"
-                  :class="{ 'is-selected': isSelectedVehicle(profile) }"
-                  :aria-pressed="isSelectedVehicle(profile)"
-                  :title="profileDetails(profile)"
-                  @click="selectVehicle(profile)"
-                >
-                  <span>{{ profileOptionLabel(profile) }}</span>
-                </button>
-              </div>
-            </div>
-          </template>
-          <ArtEmptyState
-            v-else
-            title="暂无已启用的车型规格"
-            description="请先在车辆档案维护车型。"
-            size="compact"
-            :visual-size="72"
-          />
-          <div v-if="config.vehicleType" class="order-config__metrics">
-            <span>已选 {{ config.vehicleType }}</span>
-            <span
-              >车长 <strong>{{ metricText(config.vehicleLengthM, '米') }}</strong></span
-            >
-            <span
-              >容积 <strong>{{ metricText(config.vehicleVolumeM3, '立方米') }}</strong></span
-            >
-            <span
-              >载重 <strong>{{ metricText(config.vehicleLoadTons, '吨') }}</strong></span
-            >
-          </div>
-        </div>
-      </template>
+      <template #vehicleType><ReuseVehicle /></template>
     </ArtForm>
   </div>
 </template>
@@ -103,6 +101,8 @@
   import ArtAsyncState from '@/components/core/feedback/art-async-state/index.vue'
   import { ElMessage, type FormRules } from 'element-plus'
   import { uniqBy } from 'lodash-es'
+  import { createReusableTemplate } from '@vueuse/core'
+  import { h, type Component } from 'vue'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
   import { fetchTmsVehicleTypeProfiles, type TmsVehicleTypeProfile } from '@tms/api'
@@ -110,12 +110,32 @@
   import VehicleTypeArt from '@/components/business/vehicle-type-profile-picker/vehicle-type-art.vue'
 
   const config = defineModel<Api.Tms.Order.OrderConfig>({ required: true })
-  const props = defineProps<{ canEditAttachments: boolean; resourceTenantId: string }>()
+  const props = defineProps<{
+    canEditAttachments: boolean
+    resourceTenantId: string
+    externalFields?: Component
+  }>()
+  const emit = defineEmits<{ schema: [items: FormItem[], rules: FormRules] }>()
+  const [DefineVehicle, ReuseVehicle] = createReusableTemplate()
   const settingsFormRef = ref<InstanceType<typeof ArtForm>>()
-  const attachmentUploadRef = ref<{ hasPendingUpload: () => boolean }>()
+  let hasPendingAttachmentUpload: (() => boolean) | undefined
+  const captureAttachmentControl = (instance: unknown): void => {
+    if (
+      instance &&
+      typeof instance === 'object' &&
+      'hasPendingUpload' in instance &&
+      typeof instance.hasPendingUpload === 'function'
+    ) {
+      const check = instance.hasPendingUpload
+      hasPendingAttachmentUpload = () => Boolean(check.call(instance))
+    } else {
+      hasPendingAttachmentUpload = undefined
+    }
+  }
   const vehicleProfiles = ref<TmsVehicleTypeProfile[]>([])
   const vehicleLoading = ref(false)
   const vehicleError = ref(false)
+  let profileRequest = 0
   const selectedVehicleCategory = ref(config.value.vehicleType)
   const vehicleCategories = computed(() =>
     uniqBy(vehicleProfiles.value, 'category').map((profile) => profile.category)
@@ -350,7 +370,7 @@
       span: 12,
       description: '支持图片、文档及压缩包，最多 6 个，单个不超过 2 MB',
       props: {
-        ref: attachmentUploadRef,
+        ref: captureAttachmentControl,
         title: '上传附件',
         multiple: true,
         limit: 6,
@@ -362,20 +382,57 @@
     }
   ])
 
+  const embeddedItems = computed<FormItem[]>(() =>
+    settingItems.value.map((item) => ({
+      ...item,
+      span: item.span ?? 6,
+      key: `orderConfig.${item.key}`,
+      ...(item.key === 'vehicleType' ? { render: () => h(ReuseVehicle) } : {})
+    }))
+  )
+  watchEffect(() => {
+    if (!props.externalFields) return
+    emit(
+      'schema',
+      embeddedItems.value,
+      Object.fromEntries(
+        Object.entries(combinedRules.value).map(([key, value]) => [`orderConfig.${key}`, value])
+      )
+    )
+  })
+
   async function loadProfiles(): Promise<void> {
-    if (vehicleLoading.value) return
+    const request = ++profileRequest
+    if (!props.resourceTenantId) {
+      vehicleProfiles.value = []
+      vehicleLoading.value = false
+      return
+    }
     vehicleLoading.value = true
     vehicleError.value = false
     try {
-      const result = await fetchTmsVehicleTypeProfiles()
+      const result = await fetchTmsVehicleTypeProfiles(props.resourceTenantId)
+      if (request !== profileRequest) return
       if (result.error) throw result.error
       vehicleProfiles.value = (result.data ?? []).sort((a, b) => a.sort - b.sort)
     } catch {
-      vehicleError.value = true
+      if (request === profileRequest) vehicleError.value = true
     } finally {
-      vehicleLoading.value = false
+      if (request === profileRequest) vehicleLoading.value = false
     }
   }
+
+  watch(
+    () => props.resourceTenantId,
+    () => {
+      profileRequest++
+      vehicleProfiles.value = []
+      if (config.value.loadType === 'ftl') void loadProfiles()
+    }
+  )
+  onBeforeUnmount(() => {
+    profileRequest++
+  })
 
   function selectVehicle(profile: TmsVehicleTypeProfile): void {
     Object.assign(config.value, {
@@ -484,7 +541,7 @@
   }
 
   async function validate(): Promise<boolean> {
-    if (attachmentUploadRef.value?.hasPendingUpload()) {
+    if (hasPendingAttachmentUpload?.()) {
       ElMessage.warning('请等待附件上传完成后再继续')
       return false
     }

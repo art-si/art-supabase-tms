@@ -6,6 +6,13 @@ export {
   editCarrier,
   exportCarrierList,
   fetchCarrierDetail,
+  fetchCarrierChildren,
+  fetchCarrierDefaultBillingAccount,
+  fetchCarrierBillingAccountsForDispatch,
+  fetchCarrierBillingAccountReferences,
+  fetchWaybillCarrierBillingSnapshot,
+  fetchCarrierWaybills,
+  fetchCarrierStatements,
   fetchCarrierList,
   fetchCarrierOptions,
   fetchCarrierParentOptions,
@@ -15,16 +22,24 @@ export {
   addDriverBlacklist,
   addElectronicContract,
   addServiceCase,
+  addServiceCaseReply,
   addTransportAgreement,
   copyElectronicContract,
   deleteTmsBasicRecords,
   editServiceCase,
   editTransportAgreement,
   fetchBasicRecordCarrierOptions,
+  fetchBlacklistDriverCandidates,
+  fetchDriverBlacklistDetail,
   fetchDriverBlacklistList,
+  releaseDriverBlacklist,
   fetchElectronicContractDetail,
   fetchElectronicContractList,
   fetchServiceCaseList,
+  fetchServiceCaseReplies,
+  fetchServiceCaseReplyDependencies,
+  fetchServiceCaseMentionOptions,
+  fetchServiceCaseWaybillOptions,
   fetchTransportAgreementList,
   terminateElectronicContract
 } from '@tms/api/modules/basic-records'
@@ -32,12 +47,17 @@ export type {
   BasicRecordCarrierOption,
   BlacklistInput,
   BlacklistSearch,
+  BlacklistDriverCandidate,
   DriverBlacklistRecord,
   ElectronicContractInput,
   ElectronicContractRecord,
   ElectronicContractSearch,
   ServiceCaseInput,
   ServiceCaseRecord,
+  ServiceCaseReply,
+  ServiceCaseReplyInput,
+  ServiceCaseMention,
+  ServiceCaseWaybillOption,
   ServiceCaseSearch,
   TransportAgreementInput,
   TransportAgreementRecord,
@@ -101,21 +121,34 @@ export type {
 export {
   addCustomer,
   addCustomerAddress,
+  addCustomerContact,
+  addCustomerFinance,
   addFavoriteRoute,
   cleanupCustomerDeleteSafeDependencies,
   deleteCustomer,
   deleteCustomerAddress,
   deleteCustomerAddressBatch,
+  deleteCustomerContact,
+  deleteCustomerContactBatch,
+  deleteCustomerFinance,
+  deleteCustomerFinanceBatch,
   deleteFavoriteRoute,
   deleteFavoriteRouteBatch,
   deleteCustomerBatch,
   editCustomer,
   editCustomerAddress,
+  editCustomerContact,
+  editCustomerFinance,
+  copyCustomerContact,
+  copyCustomerFinance,
   editFavoriteRoute,
   exportCustomerList,
   fetchCustomerAddressList,
   fetchCustomerAddressOptions,
   fetchCustomerDefaultAddress,
+  fetchCustomerContactList,
+  fetchCustomerFinanceList,
+  fetchCustomerDefaultFinance,
   fetchCustomerDeleteDependencyDetails,
   fetchCustomerDeleteDependencies,
   fetchCustomerDeleteSafeCleanupCandidates,
@@ -140,22 +173,36 @@ export {
   deleteCustomerPriceBatch,
   editCustomerPrice,
   exportCustomerPriceList,
+  fetchApplicableCustomerPrice,
   fetchCustomerPriceDetail,
   fetchCustomerPriceList
 } from '@tms/api/modules/customer-price'
+export type { ApplicableCustomerPriceParams } from '@tms/api/modules/customer-price'
+export {
+  fetchPriceContractOptions,
+  fetchPriceContractDetails
+} from '@tms/api/modules/price-contract'
+export type {
+  PriceContractOption,
+  PriceContractOptionParams
+} from '@tms/api/modules/price-contract'
 export {
   addCargo,
+  addCargoBatch,
   deleteCargo,
   deleteCargoBatch,
   editCargo,
   exportCargoList,
   fetchCargoList,
   fetchCargoMaterialOptions,
+  fetchCargoMaterialPage,
+  fetchCargoMaterialCategories,
   importCargoes
 } from '@tms/api/modules/cargo'
 export type { CargoMaterialOption } from '@tms/api/modules/cargo'
 export {
   addContract,
+  copyContract,
   deleteContract,
   deleteContractBatch,
   editContract,
@@ -166,7 +213,8 @@ export {
   fetchOrderContractCandidates,
   fetchOrderContractDetails,
   importContracts,
-  submitContractForApproval
+  submitContractForApproval,
+  terminateContract
 } from '@tms/api/modules/contract'
 export type { OrderContractCandidate } from '@tms/api/modules/contract'
 export {

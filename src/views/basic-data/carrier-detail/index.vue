@@ -176,7 +176,10 @@
   import CarrierRelationTable from './modules/carrier-relation-table.vue'
   import { navigateToApplication } from '@/utils/application-navigation'
   import { useUserStore } from '@/store/modules/user'
-  import { carrierSelections } from '@tms/views/basic-data/carrier/modules/carrier-selection'
+  import {
+    carrierSelections,
+    carrierSelectionLabels
+  } from '@tms/views/basic-data/carrier/modules/carrier-selection'
 
   defineOptions({ name: 'TmsCarrierDetail' })
 
@@ -236,17 +239,20 @@
       key: 'carrierType',
       label: '承运商类型',
       value: (carrier: Partial<Carrier>) =>
-        carrierSelections(carrier.carrierTypes, carrier.carrierType)
-          .map((value) => userStore.getDictLabelByValue('tmsCarrierType', value, value))
-          .join('、') || '—'
+        carrierSelectionLabels(
+          carrierSelections(carrier.carrierTypes, carrier.carrierType),
+          userStore.getDictMap.tmsCarrierType ?? [],
+          '原类型待核对'
+        )
     },
     {
       key: 'dispatchChannels',
       label: '调度渠道',
       value: (carrier: Partial<Carrier>) =>
-        carrierSelections(carrier.dispatchChannels, carrier.dispatchChannel)
-          .map((value) => userStore.getDictLabelByValue('tmsCarrierDispatchChannel', value, value))
-          .join('、') || '—'
+        carrierSelectionLabels(
+          carrierSelections(carrier.dispatchChannels, carrier.dispatchChannel),
+          userStore.getDictMap.tmsCarrierDispatchChannel ?? []
+        )
     },
     { key: 'businessLicenseNo', label: '营业执照号码', field: 'businessLicenseNo', copyable: true },
     ...(canViewCarrierField('taxNo')

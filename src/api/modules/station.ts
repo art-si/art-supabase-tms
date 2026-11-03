@@ -96,7 +96,7 @@ export async function fetchStationOptions(
         .select(
           stationSelect(
             withRoleFilter,
-            'id, station_code, station_name, station_type, region_code'
+            'id, station_code, station_name, station_type, region_code, region, address_detail, longitude, latitude'
           ),
           { count: 'exact' }
         )
@@ -174,19 +174,29 @@ export async function updateStationEnabled(id: string, enabled: boolean) {
 }
 
 export async function deleteStation(id: string) {
-  return await responseHandle(() => supabase.from('mdm_station').delete().eq('id', id), {
-    showMessage: true,
-    showErrorMessage: false,
-    breakReturn: true
-  })
+  return await responseHandle(
+    () => supabase.from('mdm_station').delete({ count: 'exact' }).eq('id', id),
+    {
+      showMessage: true,
+      showErrorMessage: false,
+      breakReturn: true,
+      requireAffected: true,
+      noAffectedMessage: '站点已不存在或当前账号无权删除，请刷新列表后重试。'
+    }
+  )
 }
 
 export async function deleteStationBatch(ids: string[]) {
-  return await responseHandle(() => supabase.from('mdm_station').delete().in('id', ids), {
-    showMessage: true,
-    showErrorMessage: false,
-    breakReturn: true
-  })
+  return await responseHandle(
+    () => supabase.from('mdm_station').delete({ count: 'exact' }).in('id', ids),
+    {
+      showMessage: true,
+      showErrorMessage: false,
+      breakReturn: true,
+      requireAffected: true,
+      noAffectedMessage: '部分站点未删除，请刷新列表核对权限、关联和状态后重试。'
+    }
+  )
 }
 
 export async function importStations(rows: StationSavePayload[]) {

@@ -8,194 +8,200 @@
   >
     <ArtPageHeader
       class="carrier-price-edit__header"
-      :title="isEdit ? '编辑承运商价' : '新增承运商价'"
+      :title="isEdit ? '编辑承运商协议价' : '新增承运商协议价'"
       subtitle="先维护运输路线和承运主体，再完善车辆司机、货物成本与付款方式"
       show-back
       @back="goBack"
     />
 
-    <div ref="pageRef" class="carrier-price-edit__content">
-      <ArtSectionCard
-        class="carrier-price-edit__section"
-        preserve-content-structure
-        title="路线与运输条件"
-      >
-        <ol class="carrier-price-edit__workflow" aria-label="承运商价格维护步骤">
-          <li
-            v-for="(step, index) in workflowSteps"
-            :key="step.key"
-            class="carrier-price-edit__workflow-step"
-            :class="{ 'is-complete': step.complete, 'is-active': step.active }"
-            :aria-current="step.active ? 'step' : undefined"
+    <ArtForm
+      ref="baseFormRef"
+      v-model="form.data"
+      :items="allFormItems"
+      :rules="allFormRules"
+      :span="12"
+      :gutter="24"
+      label-position="top"
+      root-class="p-0!"
+    >
+      <template #layout="{ fields }">
+        <div ref="pageRef" class="carrier-price-edit__content">
+          <ArtSectionCard
+            class="carrier-price-edit__section"
+            preserve-content-structure
+            title="路线与运输条件"
           >
-            <span class="carrier-price-edit__workflow-index" aria-hidden="true">
-              <ElIcon v-if="step.complete"><Check /></ElIcon>
-              <template v-else>{{ index + 1 }}</template>
-            </span>
-            <span class="carrier-price-edit__workflow-copy">
-              <strong>{{ step.label }}</strong>
-              <small>{{ step.description }}</small>
-            </span>
-            <span class="carrier-price-edit__workflow-status">
-              {{ step.complete ? '已完成' : step.active ? '当前步骤' : '待处理' }}
-            </span>
-          </li>
-        </ol>
-
-        <ArtForm
-          ref="baseFormRef"
-          v-model="form.data"
-          :items="form.baseItems"
-          :rules="form.rules"
-          :span="12"
-          :gutter="24"
-          label-width="98px"
-          root-class="carrier-price-edit__form"
-        />
-
-        <div
-          class="carrier-price-edit__route-preview"
-          :class="{ 'is-ready': routeReady }"
-          aria-label="当前承运路线"
-        >
-          <div class="carrier-price-edit__route-point">
-            <span>始发地</span>
-            <strong>{{ getRegionText('origin') || '待选择' }}</strong>
-          </div>
-          <span class="carrier-price-edit__route-arrow" aria-hidden="true">→</span>
-          <div class="carrier-price-edit__route-point">
-            <span>目的地</span>
-            <strong>{{ getRegionText('destination') || '待选择' }}</strong>
-          </div>
-          <ElTag :type="routeReady ? 'success' : 'info'" effect="plain" size="small">
-            {{ getTransportModeText() || '待选择运输方式' }}
-          </ElTag>
-        </div>
-      </ArtSectionCard>
-
-      <ArtSectionCard
-        class="carrier-price-edit__section"
-        preserve-content-structure
-        title="承运商与运力"
-      >
-        <div class="carrier-price-edit__carrier-grid">
-          <div class="carrier-price-edit__carrier-panel">
-            <div class="carrier-price-edit__panel-heading">
-              <span class="carrier-price-edit__panel-icon" aria-hidden="true">承</span>
-              <div class="carrier-price-edit__panel-copy">
-                <strong>承运主体</strong>
-                <span>选择后自动带入联系人和联系电话</span>
-              </div>
-              <ElTag :type="form.data.carrierId ? 'success' : 'info'" effect="plain" size="small">
-                {{ form.data.carrierId ? '已选择' : '待选择' }}
-              </ElTag>
-            </div>
-
-            <ArtForm
-              ref="carrierFormRef"
-              v-model="form.data"
-              :items="form.carrierItems"
-              :rules="form.rules"
-              :span="24"
-              label-position="top"
-              root-class="carrier-price-edit__form"
-            />
-          </div>
-
-          <div class="carrier-price-edit__carrier-panel">
-            <div class="carrier-price-edit__panel-heading">
-              <span
-                class="carrier-price-edit__panel-icon carrier-price-edit__panel-icon--capacity"
-                aria-hidden="true"
+            <ol class="carrier-price-edit__workflow" aria-label="承运商协议价步骤">
+              <li
+                v-for="(step, index) in workflowSteps"
+                :key="step.key"
+                class="carrier-price-edit__workflow-step"
+                :class="{ 'is-complete': step.complete, 'is-active': step.active }"
+                :aria-current="step.active ? 'step' : undefined"
               >
-                运
-              </span>
-              <div class="carrier-price-edit__panel-copy">
-                <strong>司机与车辆</strong>
-                <span>先选承运商，再选择其名下司机和车辆</span>
+                <span class="carrier-price-edit__workflow-index" aria-hidden="true">
+                  <ElIcon v-if="step.complete"><Check /></ElIcon>
+                  <template v-else>{{ index + 1 }}</template>
+                </span>
+                <span class="carrier-price-edit__workflow-copy">
+                  <strong>{{ step.label }}</strong>
+                  <small>{{ step.description }}</small>
+                </span>
+                <span class="carrier-price-edit__workflow-status">
+                  {{ step.complete ? '已完成' : step.active ? '当前步骤' : '待处理' }}
+                </span>
+              </li>
+            </ol>
+
+            <component :is="fields" :items="form.baseItems" :actions="false" />
+            <component :is="fields" :items="agreementItems" :actions="false" />
+            <ElButton :loading="distanceLoading" text type="primary" @click="calculateDistance"
+              >重新计算公里数</ElButton
+            >
+            <component :is="fields" :items="carrierAddressItems" :actions="false" />
+
+            <div
+              class="carrier-price-edit__route-preview"
+              :class="{ 'is-ready': routeReady }"
+              aria-label="当前承运路线"
+            >
+              <div class="carrier-price-edit__route-point">
+                <span>始发地</span>
+                <strong>{{ getRegionText('origin') || '待选择' }}</strong>
               </div>
-              <ElTag :type="capacityReady ? 'success' : 'info'" effect="plain" size="small">
-                {{ capacityReady ? '已配置' : '选填' }}
+              <span class="carrier-price-edit__route-arrow" aria-hidden="true">→</span>
+              <div class="carrier-price-edit__route-point">
+                <span>目的地</span>
+                <strong>{{ getRegionText('destination') || '待选择' }}</strong>
+              </div>
+              <ElTag :type="routeReady ? 'success' : 'info'" effect="plain" size="small">
+                {{ getTransportModeText() || '待选择运输方式' }}
               </ElTag>
             </div>
+          </ArtSectionCard>
 
-            <ArtForm
-              ref="capacityFormRef"
-              v-model="form.data"
-              :items="form.capacityItems"
-              :rules="form.rules"
-              :span="12"
-              :gutter="16"
-              label-position="top"
-              root-class="carrier-price-edit__form"
+          <ArtSectionCard
+            class="carrier-price-edit__section"
+            preserve-content-structure
+            title="承运商与运力"
+          >
+            <div class="carrier-price-edit__carrier-grid">
+              <div class="carrier-price-edit__carrier-panel">
+                <div class="carrier-price-edit__panel-heading">
+                  <span class="carrier-price-edit__panel-icon" aria-hidden="true">承</span>
+                  <div class="carrier-price-edit__panel-copy">
+                    <strong>承运主体</strong>
+                    <span>选择后自动带入联系人和联系电话</span>
+                  </div>
+                  <ElTag
+                    :type="form.data.carrierId ? 'success' : 'info'"
+                    effect="plain"
+                    size="small"
+                  >
+                    {{ form.data.carrierId ? '已选择' : '待选择' }}
+                  </ElTag>
+                </div>
+
+                <component :is="fields" :items="form.carrierItems" :actions="false" />
+              </div>
+
+              <div class="carrier-price-edit__carrier-panel">
+                <div class="carrier-price-edit__panel-heading">
+                  <span
+                    class="carrier-price-edit__panel-icon carrier-price-edit__panel-icon--capacity"
+                    aria-hidden="true"
+                  >
+                    运
+                  </span>
+                  <div class="carrier-price-edit__panel-copy">
+                    <strong>司机与车辆</strong>
+                    <span>先选承运商，再选择其名下司机和车辆</span>
+                  </div>
+                  <ElTag :type="capacityReady ? 'success' : 'info'" effect="plain" size="small">
+                    {{ capacityReady ? '已配置' : '选填' }}
+                  </ElTag>
+                </div>
+
+                <component :is="fields" :items="form.capacityItems" :actions="false" />
+              </div>
+            </div>
+          </ArtSectionCard>
+
+          <ArtSectionCard
+            class="carrier-price-edit__section"
+            title="配置信息"
+            subtitle="与开单共用零担、整车、计费和交接规则。"
+            preserve-content-structure
+            ><OrderConfig
+              ref="configRef"
+              v-model="form.data.orderConfig"
+              :external-fields="fields"
+              :can-edit-attachments="true"
+              :resource-tenant-id="resourceTenantId"
+              @schema="handleConfigSchema"
+          /></ArtSectionCard>
+          <ArtSectionCard title="货物信息" preserve-content-structure>
+            <AgreementCargoEditor
+              v-model="form.data.cargoItems"
+              kind="carrier"
+              :contract-id="form.data.contractId"
+              :tenant-id="resourceTenantId"
+              :editable="canEditSensitiveField('costAmounts')"
+              carrier-costs
+              :pricing-visible="canViewSensitiveField('costAmounts')"
+              :pricing-editable="canEditSensitiveField('costAmounts')"
+              @freight="form.data.transportCost = $event"
             />
-          </div>
+            <div v-if="canViewSensitiveField('costAmounts')">
+              <div class="carrier-price-edit__cost-header">
+                <div>
+                  <ArtSectionTitle :show-line="false">成本与计费</ArtSectionTitle>
+                  <p>货物明细中的分摊运费、装卸费和包装费会自动汇总。</p>
+                </div>
+                <div class="carrier-price-edit__cost-total">
+                  <span>预计总成本</span>
+                  <strong>¥ {{ form.feeTotalText }}</strong>
+                </div>
+              </div>
+              <component :is="fields" :items="form.feeItems" :actions="false" />
+            </div>
+          </ArtSectionCard>
+
+          <ArtSectionCard
+            v-if="canViewSensitiveField('paymentAmounts')"
+            class="carrier-price-edit__section"
+            preserve-content-structure
+          >
+            <template #header
+              ><div class="carrier-price-edit__payment-header">
+                <ArtSectionTitle :show-line="false">付款方式</ArtSectionTitle>
+                <span>支持拆分多种付款方式，付款合计会自动计算。</span>
+              </div></template
+            >
+            <component :is="fields" :items="form.paymentItems" :actions="false" />
+          </ArtSectionCard>
         </div>
-      </ArtSectionCard>
+      </template>
 
-      <PriceCargoSection
-        :quantity-text="form.cargoQuantityText"
-        :volume-text="form.cargoVolumeText"
-        :weight-text="form.cargoWeightText"
-        :editable="canEditSensitiveField('costAmounts')"
-        @select-cargo="openCargoSelector"
-        @add-cargo="addCargoItem"
-      >
-        <ArtTable
-          :data="form.cargoItems"
-          :columns="form.cargoColumns"
-          :pagination="undefined"
-          :show-table-header="false"
-          table-layout="fixed"
-          empty-height="160px"
-        />
-        <template v-if="canViewSensitiveField('costAmounts')" #after>
-          <div class="carrier-price-edit__cost-header">
-            <div>
-              <ArtSectionTitle :show-line="false">成本与计费</ArtSectionTitle>
-              <p>货物明细中的分摊运费、装卸费和包装费会自动汇总。</p>
-            </div>
-            <div class="carrier-price-edit__cost-total">
-              <span>预计总成本</span>
-              <strong>¥ {{ form.feeTotalText }}</strong>
-            </div>
-          </div>
-          <ArtForm
-            ref="feeFormRef"
-            v-model="form.data"
-            :items="form.feeItems"
-            :rules="form.rules"
-            :span="8"
-            :gutter="24"
-            label-width="98px"
-            root-class="carrier-price-edit__form carrier-price-edit__fee-form"
-          />
-        </template>
-      </PriceCargoSection>
-
-      <ArtSectionCard
-        v-if="canViewSensitiveField('paymentAmounts')"
-        class="carrier-price-edit__section"
-        preserve-content-structure
-      >
-        <template #header
-          ><div class="carrier-price-edit__payment-header">
-            <ArtSectionTitle :show-line="false">付款方式</ArtSectionTitle>
-            <span>支持拆分多种付款方式，付款合计会自动计算。</span>
-          </div></template
-        >
-        <ArtForm
-          ref="paymentFormRef"
-          v-model="form.data"
-          :items="form.paymentItems"
-          :rules="form.rules"
-          :span="8"
-          :gutter="24"
-          label-width="98px"
-          root-class="carrier-price-edit__form"
-        />
-      </ArtSectionCard>
-    </div>
+      <template #shippingAddressPicker
+        ><ArtAddressPicker
+          v-model:region-path="form.data.originRegionPath"
+          :address-detail="form.data.shippingAddressDetail || ''"
+          @update:address-detail="form.data.shippingAddressDetail = $event"
+          v-model:longitude="form.data.shippingLongitude"
+          v-model:latitude="form.data.shippingLatitude"
+          :disabled="!canEditSensitiveField('addressDetails')"
+      /></template>
+      <template #receivingAddressPicker
+        ><ArtAddressPicker
+          v-model:region-path="form.data.destinationRegionPath"
+          :address-detail="form.data.receivingAddressDetail || ''"
+          @update:address-detail="form.data.receivingAddressDetail = $event"
+          v-model:longitude="form.data.receivingLongitude"
+          v-model:latitude="form.data.receivingLatitude"
+          :disabled="!canEditSensitiveField('addressDetails')"
+      /></template>
+    </ArtForm>
 
     <ArtStickyActionBar
       class="carrier-price-edit__footer"
@@ -208,27 +214,32 @@
         :loading="page.saving"
         @click="handleSave"
       >
-        保存承运商价
+        保存承运商协议价
       </ElButton>
     </ArtStickyActionBar>
-
-    <CargoMultipleSelect ref="cargoSelectorRef" @confirm="handleCargoSelectorConfirm" />
   </ArtPageShell>
 </template>
 
 <script setup lang="tsx">
+  import { normalizeAgreementOrderConfig } from '../modules/agreement-order-config'
+
+  import OrderConfig from '../../order-open/modules/order-config.vue'
+  import AgreementCargoEditor from '../modules/agreement-cargo-editor.vue'
+  import { useAgreementPriceTerms } from '../modules/use-agreement-price-terms'
+  import ArtAddressPicker from '@/components/core/forms/art-address-picker/index.vue'
+
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import { cloneDeep } from 'lodash-es'
   import type { FormRules } from 'element-plus'
-  import { ElButton, ElIcon, ElInput, ElInputNumber, ElOption, ElSelect, ElTag } from 'element-plus'
+  import { ElButton, ElIcon, ElTag } from 'element-plus'
   import { Check } from '@element-plus/icons-vue'
-  import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
+
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
-  import ArtTable from '@/components/core/tables/art-table/index.vue'
+
   import { useDocumentNumberRule } from '@/hooks/core/useDocumentNumberRule'
-  import type { ColumnOption } from '@/types'
+
   import { formatNameCodeOption } from '@/utils/form'
   import { fetchRegionOptions } from '@/api/region-options'
   import {
@@ -243,19 +254,16 @@
   import { useUserStore } from '@/store/modules/user'
   import { clearFormRefsValidation, validateFormRefs } from '@/utils/form/validation'
   import { formatCompactNumberValue } from '@/utils/ui/format'
-  import CargoMultipleSelect from '../../modules/cargo-multiple-select.vue'
-  import PriceCargoSection from '../modules/price-cargo-section.vue'
+
   import {
     calculateCargoSummary,
     getResponseData,
-    mergeCargoSelections,
     roundNumber,
     splitRegionPath,
     toNumber,
     type CargoSummary
   } from '../modules/price-form-utils'
   import {
-    createCarrierPriceCargoItemFromMaster,
     createEmptyCarrierPriceFeeSummary,
     createInitialCarrierPriceCargoItem,
     createInitialCarrierPriceForm,
@@ -275,7 +283,6 @@
   defineOptions({ name: 'TmsCarrierPriceEdit' })
 
   type CarrierPriceFieldKey = Api.Tms.BasicData.CarrierPriceFieldKey
-  type CargoMaster = Api.Tms.BasicData.Cargo
   type CarrierOption = Api.Tms.BasicData.CarrierOption
   type DriverOption = Api.Tms.BasicData.DriverOption
   type VehicleOption = TmsVehicleOption
@@ -285,10 +292,6 @@
     validate: () => Promise<boolean>
     clearValidate: () => void
     reloadOptions: (key?: string) => Promise<unknown>
-  }
-
-  interface CargoSelectorExpose {
-    open: () => Promise<void>
   }
 
   interface PageState {
@@ -313,7 +316,6 @@
     feeItems: ComputedRef<FormItem[]>
     paymentItems: ComputedRef<FormItem[]>
     rules: ComputedRef<FormRules<CarrierPriceForm>>
-    cargoColumns: ComputedRef<ColumnOption<CarrierPriceCargoItem>[]>
     cargoItems: ComputedRef<CarrierPriceCargoItem[]>
     cargoSummary: ComputedRef<CargoSummary>
     feeSummary: ComputedRef<CarrierPriceFeeSummary>
@@ -337,18 +339,7 @@
   const userStore = useUserStore()
   const { getDictMap } = storeToRefs(userStore)
   const baseFormRef = ref<FormExpose>()
-  const carrierFormRef = ref<FormExpose>()
-  const capacityFormRef = ref<FormExpose>()
-  const feeFormRef = ref<FormExpose>()
-  const paymentFormRef = ref<FormExpose>()
-  const cargoSelectorRef = ref<CargoSelectorExpose>()
-  const validatedFormRefs = [
-    baseFormRef,
-    carrierFormRef,
-    capacityFormRef,
-    feeFormRef,
-    paymentFormRef
-  ]
+  const validatedFormRefs = [baseFormRef]
   const quoteNumber = useDocumentNumberRule('tms.carrier_price')
 
   const isEdit = computed(() => Boolean(route.params.id))
@@ -388,7 +379,9 @@
     return {
       label,
       key: String(key),
+      span: 8,
       type: editable ? 'number' : 'input',
+      hidden: !canViewSensitiveField(field),
       props: editable ? moneyProps : { disabled: true, class: '!w-full' }
     }
   }
@@ -482,6 +475,7 @@
         span: 24,
         description: '更换承运商会清空已选司机和车辆，请重新确认运力。',
         api: fetchCarrierOptions,
+        beforeFetch: (params) => ({ ...params, tenantId: resourceTenantId.value }),
         resultField: 'data',
         labelField: 'companyName',
         valueField: 'id',
@@ -533,8 +527,7 @@
           disabled: !form.data.carrierId || !canEditSensitiveField('contactPhones'),
           placeholder: form.data.carrierId ? '请选择司机' : '请先选择承运商',
           onVisibleChange: (visible: boolean) => {
-            if (visible && form.data.carrierId)
-              void capacityFormRef.value?.reloadOptions('driverId')
+            if (visible && form.data.carrierId) void baseFormRef.value?.reloadOptions('driverId')
           },
           onChange: handleDriverChange
         }
@@ -568,38 +561,13 @@
           disabled: !form.data.carrierId,
           placeholder: form.data.carrierId ? '请选择车辆' : '请先选择承运商',
           onVisibleChange: (visible: boolean) => {
-            if (visible && form.data.carrierId)
-              void capacityFormRef.value?.reloadOptions('vehicleId')
+            if (visible && form.data.carrierId) void baseFormRef.value?.reloadOptions('vehicleId')
           },
           onChange: handleVehicleChange
         }
-      },
-      {
-        label: '车型',
-        key: 'vehicleType',
-        type: 'select',
-        span: 12,
-        props: { options: form.vehicleTypeOptions, clearable: true, placeholder: '请选择车型' }
-      },
-      {
-        label: '车长',
-        key: 'vehicleLength',
-        type: 'select',
-        span: 12,
-        props: { options: form.vehicleLengthOptions, clearable: true, placeholder: '请选择车长' }
       }
     ]),
     feeItems: computed<FormItem[]>(() => [
-      {
-        label: '计费方式',
-        key: 'billingMethod',
-        type: 'select',
-        props: {
-          options: form.billingMethodOptions,
-          clearable: true,
-          placeholder: '请选择计费方式'
-        }
-      },
       createSensitiveMoneyItem('运费成本', 'transportCost', 'costAmounts'),
       createSensitiveMoneyItem('其他费用', 'otherFee', 'costAmounts'),
       createSensitiveMoneyItem('分摊运费', 'splitTransportFee', 'costAmounts', true),
@@ -636,7 +604,6 @@
             carrierId: [{ required: true, message: '请选择承运商名称', trigger: 'change' }]
           }
         : {}),
-      billingMethod: [{ required: true, message: '请选择计费方式', trigger: 'change' }],
       ...(canEditSensitiveField('costAmounts')
         ? {
             transportCost: [{ required: true, message: '请输入运费成本', trigger: 'blur' }],
@@ -644,152 +611,6 @@
           }
         : {})
     })),
-    cargoColumns: computed<ColumnOption<CarrierPriceCargoItem>[]>(() =>
-      canEditSensitiveField('costAmounts')
-        ? [
-            { type: 'globalIndex', label: '序号', width: 70 },
-            {
-              prop: 'orderNo',
-              label: '订单编号',
-              width: 130,
-              formatter: (row) => <ElInput v-model={row.orderNo} maxlength={40} />
-            },
-            {
-              prop: 'originRegion',
-              label: '始发地',
-              minWidth: 170,
-              formatter: (row) => <ElInput v-model={row.originRegion} maxlength={120} />
-            },
-            {
-              prop: 'destinationRegion',
-              label: '目的地',
-              minWidth: 170,
-              formatter: (row) => <ElInput v-model={row.destinationRegion} maxlength={120} />
-            },
-            {
-              prop: 'cargoName',
-              label: '货物名称',
-              minWidth: 160,
-              formatter: (row) => <ElInput v-model={row.cargoName} maxlength={80} />
-            },
-            {
-              prop: 'quantity',
-              label: '数量',
-              width: 120,
-              formatter: (row) => (
-                <ElInputNumber
-                  v-model={row.quantity}
-                  min={0}
-                  precision={2}
-                  controls={false}
-                  class="w-full!"
-                />
-              )
-            },
-            {
-              prop: 'unit',
-              label: '单位',
-              width: 120,
-              formatter: (row) => (
-                <ElSelect
-                  v-model={row.unit}
-                  class="w-full!"
-                  clearable
-                  filterable
-                  placeholder="请选择"
-                >
-                  {form.cargoUnitOptions.map((item) => (
-                    <ElOption
-                      key={item.value}
-                      label={item.label || item.value}
-                      value={item.value}
-                    />
-                  ))}
-                </ElSelect>
-              )
-            },
-            {
-              prop: 'volumeM3',
-              label: '体积（m³）',
-              width: 130,
-              formatter: (row) => (
-                <ElInputNumber
-                  v-model={row.volumeM3}
-                  min={0}
-                  precision={3}
-                  controls={false}
-                  class="w-full!"
-                />
-              )
-            },
-            {
-              prop: 'weightKg',
-              label: '重量（kg）',
-              width: 130,
-              formatter: (row) => (
-                <ElInputNumber
-                  v-model={row.weightKg}
-                  min={0}
-                  precision={2}
-                  controls={false}
-                  class="w-full!"
-                />
-              )
-            },
-            {
-              prop: 'splitTransportFee',
-              label: '分摊运费（元）',
-              width: 140,
-              formatter: (row) => (
-                <ElInputNumber
-                  v-model={row.splitTransportFee}
-                  min={0}
-                  precision={2}
-                  controls={false}
-                  class="w-full!"
-                />
-              )
-            },
-            {
-              prop: 'loadingFee',
-              label: '装卸费（元）',
-              width: 130,
-              formatter: (row) => (
-                <ElInputNumber
-                  v-model={row.loadingFee}
-                  min={0}
-                  precision={2}
-                  controls={false}
-                  class="w-full!"
-                />
-              )
-            },
-            {
-              prop: 'packageFee',
-              label: '包装费（元）',
-              width: 130,
-              formatter: (row) => (
-                <ElInputNumber
-                  v-model={row.packageFee}
-                  min={0}
-                  precision={2}
-                  controls={false}
-                  class="w-full!"
-                />
-              )
-            },
-            {
-              prop: 'operation',
-              label: '操作',
-              width: 100,
-              fixed: 'right',
-              formatter: (row) => (
-                <ArtButtonTable type="delete" onClick={() => removeCargoItem(row)} />
-              )
-            }
-          ]
-        : createReadonlyCargoColumns()
-    ),
     cargoItems: computed(() => form.data.cargoItems ?? []),
     cargoSummary: computed(() => calculateCargoSummary(form.data.cargoItems ?? [])),
     feeSummary: computed(() => {
@@ -830,63 +651,53 @@
     )
   })
 
-  function createReadonlyCargoColumns(): ColumnOption<CarrierPriceCargoItem>[] {
-    const columns: ColumnOption<CarrierPriceCargoItem>[] = [
-      { type: 'globalIndex', label: '序号', width: 70 },
-      { prop: 'orderNo', label: '订单编号', width: 130 },
-      { prop: 'originRegion', label: '始发地', minWidth: 170 },
-      { prop: 'destinationRegion', label: '目的地', minWidth: 170 },
-      { prop: 'cargoName', label: '货物名称', minWidth: 160 },
-      {
-        prop: 'quantity',
-        label: '数量',
-        width: 110,
-        align: 'right',
-        formatter: (row) => formatCompactNumberValue(row.quantity, 2)
-      },
-      { prop: 'unit', label: '单位', width: 100, dict: { code: 'tmsCargoUnit', display: 'text' } },
-      {
-        prop: 'volumeM3',
-        label: '体积（m³）',
-        width: 130,
-        align: 'right',
-        formatter: (row) => formatCompactNumberValue(row.volumeM3, 3)
-      },
-      {
-        prop: 'weightKg',
-        label: '重量（kg）',
-        width: 130,
-        align: 'right',
-        formatter: (row) => formatCompactNumberValue(row.weightKg, 2)
-      }
-    ]
-    if (!canViewSensitiveField('costAmounts')) return columns
-    return [
-      ...columns,
-      {
-        prop: 'splitTransportFee',
-        label: '分摊运费（元）',
-        width: 140,
-        align: 'right',
-        formatter: (row) => formatSensitiveNumber(row.splitTransportFee)
-      },
-      {
-        prop: 'loadingFee',
-        label: '装卸费（元）',
-        width: 130,
-        align: 'right',
-        formatter: (row) => formatSensitiveNumber(row.loadingFee)
-      },
-      {
-        prop: 'packageFee',
-        label: '包装费（元）',
-        width: 130,
-        align: 'right',
-        formatter: (row) => formatSensitiveNumber(row.packageFee)
-      }
-    ]
-  }
-
+  const configRef = ref<{ validate: () => Promise<boolean> }>()
+  const {
+    agreementItems,
+    agreementRules,
+    configItems,
+    configRules,
+    handleConfigSchema,
+    resourceTenantId,
+    calculateDistance,
+    distanceLoading
+  } = useAgreementPriceTerms(
+    'carrier',
+    computed(() => form.data),
+    computed(() => page.loading),
+    () => canEditSensitiveField('addressDetails')
+  )
+  const carrierAddressItems = computed<FormItem[]>(() => [
+    {
+      key: 'shippingAddressPicker',
+      label: '发货地址',
+      type: 'addressPicker',
+      span: 12,
+      hidden: !canViewSensitiveField('addressDetails')
+    },
+    {
+      key: 'receivingAddressPicker',
+      label: '收货地址',
+      type: 'addressPicker',
+      span: 12,
+      hidden: !canViewSensitiveField('addressDetails')
+    }
+  ])
+  const allFormItems = computed<FormItem[]>(() => [
+    ...form.baseItems,
+    ...form.carrierItems,
+    ...form.capacityItems,
+    ...form.feeItems,
+    ...form.paymentItems,
+    ...agreementItems.value,
+    ...configItems.value,
+    ...carrierAddressItems.value
+  ])
+  const allFormRules = computed(() => ({
+    ...form.rules,
+    ...agreementRules.value,
+    ...configRules.value
+  }))
   const routeReady = computed(
     () =>
       Boolean(form.data.originRegionPath.length) &&
@@ -894,14 +705,14 @@
       Boolean(form.data.transportMode)
   )
   const capacityReady = computed(() =>
-    Boolean(
-      form.data.driverId || form.data.vehicleId || form.data.vehicleType || form.data.vehicleLength
-    )
+    Boolean(form.data.driverId || form.data.vehicleId || form.data.orderConfig.vehicleType)
   )
   const workflowSteps = computed<WorkflowStep[]>(() => {
     const hasCargoCost =
       !canEditSensitiveField('costAmounts') ||
-      Boolean(form.data.cargoItems?.some((item) => item.cargoName) && form.data.billingMethod)
+      Boolean(
+        form.data.cargoItems?.some((item) => item.cargoName) && form.data.orderConfig.billingMode
+      )
     const steps = [
       {
         key: 'route',
@@ -967,21 +778,28 @@
     void initializePage()
   })
 
+  let pageRevision = 0
+  onBeforeUnmount(() => {
+    pageRevision++
+  })
   async function initializePage(): Promise<void> {
+    const revision = ++pageRevision
     page.loading = true
     page.error = null
     try {
       await Promise.all([
-        loadDetail(),
+        loadDetail(revision),
         quoteNumber.loadRule(),
         ...dictCodes.map((code) => userStore.ensureDictLoaded(code))
       ])
       await nextTick()
+      if (revision !== pageRevision) return
       clearFormRefsValidation(validatedFormRefs)
     } catch (error) {
-      page.error = error instanceof Error ? error : new Error('承运商价信息加载失败')
+      if (revision !== pageRevision) return
+      page.error = error instanceof Error ? error : new Error('承运商协议价信息加载失败')
     } finally {
-      page.loading = false
+      if (revision === pageRevision) page.loading = false
     }
   }
 
@@ -1026,7 +844,7 @@
     }
   )
 
-  async function loadDetail(): Promise<void> {
+  async function loadDetail(revision: number): Promise<void> {
     if (!isEdit.value) {
       replaceForm(createInitialCarrierPriceForm())
       form.driverOptions = []
@@ -1036,11 +854,13 @@
 
     const id = String(route.params.id || '')
     const { data } = await fetchCarrierPriceDetail(id)
-    if (!data) throw new Error('承运商价不存在或无权访问')
+    if (revision !== pageRevision) return
+    if (!data) throw new Error('承运商协议价不存在或无权访问')
 
     replaceForm({
       ...createInitialCarrierPriceForm(),
       ...data,
+      orderConfig: normalizeAgreementOrderConfig(data),
       originRegionPath: splitRegionPath(data.originRegion),
       destinationRegionPath: splitRegionPath(data.destinationRegion),
       cargoItems: data.cargoItems?.length ? data.cargoItems : [createInitialCarrierPriceCargoItem()]
@@ -1049,7 +869,9 @@
   }
 
   function replaceForm(nextForm: CarrierPriceForm): void {
-    Object.assign(form.data, createInitialCarrierPriceForm(), cloneDeep(nextForm))
+    Object.assign(form.data, createInitialCarrierPriceForm(), cloneDeep(nextForm), {
+      orderConfig: normalizeAgreementOrderConfig(nextForm)
+    })
   }
 
   function syncCarrierOptions(result: unknown): unknown {
@@ -1097,8 +919,8 @@
       plateNo: ''
     })
     void nextTick(() => {
-      void capacityFormRef.value?.reloadOptions('driverId')
-      void capacityFormRef.value?.reloadOptions('vehicleId')
+      void baseFormRef.value?.reloadOptions('driverId')
+      void baseFormRef.value?.reloadOptions('vehicleId')
     })
   }
 
@@ -1119,44 +941,12 @@
     })
   }
 
-  function addCargoItem(): void {
-    if (!canEditSensitiveField('costAmounts')) return
-    form.data.cargoItems = [...(form.data.cargoItems ?? []), createInitialCarrierPriceCargoItem()]
-  }
-
-  async function openCargoSelector(): Promise<void> {
-    if (!canEditSensitiveField('costAmounts')) return
-    await cargoSelectorRef.value?.open()
-  }
-
-  function handleCargoSelectorConfirm(selectedCargoes: CargoMaster[]): void {
-    if (!canEditSensitiveField('costAmounts')) return
-    const currentItems = form.data.cargoItems ?? []
-    const result = mergeCargoSelections(
-      currentItems,
-      selectedCargoes,
-      createCarrierPriceCargoItemFromMaster
-    )
-    if (!result.addedCount) return
-
-    form.data.cargoItems = result.items
-  }
-
-  function removeCargoItem(row: CarrierPriceCargoItem): void {
-    if (!canEditSensitiveField('costAmounts')) return
-    const rows = form.data.cargoItems ?? []
-    if (rows.length <= 1) {
-      form.data.cargoItems = [createInitialCarrierPriceCargoItem()]
-      return
-    }
-    form.data.cargoItems = rows.filter((item) => item !== row)
-  }
-
   function normalizePayload(): CarrierPrice {
     return normalizeCarrierPricePayload(toRaw(form.data), {
       cargoSummary: form.cargoSummary,
       feeSummary: form.feeSummary,
       editableFields: {
+        addressDetails: canEditSensitiveField('addressDetails'),
         contactPhones: canEditSensitiveField('contactPhones'),
         costAmounts: canEditSensitiveField('costAmounts'),
         paymentAmounts: canEditSensitiveField('paymentAmounts')
@@ -1165,15 +955,19 @@
   }
 
   async function handleSave(): Promise<void> {
+    if (page.saving || page.loading) return
+    const revision = pageRevision
     const valid = await validateFormRefs(validatedFormRefs, pageRef)
+    if (!(await configRef.value?.validate())) return
     if (!valid) return
+    if (revision !== pageRevision) return
 
     page.saving = true
     try {
       const payload = normalizePayload()
       if (form.data.id) await editCarrierPrice(payload)
       else await addCarrierPrice(payload)
-      goBack()
+      if (revision === pageRevision) goBack()
     } catch {
       // API 层已经展示错误信息，当前页保持编辑状态。
     } finally {

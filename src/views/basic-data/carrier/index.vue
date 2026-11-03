@@ -67,9 +67,10 @@
   import CarrierDialog from './modules/carrier-dialog.vue'
   import {
     carrierSelections,
+    carrierSelectionLabels,
     parseCarrierSelections
   } from '@tms/views/basic-data/carrier/modules/carrier-selection'
-  import { toDictionaryOption } from '@/utils/form/option'
+  import { getDictionaryDisplayLabel, toDictionaryOption } from '@/utils/form/option'
   import MasterDataDeleteGuard, {
     type MasterDataDeleteGuardOpenOptions
   } from '@/components/business/master-data-delete-guard/index.vue'
@@ -94,7 +95,8 @@
 
   const router = useRouter()
   const route = useRoute()
-  const { getDictMap } = storeToRefs(useUserStore())
+  const userStore = useUserStore()
+  const { getDictMap } = storeToRefs(userStore)
   const tableQueryRef = ref<ArtTableQueryExpose>()
   const dialogRef = ref<CarrierDialogExpose>()
   const deleteGuardRef = ref<MasterDataDeleteGuardExpose>()
@@ -133,15 +135,52 @@
   ]
 
   const visibleCarrierExportColumns = computed(() =>
-    carrierImportColumns.filter((column) => {
-      if (column.key === 'addressDetail') {
-        return canViewField(carrierFieldAccess.value, 'addressDetail')
-      }
-      if (column.key === 'contactPhone') {
-        return canViewField(carrierFieldAccess.value, 'contactPhone')
-      }
-      return true
-    })
+    carrierImportColumns
+      .filter((column) => {
+        if (column.key === 'addressDetail') {
+          return canViewField(carrierFieldAccess.value, 'addressDetail')
+        }
+        if (column.key === 'contactPhone') {
+          return canViewField(carrierFieldAccess.value, 'contactPhone')
+        }
+        return true
+      })
+      .map((column) => {
+        if (column.key === 'carrierType')
+          return {
+            ...column,
+            formatter: (value: unknown) =>
+              carrierSelectionLabels(
+                String(value ?? '')
+                  .split(',')
+                  .filter(Boolean),
+                carrierTypeOptions.value,
+                '原类型待核对'
+              )
+          }
+        if (column.key === 'dispatchChannel')
+          return {
+            ...column,
+            formatter: (value: unknown) =>
+              carrierSelectionLabels(
+                String(value ?? '')
+                  .split(',')
+                  .filter(Boolean),
+                getDictMap.value.tmsCarrierDispatchChannel ?? []
+              )
+          }
+        if (column.key === 'enabled')
+          return {
+            ...column,
+            formatter: (value: unknown) =>
+              getDictionaryDisplayLabel(
+                userStore.getDictItemByValue('commonBoolean', String(value)),
+                String(value),
+                { unknownText: '待核对' }
+              )
+          }
+        return column
+      })
   )
 
   const searchItems = computed<SearchFormItem[]>(() => [
@@ -204,20 +243,21 @@
       minWidth: 170,
       showOverflowTooltip: true,
       formatter: (row) =>
-        carrierSelections(row.carrierTypes, row.carrierType)
-          .map((value) => useUserStore().getDictLabelByValue('tmsCarrierType', value, value))
-          .join('、') || '—'
+        carrierSelectionLabels(
+          carrierSelections(row.carrierTypes, row.carrierType),
+          carrierTypeOptions.value,
+          '原类型待核对'
+        )
     },
     {
       prop: 'dispatchChannel',
       label: '调度渠道',
       minWidth: 120,
       formatter: (row) =>
-        carrierSelections(row.dispatchChannels, row.dispatchChannel)
-          .map((value) =>
-            useUserStore().getDictLabelByValue('tmsCarrierDispatchChannel', value, value)
-          )
-          .join('、') || '—'
+        carrierSelectionLabels(
+          carrierSelections(row.dispatchChannels, row.dispatchChannel),
+          getDictMap.value.tmsCarrierDispatchChannel ?? []
+        )
     },
     {
       prop: 'driverCount',
@@ -347,6 +387,11 @@
       exportSheetName: '承运商管理',
       exportColumns: () => visibleCarrierExportColumns.value,
       exportApi: async ({ selectedIds, searchParams, maxRows }) => {
+        await Promise.all([
+          userStore.ensureDictLoaded('tmsCarrierType'),
+          userStore.ensureDictLoaded('tmsCarrierDispatchChannel'),
+          userStore.ensureDictLoaded('commonBoolean')
+        ])
         const result = await exportCarrierList({
           ...(searchParams as SearchParams),
           ids: selectedIds.map(String),

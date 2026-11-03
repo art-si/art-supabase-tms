@@ -1,4 +1,8 @@
 import { cloneDeep, omit } from 'lodash-es'
+import {
+  createInitialOrderConfig,
+  normalizeCargoItems
+} from '../../../order-open/modules/order-open-model'
 import { normalizeNullableNumber, normalizeNullableText } from '@/utils/form/normalize'
 import {
   joinRegionPath,
@@ -12,6 +16,8 @@ export type CarrierPrice = Api.Tms.BasicData.CarrierPrice
 export type CarrierPriceCargoItem = Api.Tms.BasicData.CarrierPriceCargoItem
 
 export type CarrierPriceForm = CarrierPrice & {
+  orderConfig: Api.Tms.Order.OrderConfig
+  cargoItems: CarrierPriceCargoItem[]
   originRegionPath: string[]
   destinationRegionPath: string[]
 }
@@ -27,6 +33,7 @@ interface NormalizeCarrierPriceOptions {
   cargoSummary: CargoSummary
   feeSummary: CarrierPriceFeeSummary
   editableFields: {
+    addressDetails: boolean
     contactPhones: boolean
     costAmounts: boolean
     paymentAmounts: boolean
@@ -60,6 +67,18 @@ export function createInitialCarrierPriceForm(): CarrierPriceForm {
   return {
     id: undefined,
     quoteNo: '',
+    contractId: null,
+    effectiveFrom: null,
+    effectiveTo: null,
+    agreementStatus: 'draft',
+    distanceKm: null,
+    orderConfig: createInitialOrderConfig(),
+    shippingAddressDetail: '',
+    receivingAddressDetail: '',
+    shippingLongitude: null,
+    shippingLatitude: null,
+    receivingLongitude: null,
+    receivingLatitude: null,
     carrierId: '',
     carrier: null,
     driverId: null,
@@ -102,24 +121,12 @@ export function createEmptyCarrierPriceFeeSummary(): CarrierPriceFeeSummary {
   return { splitTransportFee: 0, loadingFee: 0, packageFee: 0, totalFee: 0 }
 }
 
-export function createCarrierPriceCargoItemFromMaster(
-  cargo: Api.Tms.BasicData.Cargo
-): CarrierPriceCargoItem {
-  return {
-    ...createInitialCarrierPriceCargoItem(),
-    cargoName: cargo.cargoName,
-    quantity: 1,
-    unit: cargo.unit || '',
-    volumeM3: cargo.volumeM3 ?? null,
-    weightKg: cargo.weightKg ?? null
-  }
-}
-
 export function normalizeCarrierPriceCargoItems(
   items: CarrierPriceCargoItem[] | undefined
 ): CarrierPriceCargoItem[] {
   return (items ?? [])
     .map((item) => ({
+      ...normalizeCargoItems([item])[0],
       orderNo: normalizeNullableText(item.orderNo),
       originRegion: normalizeNullableText(item.originRegion),
       destinationRegion: normalizeNullableText(item.destinationRegion),
@@ -153,6 +160,7 @@ export function normalizeCarrierPricePayload(
   const payload = omit(raw, [
     'tenantId',
     'carrier',
+    'contract',
     'driver',
     'vehicle',
     'originRegionPath',
@@ -168,6 +176,14 @@ export function normalizeCarrierPricePayload(
   Object.assign(payload, {
     originRegion: joinRegionPath(raw.originRegionPath),
     destinationRegion: joinRegionPath(raw.destinationRegionPath),
+    contractId: normalizeNullableText(raw.contractId),
+    effectiveFrom: normalizeNullableText(raw.effectiveFrom),
+    effectiveTo: normalizeNullableText(raw.effectiveTo),
+    distanceKm: normalizeNullableNumber(raw.distanceKm),
+    orderConfig: cloneDeep(raw.orderConfig),
+    billingMethod: raw.orderConfig.billingMode
+      ? `by_${raw.orderConfig.billingMode}`
+      : raw.billingMethod,
     driverId: normalizeNullableText(raw.driverId),
     vehicleId: normalizeNullableText(raw.vehicleId),
     contactName: normalizeNullableText(raw.contactName),
@@ -175,8 +191,9 @@ export function normalizeCarrierPricePayload(
     driverName: normalizeNullableText(raw.driverName),
     driverPhone: normalizeNullableText(raw.driverPhone),
     plateNo: normalizeNullableText(raw.plateNo),
-    vehicleType: normalizeNullableText(raw.vehicleType),
-    vehicleLength: normalizeNullableText(raw.vehicleLength),
+    vehicleType: raw.orderConfig.vehicleType || null,
+    vehicleLength:
+      raw.orderConfig.vehicleLengthM == null ? null : String(raw.orderConfig.vehicleLengthM),
     cargoItems: normalizeCarrierPriceCargoItems(raw.cargoItems),
     cargoQuantityTotal: options.cargoSummary.quantity,
     cargoVolumeTotal: options.cargoSummary.volume,
@@ -203,9 +220,24 @@ export function normalizeCarrierPricePayload(
       'carrierId',
       'contactName',
       'contactPhone',
+      'shippingContactPhone',
+      'receivingContactPhone',
       'driverId',
       'driverName',
       'driverPhone'
+    ])
+  }
+  if (!options.editableFields.addressDetails) {
+    removePayloadFields(payload, [
+      'shippingAddressId',
+      'receivingAddressId',
+      'shippingAddressDetail',
+      'receivingAddressDetail',
+      'shippingLongitude',
+      'shippingLatitude',
+      'receivingLongitude',
+      'receivingLatitude',
+      'distanceKm'
     ])
   }
   if (!options.editableFields.costAmounts) {

@@ -5,15 +5,15 @@
       v-if="deleteContext.active"
       :customer-id="deleteContext.customerId"
       :customer-name="deleteContext.customerName"
-      action-hint="请核对关联报价；处理完成后可返回原主数据页面继续删除。"
+      action-hint="请核对关联承运商协议价；处理完成后可返回原主数据页面继续删除。"
     />
     <BusinessWorkspaceHeader
-      eyebrow="CARRIER RATE CARD"
-      title="承运商报价"
-      description="维护承运线路、运输模式与结算计价规则，为调度决策和成本测算提供依据。"
+      eyebrow="CARRIER AGREEMENT PRICE"
+      title="承运商协议价"
+      description="按关联合同、有效期与承运线路维护承运商协议价，为调度和成本测算提供依据。"
       icon="ri:money-cny-circle-line"
       :tags="[
-        { label: '采购运价', type: 'primary' },
+        { label: '采购协议价', type: 'primary' },
         { label: '成本基线', type: 'warning' }
       ]"
     >
@@ -35,8 +35,8 @@
         tableLayout: 'fixed',
         fit: false,
         showOverflowTooltip: false,
-        emptyText: '暂无承运商报价',
-        emptyDescription: '可新增承运商价，或调整线路、运输模式、计费方式和日期后查询。'
+        emptyText: '暂无承运商协议价',
+        emptyDescription: '可新增承运商协议价，或调整线路、运输模式、计费方式和日期后查询。'
       }"
       focusable
     />
@@ -46,6 +46,7 @@
 
 <script setup lang="tsx">
   import { normalizePriceRegionSearch } from '../modules/price-form-utils'
+  import { formatRateDistanceKm, formatRateEffectivePeriod } from '../modules/rate-card-detail'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
@@ -68,6 +69,7 @@
   import { createDateTimeFormatter } from '@/utils/ui/format'
   import BusinessWorkspaceHeader from '@/components/business/business-workspace-header/index.vue'
   import BusinessTableWorkspaceActions from '@/components/business/business-table-workspace-actions/index.vue'
+  import BusinessTableRowActions from '@/components/business/business-table-row-actions/index.vue'
   import MasterDeleteProcessingNotice from '@/components/business/master-delete-processing-notice/index.vue'
   import { useMasterDataDeleteProcessingContext } from '@/hooks/core/useMasterDataDeleteProcessing'
   import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
@@ -109,7 +111,7 @@
   const tableQueryRef = ref<ArtTableQueryExpose>()
   const { deleteGuardRef, deleteRecord, deleteRecords } = useRecordDeleteGuard(
     'tms_carrier_price',
-    '承运商报价'
+    '承运商协议价'
   )
   const carrierPriceFieldAccess = ref<CarrierPriceFieldAccessMap>({})
   const currentRows = ref<CarrierPrice[]>([])
@@ -141,7 +143,32 @@
 
   function createExcelColumns(): ArtTableQueryExcelColumn[] {
     return [
-      { key: 'quoteNo', title: '报价单号' },
+      { key: 'quoteNo', title: '协议价编号' },
+      {
+        key: 'contractName',
+        title: '关联合同名称',
+        formatter: (_value, row) => (row as CarrierPrice).contract?.contractName || ''
+      },
+      {
+        key: 'contractNo',
+        title: '关联合同编号',
+        formatter: (_value, row) => (row as CarrierPrice).contract?.contractNo || ''
+      },
+      {
+        key: 'agreementStatus',
+        title: '协议状态',
+        formatter: (value) => getLabel(getDictMap.value.tmsPriceAgreementStatus ?? [], value)
+      },
+      {
+        key: 'effectivePeriod',
+        title: '有效期',
+        formatter: (_value, row) => formatRateEffectivePeriod(row as CarrierPrice)
+      },
+      {
+        key: 'distanceKm',
+        title: '线路里程',
+        formatter: (value) => formatRateDistanceKm(value as number | string | null)
+      },
       { key: 'originRegion', title: '始发地' },
       { key: 'destinationRegion', title: '目的地' },
       { key: 'transportMode', title: '运输方式', formatter: (value) => formatTransportMode(value) },
@@ -281,7 +308,7 @@
           await deleteRecords({
             resources: rows.map((row) => ({
               id: row.id ?? '',
-              label: `${row.quoteNo} · ${row.carrier?.companyName || '承运商报价'}`
+              label: `${row.quoteNo} · ${row.carrier?.companyName || '承运商协议价'}`
             })),
             permission: 'TmsCarrierPrice:Delete',
             remove: () => deleteCarrierPriceBatch(rows.map((row) => row.id ?? '')),
@@ -294,8 +321,8 @@
       {
         permission: 'TmsCarrierPrice:Export',
         type: 'export',
-        exportFilename: 'TMS承运商价格维护',
-        exportSheetName: '承运商价格维护',
+        exportFilename: 'TMS承运商协议价',
+        exportSheetName: '承运商协议价',
         exportColumns: createExcelColumns(),
         exportApi: ({ selectedIds, searchParams, maxRows }) =>
           exportCarrierPriceList({
@@ -312,7 +339,7 @@
       { type: 'selection', width: 50, fixed: 'left', reserveSelection: true },
       {
         prop: 'quoteNo',
-        label: '报价单号',
+        label: '协议价编号',
         width: 180,
         fixed: 'left',
         formatter: (row) =>
@@ -329,6 +356,37 @@
           ) : (
             <span>{row.quoteNo || '-'}</span>
           )
+      },
+      {
+        prop: 'contractName',
+        label: '关联合同名称',
+        minWidth: 190,
+        formatter: (row) => row.contract?.contractName || '-'
+      },
+      {
+        prop: 'contractNo',
+        label: '关联合同编号',
+        minWidth: 155,
+        formatter: (row) => row.contract?.contractNo || '-'
+      },
+      {
+        prop: 'agreementStatus',
+        label: '协议状态',
+        width: 110,
+        dict: { code: 'tmsPriceAgreementStatus', display: 'auto' }
+      },
+      {
+        prop: 'effectivePeriod',
+        label: '有效期',
+        minWidth: 210,
+        formatter: (row) => formatRateEffectivePeriod(row)
+      },
+      {
+        prop: 'distanceKm',
+        label: '线路里程',
+        width: 125,
+        align: 'right',
+        formatter: (row) => formatRateDistanceKm(row.distanceKm)
       },
       { prop: 'originRegion', label: '始发地', width: 170 },
       { prop: 'destinationRegion', label: '目的地', width: 170 },
@@ -391,7 +449,7 @@
         width: 120,
         fixed: 'right',
         formatter: (row) => (
-          <div>
+          <BusinessTableRowActions>
             <ArtButtonTable
               type="edit"
               permission="TmsCarrierPrice:Edit"
@@ -402,7 +460,7 @@
               permission="TmsCarrierPrice:Delete"
               onClick={() => handleDelete(row)}
             />
-          </div>
+          </BusinessTableRowActions>
         )
       }
     ]
@@ -447,7 +505,7 @@
     await deleteRecord({
       resource: {
         id: row.id ?? '',
-        label: `${row.quoteNo} · ${row.carrier?.companyName || '承运商报价'}`
+        label: `${row.quoteNo} · ${row.carrier?.companyName || '承运商协议价'}`
       },
       permission: 'TmsCarrierPrice:Delete',
       remove: () => deleteCarrierPrice(row.id ?? ''),

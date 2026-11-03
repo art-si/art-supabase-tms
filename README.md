@@ -101,6 +101,13 @@ AI 智能填单只生成可复核草稿；调度推荐和异常研判只提供�
 - 新增和编辑通过 `tms_create_carrier_multi_secure`、`tms_update_carrier_multi_secure` 写入；原有安全 RPC 仍负责租户、业务操作及字段权限校验。列表类型筛选匹配数组内任一类型，导入支持多值，调度参选和详情回显全部渠道。
 - 2026-10-18 已回填现有 3 条记录；以已有承运商的创建者身份调用安全更新 RPC，并用事务回滚验证了双类型、双渠道写入及首选值同步，回滚后原数据保持单值。模块边界、UI、类型、Lint、样式和 71 项单元测试通过。
 
+### 承运商联系人、开票账户与调度快照（2026-11-02）
+
+- `mdm_carrier_contact`、`mdm_carrier_billing_account` 以承运商和租户为归属，各允许一个默认行。上线时把主表已有的 2 条联系人回填为默认子行；当时主表没有非空开票资料。新增和编辑仍使用原承运商安全 RPC 校验 `Add` / `Edit`、记录归属和字段权限，子行替换在同一事务完成，默认行同步回主表的兼容字段。
+- 删除已用于运单的开票账户会由 `MasterDataDeleteGuard` 展示运单号、状态及授权导航；数据库再次检查 `tms_waybill_carrier_billing_snapshot`，并在并发引用出现时拒绝删除。失败后表单重新检查引用并保留草稿。联系人和账户表不向 `anon`、`authenticated` 直接授权，安全读取 RPC 按租户、按钮权限及敏感字段级别返回数据。
+- 调度选承运商后读取其开票账户并预选默认项，可改选同一承运商的其他账户。`tms_create_dispatch_plan_secure` 在原调度事务完成后校验账户的承运商与租户，写入运单账户 ID 和独立历史快照；没有账户不阻断调度。承运商待接单运单允许暂未指定司机，接单或变更调度模式仍须通过证件审核门禁。
+- 执行前的函数定义和主表快照保存在 Git 忽略的 `.artifacts/tms-carrier-children/`；数据库变更用事务回滚验证后直接执行。`tests/integration/tms-carrier-children-scope.sql` 覆盖平台全部/选定、普通本租户、伪造跨租户请求，`tms-carrier-billing-delete-guard.sql` 覆盖已引用账户拒删，`tms-dispatch-carrier-billing.sql` 覆盖调度账户快照及接单/改模式拒绝绕过认证。浏览器用例 `tests/e2e/tms-carrier-children.spec.ts` 与 `tms-carrier-dispatch-account.spec.ts` 验证子表、关联页签、窄屏、默认账户切换和保存载荷。
+
 ### 基础资料补充
 
 - “黑名单”“投诉咨询”“电子合同”“运输协议”分别存于 `tms_driver_blacklist`、`tms_service_case`、`tms_electronic_contract`、`tms_transport_agreement`。四页复用平台的查询表格、详情描述、上传控件与空状态组件。
@@ -343,3 +350,68 @@ fms_asset_depreciation_line 关联固定资产及折旧批次，fms_fixed_asset 
 before-cost-actor-scope.json 保存原约束、函数与策略；事务预演后发布，发布后 MCP 和 CLI 契约测试均通过：普通用户新增、伪造头拒绝跨租户新增/改绑、平台全量继承父运单租户、平台选定合法新增及范围外拒绝、真实创建人保留及不可改写。成本去重审批回归 tms-report-cost-reconciliation.sql 通过，测试费用全部回滚。安全顾问仍为原五类 INFO/WARN，无 ERROR；此修复未新增公开 RPC 或放宽来源权限。维修来源关联及 UI 验收仍未完成。
 
 </details>
+
+## 2026-11-02 基础资料关联与生命周期调整
+
+本轮客户、货物、司机、运输合同、黑名单、投诉咨询、常用线路及站点维护采用现有 Art / Element Plus 组件和各模块原始业务表。数据库变更直接在项目 `ckbftoopuyophiebamwy` 执行，未新增迁移文件或 runbook。
+
+- 客户联系人和财务账户分别由 `mdm_customer_contact`、`mdm_customer_finance` 维护；迁入原有 7 位联系人、3 个财务账户。默认联系人事务同步主档摘要；主档原有税号、银行字段已清空，财务子表作为唯一维护来源。TMS 和 MDM 客户入口复用主仓 `CustomerChildRecords`、`customer-children` API，分别使用所在页面的联系人/财务操作权限，避免 MDM 旧表单继续写主档摘要。开单保存 `invoice_account_id`，默认取发货客户的默认开票账户，禁止引用其他客户/租户账户。
+- 客户名称打开客户档案；联系人、财务、运输合同、客户协议价、运单、电子合同、运输协议、客户对账按客户 ID 关联。电子合同及运输协议新增客户外键、索引、租户和操作权限守卫；复制电子合同保留客户关联。客户删除检查包括上述合同、协议和已使用财务账户的运单，保留业务历史。
+- 货物新增复用物料分类、物料列表、已选物料三栏弹窗，支持批量选择；表单和列表显示计量单位名称。
+- 运输合同使用独立的有效期生命周期（待生效/生效中/已到期/已终止），审核状态仍由流程系统负责。修正承运商/客户合同分类的历史反向映射，保留原相对方关系；一份历史草稿按其已有客户纠正业务租户，增加相对方与租户的组合外键。复制仅接受来源 ID，独立检查 `Copy` 权限并生成新草稿，不接受任意创建载荷；隐藏的金额不会替换为零。提交审核新增精确的 `Submit` 权限，修复工作流启动缺少合同分支、未按合同继承租户及真实平台创建人与业务租户的外键冲突，普通用户和平台全量工作区均已通过真实启动工作流的回滚验证。现有一个业务租户有已发布的合同流程，其他租户需通过流程管理配置适用定义和审核人；未代用户发布流程。
+- 合同终止使用独立的 `Terminate` 权限并记录原因、真实操作人及时间；只允许已审核合同终止。到期提醒复用统一预警场景，终止合同取消提醒，不改写既有运单和价格。合同列表支持单据/明细查询、计费单位及完整相对方信息，生命周期日期按上海时区计算。
+- 司机姓名查看与编辑复用同一档案界面；列表展示照片、归属/公司、注册和三证状态、紧急联系人。黑名单保存司机 ID、禁用前状态和解除历史；加入时禁用，解除时恢复原启用状态，不自动启用原本已禁用的司机。
+- 投诉咨询关联同租户运单 ID，由服务器回填运输上下文；回复子表保留作者、附件、引用回复及用户/部门/角色提及。运单和提及选项使用安全 RPC，按服务单租户和来源字段权限返回；有回复的服务单由删除保护提示关联历史。
+- 常用线路保存最多 3 个有序途经站点，支持增删、上移/下移和返程顺序，地图估算使用完整节点序列。站点地址复用地图地址组件；`transfer` 存储值保留，字典显示名改为“途经点”。站点删除检查和服务器守卫均保护被线路引用的途经点。
+- 客户对账安全读取改用规范的租户范围谓词，平台管理员选择具体租户后不再越过该选择读取其他租户。MDM 客户删除复用安全依赖详情，展示关联业务编号、状态及有权限的导航，不返回金额；检查失败时阻止删除并允许重试。
+
+### 数据库验证与恢复证据
+
+回滚执行的自动化验证：`tests/integration/tms-customer-child-scope.sql`、`tms-customer-finance-normalization.sql`、`mdm-customer-child-scope.sql`、`mdm-customer-delete-guard.sql`、`tms-order-invoice-account.sql`、`tms-driver-blacklist-lifecycle.sql`、`tms-customer-child-delete-dependencies.sql`、`tms-customer-related-contracts.sql`、`tms-customer-statement-selected-scope.sql`、`tms-contract-customer-lifecycle.sql`、`tms-route-station-waypoints.sql`、`tms-driver-list-profile-projection.sql`、`tms-service-case-conversation.sql`。覆盖平台全部/指定租户、普通用户本租户及伪造租户头、默认值同步、错误客户账户拒绝、复制保留关联、合同实际启动审核与终止、途经点顺序/删除保护、解除恢复状态和删除阻塞明细。
+
+私有恢复备份包括 `app_private.customer_child_legacy_backup_20261102`、`customer_order_finance_backup_20261102`、`driver_blacklist_backup_20261102`、`driver_blacklist_driver_state_backup_20261102`、`customer_child_customer_function_backup_20261102`、`customer_delete_readers_backup_20261102`、`customer_contract_relation_backup_20261102`、`tms_contract_change_backup_20261102`、`tms_route_station_backup_20261102`、`tms_driver_list_fn_backup_20261102`；均保留在非公开 schema，未向普通角色授予读取。服务单备份和各项变更均由对应实施过程先验证备份、事务预演，再执行和断言。测试临时记录均回滚。
+
+补充备份：`app_private.mdm_customer_child_menu_backup_20261102`、`mdm_customer_child_role_menu_backup_20261102`、`mdm_customer_child_function_backup_20261102`、`mdm_customer_delete_scope_backup_20261102`、`tms_customer_statement_scope_fn_backup_20261102`、`tms_service_case_backup_20261102`、`tms_service_case_reply_guard_backup_20261102`。主仓共享 API/组件迁移后，TMS、MDM 独立类型检查及全仓复用检查均需覆盖。
+
+安全顾问仍包含项目既有的扩展安装位置、登录默认语言函数、密码泄漏保护设置及大量有意授权的 authenticated SECURITY DEFINER RPC 提示；本轮私有触发器不向 anon/authenticated 授予直接调用，新公开业务 RPC 保留身份、业务权限和租户校验。
+
+浏览器证据使用真实组件和脱敏接口夹具，保存在 Git 忽略的 `.artifacts` 目录；不将夹具截图等同于真实合同审批或外部地图服务的生产验收。E2E 模式关闭文件监听，源文件变更后必须重启验证服务，避免读取缓存旧版本。
+
+最终公共检查：全仓 `pnpm typecheck`、Vite `build --mode e2e`、33 项相关单元测试、`pnpm ui:audit`（866 个宿主/1635 个模块 UI 文件）和 `pnpm reuse:audit`（2449 个前端文件）通过。TMS 客户档案 2 项、MDM 客户子表 1 项浏览器回归通过，已检查窄屏及正式主题切换后的暗色截图；共享载荷测试已迁至 `tests/unit/pick-defined-payload.test.ts`，旧子仓导入路径无残留。全仓 `pnpm permissions:audit` 仍仅报告本轮范围外的 `MdmStockMovementType:Submit` 页面精确权限声明缺项，本轮客户及合同操作权限均已覆盖，未绕过审计。
+
+合同最终浏览器回归 `tests/e2e/tms-contract-customer-tab.spec.ts` 4/4 通过，覆盖嵌入列表及生命周期、仅有 Copy 无 Add 权限、终止原因与已终止状态、ArtForm 承运商弹窗的五项列信息。线路三途经点排序/返程、站点地址及司机黑名单、货物批选、服务单评论与提及专项已在各自实现阶段完成浏览器验证；关键数据库场景同时有上述回滚 SQL 验证。
+
+独立分发边界：本次验证使用当前宿主源码。TMS/MDM 的平台解析优先使用 `ART_SUPABASE_PLATFORM_ROOT`、本工作区 `../..`，最后才回退到已安装的平台包。两模块当前固定的旧平台归档尚不包含新增的 `src/components/business/customer-child-records/index.vue`、`src/api/customer-children.ts`、`src/utils/form/pick-defined-payload.ts`；仅携带旧归档的独立检出不能据此宣称构建通过。单独发布模块前需发布包含这些共享路径的平台归档，并同步更新两模块 `package.json` 和 `pnpm-lock.yaml` 的固定引用；本轮没有发布包或改写远程归档引用。
+
+### 持续目标：真实数据与最终视觉复验（进行中）
+
+此阶段针对“每个新增页面至少两条数据、跑通流程、最后视觉验收”补充证据。前述夹具浏览器测试及事务回滚测试仍保留，但不能代替本节的持久数据、真实登录和地图/上传验收。本节验收记录明确带测试标记并保留；回归测试的临时写入继续回滚。
+
+已从项目 `ai_ui_design_reference` 读取当前 18 条标星记录，重点选取常用线路、用户管理、ESOP、员工档案维护、单据类型及角色管理，并检查对应源码。沿用紧凑查询/表格工作区、分层身份信息、适量关系图标、集中行操作、ArtForm 元数据及 ArtDialog 稳定底部操作区。常用线路的用户备注强调表格图标、弹窗布局与交互；用户管理强调换行信息、主次和紧凑操作；ESOP 强调小巧紧凑弹窗。保存的参考图片位于私有桶，未登录时不绕过图片权限，也不将只读源码对比称为最终视觉通过。
+
+| 页面/关联区 | 已保留的真实验收数据 | 已验证的业务入口与结果 | 最终实际浏览器状态 |
+| --- | --- | --- | --- |
+| 客户主档、联系人、财务 | 复用 KH202610-0001/0002；每客户各 2 联系人、2 开票账户 | 新增→复制→编辑→默认切换；默认联系人同步摘要，主表财务四字段仍为 NULL；另实际复制 4 条临时子记录，经专用引用预检和 Delete RPC 删除，订单引用账户返回具体单号并保留 | 11 月 3 日已登录，华东客户名称直接打开档案，联系人与财务各 2 行及全部页签可见；实际默认切换和其余关联页签尚待逐项复验 |
+| 开单账户联动 | YD202611-001/002 | 默认账户带出并保存；第一单改选另一主体后详情回显一致，第二单保留默认账户 | 待登录复验；两单保留待装载 |
+| 运输合同 | HT202611-0001～0008；6 客户合同、2 承运商合同，每客户关联 3 份 | 正常创建/复制/编辑；6 份客户合同完成法务及总经理审批，一份随后终止；另覆盖已到期、七日内到期，承运商合同有草稿及实际审批驳回 | 待登录复验；已到期/将到期 subject 为 active，已终止 subject 为 resolved |
+| 常用线路 | 两条 `[TMS验收20261102]` 线路，分别关联两客户 | 3 途经点 B-A-C→A-B-C 更新回显及返程；第二条 2 途经点、单程 | 待登录复验 |
+| 站点 | ZD202611-0001～0003 | 通过 save_tms_station 创建、编辑地址及读取坐标；当前坐标来源为 manual | 地图实际选点、自动回填及保存待验收 |
+| 客户协议价 | 每客户 2 条标记协议价，共 4 条草稿 | 正常安全写入口及按客户读取，各客户结果恰为 2；两客户各一条通过 Edit RPC 更新并安全详情回显。原页不提供 Copy/独立审核动作 | 待登录复验 |
+| 电子合同、运输协议 | DZHT202611-001～006、YSXY202611-001～004 | 电子合同各客户经正常 Copy RPC 新增一份，现每客户 3 条；运输协议各客户一条编辑回显（原页无 Copy）。保留待签状态，未对外发起签约 | 待登录复验 |
+| 运单、客户对账 | 安全运单列表按两客户分别读取，各至少 2 条真实记录；KHDZ202610-0003/0004 共 2 张历史对账单 | 主代理以普通验收身份调用实际 loaded 列表并断言两客户均有至少 2 行；新对账预演正确拒绝已进入 FMS 应收的订单，未重复结算或修改原账单 | 待登录复验；每客户对账为 1 条 |
+| 货物 | 当前登录租户另建 B00-0039/B00-0044 两条物料关联货物；原 QA_AP_MAT_1/2 样本保留 | 本租户两条记录的列表及编辑单位分别显示“件”“片”，运输参数页签可正常切换 | 已修复未选分组提交空 UUID：实际保存 HTTP 200，关闭后重开备注持久保留；历史 PC/KG/ton 分别显示件/千克/吨，1280 宽度截图留证；无引用货物可进入删除确认并已取消。专注模式进入已验证，退出双路径及其余完整视觉流程仍待验收 |
+| 司机 | 当前登录租户另建验收-TMS-司机-20261103-01/02；原跨租户验收样本保留 | 正常创建/编辑及安全详情回显；归属 self/individual 对照，注册和三证默认未注册/未认证 | 已登录列表确认本租户两条档案、公司与认证名称；01 黑名单标记并禁用，超链接完整档案与解除操作仍需复验；四项状态人工参选口径待明确 |
+| 黑名单 | 2 条 released 历史、1 条 active 记录 | 两位既有验收司机 Add→禁用→Release→恢复原启用；一位新验收司机保留 active，详情禁用且有黑名单标记 | 红色姓名及实际 UI 解除待登录复验 |
+| 投诉咨询 | TS202611-001/002，3 条持久回复 | 绑定不同验收运单并读取运输上下文；编辑、正文回复、引用前文及用户/组织/角色提及回显 | 文件/图片附件数量仍为 0；真实上传及登录后视觉待验收 |
+
+客户、合同及服务单数据归属现有验收租户 `yq_2026_001`（`7529f951-938e-4e2c-ac0d-316c136ae1f9`）。早期货物及司机样本位于其他既有验收租户；11 月 3 日补建同一登录租户的货物、司机与黑名单数据，使用普通租户账号复验，未以提权或切换到无权租户绕过数据隔离。数据库业务入口验证通过 `SET LOCAL ROLE authenticated` 和现有业务 RPC/RLS 执行，先备份及 BEGIN/ROLLBACK 预演，再提交持久验收数据；与实际浏览器 HTTP/界面证据分别记录。客户原有 10 张订单未改动；原合同、线路、站点和既有工作流/通知记录经备份逐行对比均未缺失、未修改。完整 ID 和脱敏步骤记录在忽略目录 `.artifacts/customer-live-acceptance.json`、`.artifacts/contracts-live-acceptance.json`、`.artifacts/cargo-live-acceptance.json`，恢复备份位于 `app_private.qa_customer_acceptance_*_20261102`、`app_private.tms_acceptance_backup_20261102` 及 `app_private.tms_acceptance_*_pre_20261102`。
+
+真实对账预演发现候选列表曾显示已被 FMS 应收认领的订单，而创建时防重守卫拒绝。已定向备份原候选函数到 `app_private.qa_customer_statement_eligible_fn_20261102`，仅在 `tms_list_customer_statement_eligible_waybills_secure` 的分页前过滤中加入与既有 AR 守卫一致的 FMS 认领排除条件；不改财务生命周期、创建接口、AR 守卫或历史账单。新增 `tests/integration/tms-customer-statement-eligible-ar-claim.sql` 已由实施者和主代理分别执行通过，覆盖被认领候选排除、真正未认领候选保留、total/records 一致及平台全量/选定、普通本租户/伪造租户头四类范围。
+
+合同到期样本补充备份为 `app_private.tms_contract_expiry_acceptance_backup_20261102`。HT202611-0007（2026-10-20 到期）与 0008（2026-11-09 到期）均经正常两级审批，合同触发器精确创建其预警主体并提供合同定位参数；终止的 0002 主体为 resolved。11 月 3 日 08:32 只读复核，0008 已由自然定时任务生成 30 日和 7 日两条事件，均有成功站内投递及正确接收人与合同定位链接；未手动运行全租户扫描器。新增统一预警中心 `/tms/alert-center` 以合同及提醒主体为来源，使用 `TmsAlertCenter:View` 与合同查看权限及规范租户范围，不返回消息正文、接收人或金额；真实页面视觉仍需完成。
+
+当前最终视觉门禁尚未全部通过：用户已登录 IAB，正在使用普通租户身份及上述持久样本逐页复验。客户档案及承运商关联运单的实际显示已有证据；承运商无引用验收记录能进入正常删除确认并取消，有引用验收记录列出 16 条具名业务阻挡。其余 1440/1280 宽度、相关主题与边框/阴影模式、专注模式进入/按钮退出/Esc 退出、下部滚动及操作栏、地图实际选点和合成文件/图片上传仍需完成，不把数据库回滚预演或夹具截图替代真实全流程。持续目标保持进行中。
+
+司机四项状态的“参选”另有待明确的业务口径：当前表单为禁用字典，保存载荷排除四字段；正式三证审核接口仅允许 `TmsDriver:Audit` 或平台管理员在证件与影像完整时统一认证/撤销，注册状态与“企业内保存”没有人工维护入口。因此未把只读展示记为可编辑完成，已向用户区分“按权限人工维护并留痕”与“仅查询筛选、状态由注册/审核流程生成”，等待选择后完成对应功能。
+
+本阶段还修正了投诉运单参选中的本地调度方式标签缓存，改用 `tmsDispatchOperatorMode` 与 `ArtDictDisplay`，弹窗列和选中后正文均随字典显示“自营”等名称。共享 ArtForm 的 text 字段现已支持 formatter，调度方式已改为字段 metadata 内的字典名称格式化，取消该只读字段的命名槽；选择器继续复用 ArtDictDisplay。服务单提示改为运输信息带入及保存后评论的业务说明，确认按钮明确为“保存服务单/保存修改”。定向夹具 E2E 1/1、TMS 类型检查、聚焦 ESLint、UI 审计（866/1635）及复用审计（2449）通过；这些组件证据仍不替代待登录的真实全流程视觉验收。

@@ -58,7 +58,15 @@
               ></span>
               <div>
                 <strong>{{ item.orderNo }}</strong>
-                <small>{{ item.source.order?.transportMode || '公路运输' }}</small>
+                <small>
+                  <ArtDictDisplay
+                    dict-code="tmsOrderTransportMode"
+                    :value="item.source.order?.transportMode"
+                    display="text"
+                    empty-text="运输方式未记录"
+                    unknown-text="运输方式待核对"
+                  />
+                </small>
               </div>
               <em
                 :style="{
@@ -100,6 +108,7 @@
   import { formatPercentValue } from '@/utils/ui/format'
   import { Search, Tickets } from '@element-plus/icons-vue'
   import ArtAsyncState from '@/components/core/feedback/art-async-state/index.vue'
+  import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import MonitorRouteCard from './monitor-route-card.vue'
   import type { MonitorOrder, MonitorOverview } from './monitor-types'
 

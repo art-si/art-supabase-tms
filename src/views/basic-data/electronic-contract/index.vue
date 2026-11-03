@@ -1,6 +1,11 @@
 <template>
-  <div class="business-workspace-page art-full-height">
+  <div
+    :class="
+      embedded ? 'flex h-[460px] min-w-0 flex-col' : 'business-workspace-page art-full-height'
+    "
+  >
     <BusinessWorkspaceHeader
+      v-if="!embedded"
       eyebrow="ELECTRONIC CONTRACTS"
       title="电子合同"
       description="管理合同有效期、签署双方与电子附件，通过合同号快速核查完整内容。"
@@ -19,16 +24,20 @@
       :api-fn="fetchTable"
       :columns-factory="columnsFactory"
       :header-actions="headerActions"
-      header-actions-placement="workspace"
+      :header-actions-placement="embedded ? 'table' : 'workspace'"
       :search-bar-props="{ span: 8, labelWidth: 82, showExpand: false }"
       :table-props="{
         rowKey: 'id',
         emptyText: '暂无电子合同',
         emptyDescription: '创建合同后，系统自动生成合同号并保留双方与有效期信息。'
       }"
-      focusable
+      :focusable="!embedded"
     />
-    <ElectronicContractDialog ref="formDialogRef" @success="() => tableRef?.refreshCreate()" />
+    <ElectronicContractDialog
+      ref="formDialogRef"
+      :customer="customer"
+      @success="() => tableRef?.refreshCreate()"
+    />
     <ArtDialog
       ref="detailDialogRef"
       size="xl"
@@ -101,7 +110,7 @@
     ArtTableQueryHeaderAction
   } from '@/components/core/tables/art-table-query/index.vue'
   import { useUserStore } from '@/store/modules/user'
-  import { useArtFeedback } from '@/hooks/core/useArtFeedback'
+  import { notifyFriendlyError, useArtFeedback } from '@/hooks/core/useArtFeedback'
   import type { ColumnOption } from '@/types'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { formatWithDayjs } from '@/utils/time'
@@ -117,10 +126,12 @@
   import ElectronicContractDialog from './modules/electronic-contract-dialog.vue'
 
   defineOptions({ name: 'TmsElectronicContract' })
+  const props = defineProps<{ embedded?: boolean; customer?: Api.Tms.BasicData.Customer }>()
 
   const route = useRoute()
   const router = useRouter()
   const { confirmAction } = useArtFeedback()
+  const terminatingId = ref<string | null>(null)
   const userStore = useUserStore()
   const { getDictMap } = storeToRefs(userStore)
   const tableRef = ref<ArtTableQueryExpose>()
@@ -201,7 +212,10 @@
       formatter: (row) => (
         <RouterLink
           class="font-semibold text-[var(--el-color-primary)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--el-color-primary)]"
-          to={{ name: 'TmsElectronicContract', query: { contractId: row.id } }}
+          to={{
+            name: route.name ?? 'TmsElectronicContract',
+            query: { ...route.query, contractId: row.id }
+          }}
           title={`查看合同 ${row.contractNo}`}
         >
           {row.contractNo}
@@ -245,7 +259,7 @@
             icon="ri:stop-circle-line"
             label="终止"
             permission="TmsElectronicContract:Terminate"
-            disabled={row.status === 'terminated'}
+            disabled={row.status === 'terminated' || terminatingId.value === row.id}
             onClick={() => void terminate(row)}
           />
         </BusinessTableRowActions>
@@ -299,18 +313,24 @@
 
   const fetchTable = (params: ElectronicContractSearch & { current: number; size: number }) => {
     const { from, to } = buildSupabasePageRange({ current: params.current, size: params.size })
-    return fetchElectronicContractList({ ...params, from, to })
+    return fetchElectronicContractList({
+      ...params,
+      from,
+      to,
+      customerId: props.customer?.id,
+      recordId: typeof route.query.recordId === 'string' ? route.query.recordId : undefined
+    })
   }
 
   const showDetail = async (row: ElectronicContractRecord): Promise<void> => {
     await router.push({
-      name: 'TmsElectronicContract',
+      name: route.name ?? 'TmsElectronicContract',
       query: { ...route.query, contractId: row.id }
     })
   }
 
   watch(
-    () => route.query.contractId,
+    () => route.query.contractId ?? route.query.recordId,
     async (value) => {
       if (!value || typeof value !== 'string') return
       detail.value = undefined
@@ -334,10 +354,11 @@
   )
 
   const clearDetailQuery = (): void => {
-    if (!route.query.contractId) return
+    if (!route.query.contractId && !route.query.recordId) return
     const query = { ...route.query }
     delete query.contractId
-    void router.replace({ name: 'TmsElectronicContract', query })
+    delete query.recordId
+    void router.replace({ name: route.name ?? 'TmsElectronicContract', query })
   }
 
   const terminate = async (row: ElectronicContractRecord): Promise<void> => {
@@ -347,10 +368,18 @@
         cancelButtonText: '取消',
         type: 'warning'
       })
+    } catch {
+      return
+    }
+    if (terminatingId.value) return
+    terminatingId.value = row.id
+    try {
       await terminateElectronicContract(row.id)
       await tableRef.value?.refreshUpdate()
-    } catch {
-      // 用户取消或服务端拒绝时保留当前记录。
+    } catch (error) {
+      notifyFriendlyError(error, '电子合同终止失败，请核对权限和状态后重试')
+    } finally {
+      terminatingId.value = null
     }
   }
 </script>

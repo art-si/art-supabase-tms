@@ -8,296 +8,231 @@
   >
     <ArtPageHeader
       class="customer-price-edit__header"
-      :title="isEdit ? '编辑客户价' : '新增客户价'"
+      :title="isEdit ? '编辑客户协议价' : '新增客户协议价'"
       subtitle="先选择客户和收发货地址，再完善货物、车辆与结算费用"
       show-back
       @back="goBack()"
     />
 
-    <div ref="pageRef" class="customer-price-edit__content">
-      <ArtSectionCard
-        class="customer-price-edit__section"
-        preserve-content-structure
-        title="客户与运输路线"
-      >
-        <ol class="customer-price-edit__workflow" aria-label="客户价格维护步骤">
-          <li
-            v-for="(step, index) in workflowSteps"
-            :key="step.key"
-            class="customer-price-edit__workflow-step"
-            :class="{ 'is-complete': step.complete, 'is-active': step.active }"
-            :aria-current="step.active ? 'step' : undefined"
+    <ArtForm
+      ref="baseFormRef"
+      v-model="form.data"
+      :items="allFormItems"
+      :rules="allFormRules"
+      :span="12"
+      :gutter="24"
+      label-position="top"
+      root-class="p-0!"
+    >
+      <template #layout="{ fields }">
+        <div ref="pageRef" class="customer-price-edit__content">
+          <ArtSectionCard
+            class="customer-price-edit__section"
+            preserve-content-structure
+            title="客户与运输路线"
           >
-            <span class="customer-price-edit__workflow-index" aria-hidden="true">
-              <ElIcon v-if="step.complete"><Check /></ElIcon>
-              <template v-else>{{ index + 1 }}</template>
-            </span>
-            <span class="customer-price-edit__workflow-copy">
-              <strong>{{ step.label }}</strong>
-              <small>{{ step.description }}</small>
-            </span>
-            <span class="customer-price-edit__workflow-status">
-              {{ step.complete ? '已完成' : step.active ? '当前步骤' : '待处理' }}
-            </span>
-          </li>
-        </ol>
-
-        <ArtForm
-          ref="baseFormRef"
-          v-model="form.data"
-          :items="form.baseItems"
-          :rules="form.rules"
-          :span="12"
-          :gutter="24"
-          label-width="98px"
-          root-class="customer-price-edit__form"
-        />
-
-        <div class="customer-price-edit__contact-grid">
-          <div class="customer-price-edit__contact-panel">
-            <div class="customer-price-edit__contact-heading">
-              <span class="customer-price-edit__contact-icon" aria-hidden="true">发</span>
-              <div class="customer-price-edit__contact-copy">
-                <strong>发货信息</strong>
-                <span>选择客户后，自动带入默认发货地址</span>
-              </div>
-              <ElTag :type="getAddressStatusType('shipping')" effect="plain" size="small">
-                {{ getAddressStatusText('shipping') }}
-              </ElTag>
-            </div>
-
-            <ElAlert
-              v-if="page.shippingAddressError"
-              class="customer-price-edit__address-alert"
-              type="error"
-              :closable="false"
-              show-icon
-            >
-              <template #title>
-                <span>{{ page.shippingAddressError }}</span>
-                <ElButton link type="primary" @click="retryShippingAddressLoad">
-                  重新加载
-                </ElButton>
-              </template>
-            </ElAlert>
-            <ArtForm
-              ref="shippingFormRef"
-              v-model="form.data"
-              :items="form.shippingItems"
-              :rules="form.rules"
-              :span="24"
-              label-width="92px"
-              root-class="customer-price-edit__form"
-            >
-              <template #shippingAddressDetail>
-                <div
-                  class="customer-price-edit__address-card"
-                  :class="{
-                    'is-empty': !form.data.shippingAddressDetail,
-                    'is-disabled': !form.data.customerId || page.shippingAddressLoading
-                  }"
-                >
-                  <div class="customer-price-edit__address-main">
-                    <div class="customer-price-edit__address-text">
-                      {{ form.data.shippingAddressDetail || getAddressEmptyText('shipping') }}
-                    </div>
-                    <div
-                      v-if="form.data.shippingAddressDetail"
-                      class="customer-price-edit__address-meta"
-                    >
-                      <span
-                        :class="{
-                          'is-warning': !getAddressCoordinateText('shipping')
-                        }"
-                      >
-                        {{ getAddressCoordinateText('shipping') || '缺少经纬度' }}
-                      </span>
-                    </div>
-                  </div>
-                  <div v-if="canEditAddressSelection" class="customer-price-edit__address-actions">
-                    <ElButton
-                      type="primary"
-                      plain
-                      :loading="page.shippingAddressLoading"
-                      :disabled="!form.data.customerId"
-                      @click="openAddressSelector('shipping')"
-                    >
-                      {{ form.data.shippingAddressDetail ? '更换' : '选择地址' }}
-                    </ElButton>
-                    <ElButton
-                      v-if="form.data.shippingAddressDetail"
-                      text
-                      @click="handleAddressClear('shipping')"
-                    >
-                      清空
-                    </ElButton>
-                  </div>
-                </div>
-              </template>
-
-              <template #originRegionPath>
-                <div
-                  class="customer-price-edit__region-field"
-                  :class="{ 'is-empty': !form.data.originRegionPath.length }"
-                >
-                  <span>{{ getRegionText('shipping') || '选择发货地址后自动生成始发地' }}</span>
-                  <ElTag v-if="form.data.originRegionPath.length" effect="plain" size="small">
-                    自动生成
-                  </ElTag>
-                </div>
-              </template>
-            </ArtForm>
-          </div>
-
-          <div class="customer-price-edit__contact-panel">
-            <div class="customer-price-edit__contact-heading">
-              <span
-                class="customer-price-edit__contact-icon customer-price-edit__contact-icon--receive"
-                aria-hidden="true"
+            <ol class="customer-price-edit__workflow" aria-label="客户协议价步骤">
+              <li
+                v-for="(step, index) in workflowSteps"
+                :key="step.key"
+                class="customer-price-edit__workflow-step"
+                :class="{ 'is-complete': step.complete, 'is-active': step.active }"
+                :aria-current="step.active ? 'step' : undefined"
               >
-                收
-              </span>
-              <div class="customer-price-edit__contact-copy">
-                <strong>收货信息</strong>
-                <span>选择收货地址后，自动更新目的地</span>
-              </div>
-              <ElTag :type="getAddressStatusType('receiving')" effect="plain" size="small">
-                {{ getAddressStatusText('receiving') }}
-              </ElTag>
-            </div>
-            <ArtForm
-              ref="receivingFormRef"
-              v-model="form.data"
-              :items="form.receivingItems"
-              :rules="form.rules"
-              :span="24"
-              label-width="92px"
-              root-class="customer-price-edit__form"
-            >
-              <template #receivingAddressDetail>
-                <div
-                  class="customer-price-edit__address-card"
-                  :class="{ 'is-empty': !form.data.receivingAddressDetail }"
-                >
-                  <div class="customer-price-edit__address-main">
-                    <div class="customer-price-edit__address-text">
-                      {{ form.data.receivingAddressDetail || getAddressEmptyText('receiving') }}
-                    </div>
-                    <div
-                      v-if="form.data.receivingAddressDetail"
-                      class="customer-price-edit__address-meta"
-                    >
-                      <span
-                        :class="{
-                          'is-warning': !getAddressCoordinateText('receiving')
-                        }"
-                      >
-                        {{ getAddressCoordinateText('receiving') || '缺少经纬度' }}
-                      </span>
-                    </div>
-                  </div>
-                  <div v-if="canEditAddressSelection" class="customer-price-edit__address-actions">
-                    <ElButton type="primary" plain @click="openAddressSelector('receiving')">
-                      {{ form.data.receivingAddressDetail ? '更换' : '选择地址' }}
-                    </ElButton>
-                    <ElButton
-                      v-if="form.data.receivingAddressDetail"
-                      text
-                      @click="handleAddressClear('receiving')"
-                    >
-                      清空
-                    </ElButton>
-                  </div>
-                </div>
-              </template>
+                <span class="customer-price-edit__workflow-index" aria-hidden="true">
+                  <ElIcon v-if="step.complete"><Check /></ElIcon>
+                  <template v-else>{{ index + 1 }}</template>
+                </span>
+                <span class="customer-price-edit__workflow-copy">
+                  <strong>{{ step.label }}</strong>
+                  <small>{{ step.description }}</small>
+                </span>
+                <span class="customer-price-edit__workflow-status">
+                  {{ step.complete ? '已完成' : step.active ? '当前步骤' : '待处理' }}
+                </span>
+              </li>
+            </ol>
 
-              <template #destinationRegionPath>
-                <div
-                  class="customer-price-edit__region-field"
-                  :class="{ 'is-empty': !form.data.destinationRegionPath.length }"
-                >
-                  <span>{{ getRegionText('receiving') || '选择收货地址后自动生成目的地' }}</span>
-                  <ElTag v-if="form.data.destinationRegionPath.length" effect="plain" size="small">
-                    自动生成
+            <component :is="fields" :items="form.baseItems" :actions="false" />
+            <component :is="fields" :items="agreementItems" :actions="false" />
+            <ElButton :loading="distanceLoading" text type="primary" @click="calculateDistance"
+              >重新计算公里数</ElButton
+            >
+
+            <div class="customer-price-edit__contact-grid">
+              <div class="customer-price-edit__contact-panel">
+                <div class="customer-price-edit__contact-heading">
+                  <span class="customer-price-edit__contact-icon" aria-hidden="true">发</span>
+                  <div class="customer-price-edit__contact-copy">
+                    <strong>发货信息</strong>
+                    <span>选择客户后，自动带入默认发货地址</span>
+                  </div>
+                  <ElTag :type="getAddressStatusType('shipping')" effect="plain" size="small">
+                    {{ getAddressStatusText('shipping') }}
                   </ElTag>
                 </div>
-              </template>
-            </ArtForm>
+
+                <ElAlert
+                  v-if="page.shippingAddressError"
+                  class="customer-price-edit__address-alert"
+                  type="error"
+                  :closable="false"
+                  show-icon
+                >
+                  <template #title>
+                    <span>{{ page.shippingAddressError }}</span>
+                    <ElButton link type="primary" @click="retryShippingAddressLoad">
+                      重新加载
+                    </ElButton>
+                  </template>
+                </ElAlert>
+                <component :is="fields" :items="form.shippingItems" :actions="false" />
+              </div>
+
+              <div class="customer-price-edit__contact-panel">
+                <div class="customer-price-edit__contact-heading">
+                  <span
+                    class="customer-price-edit__contact-icon customer-price-edit__contact-icon--receive"
+                    aria-hidden="true"
+                  >
+                    收
+                  </span>
+                  <div class="customer-price-edit__contact-copy">
+                    <strong>收货信息</strong>
+                    <span>选择收货地址后，自动更新目的地</span>
+                  </div>
+                  <ElTag :type="getAddressStatusType('receiving')" effect="plain" size="small">
+                    {{ getAddressStatusText('receiving') }}
+                  </ElTag>
+                </div>
+                <component :is="fields" :items="form.receivingItems" :actions="false" />
+              </div>
+            </div>
+          </ArtSectionCard>
+
+          <ArtSectionCard
+            class="customer-price-edit__section"
+            title="配置信息"
+            subtitle="与开单共用零担、整车、计费和交接规则。"
+            preserve-content-structure
+            ><OrderConfig
+              ref="configRef"
+              v-model="form.data.orderConfig"
+              :external-fields="fields"
+              :can-edit-attachments="true"
+              :resource-tenant-id="resourceTenantId"
+              @schema="handleConfigSchema"
+          /></ArtSectionCard>
+          <ArtSectionCard title="货物信息" preserve-content-structure>
+            <AgreementCargoEditor
+              v-model="form.data.cargoItems"
+              kind="customer"
+              :contract-id="form.data.contractId"
+              :tenant-id="resourceTenantId"
+              :editable="canEditSensitiveField('quoteAmounts')"
+              :pricing-visible="canViewSensitiveField('quoteAmounts')"
+              :pricing-editable="canEditSensitiveField('quoteAmounts')"
+              @freight="form.data.transportFee = $event"
+            />
+          </ArtSectionCard>
+
+          <ArtSectionCard
+            v-if="canViewSensitiveField('quoteAmounts')"
+            class="customer-price-edit__section"
+            preserve-content-structure
+            title="费用信息"
+          >
+            <component :is="fields" :items="form.feeItems" :actions="false" />
+          </ArtSectionCard>
+
+          <ArtSectionCard
+            v-if="canViewSensitiveField('paymentAmounts')"
+            class="customer-price-edit__section"
+            preserve-content-structure
+            title="付款方式"
+          >
+            <component :is="fields" :items="form.paymentItems" :actions="false" />
+          </ArtSectionCard>
+        </div>
+      </template>
+
+      <template #shippingAddressDetail>
+        <div
+          class="customer-price-edit__address-card"
+          :class="{
+            'is-empty': !form.data.shippingAddressDetail,
+            'is-disabled': !form.data.customerId || page.shippingAddressLoading
+          }"
+        >
+          <div class="customer-price-edit__address-main">
+            <div class="customer-price-edit__address-text">
+              {{ form.data.shippingAddressDetail || getAddressEmptyText('shipping') }}
+            </div>
+            <div v-if="form.data.shippingAddressDetail" class="customer-price-edit__address-meta">
+              <span
+                :class="{
+                  'is-warning': !getAddressCoordinateText('shipping')
+                }"
+              >
+                {{ getAddressCoordinateText('shipping') || '缺少经纬度' }}
+              </span>
+            </div>
+          </div>
+          <div v-if="canEditAddressSelection" class="customer-price-edit__address-actions">
+            <ElButton
+              type="primary"
+              plain
+              :loading="page.shippingAddressLoading"
+              :disabled="!form.data.customerId"
+              @click="openAddressSelector('shipping')"
+            >
+              {{ form.data.shippingAddressDetail ? '更换' : '选择地址' }}
+            </ElButton>
+            <ElButton
+              v-if="form.data.shippingAddressDetail"
+              text
+              @click="handleAddressClear('shipping')"
+            >
+              清空
+            </ElButton>
           </div>
         </div>
-      </ArtSectionCard>
+      </template>
 
-      <PriceCargoSection
-        :quantity-text="form.cargoQuantityText"
-        :volume-text="form.cargoVolumeText"
-        :weight-text="form.cargoWeightText"
-        weight-label="总质量"
-        @select-cargo="openCargoSelector"
-        @add-cargo="addCargoItem"
-      >
-        <ArtTable
-          :data="form.cargoItems"
-          :columns="form.cargoColumns"
-          :pagination="undefined"
-          :show-table-header="false"
-          table-layout="fixed"
-          empty-height="160px"
-        />
-      </PriceCargoSection>
-
-      <ArtSectionCard
-        class="customer-price-edit__section"
-        preserve-content-structure
-        title="需求车辆"
-      >
-        <ArtForm
-          ref="vehicleFormRef"
-          v-model="form.data"
-          :items="form.vehicleItems"
-          :rules="form.rules"
-          :span="8"
-          :gutter="24"
-          label-width="98px"
-          root-class="customer-price-edit__form"
-        />
-      </ArtSectionCard>
-
-      <ArtSectionCard
-        v-if="canViewSensitiveField('quoteAmounts')"
-        class="customer-price-edit__section"
-        preserve-content-structure
-        title="费用信息"
-      >
-        <ArtForm
-          ref="feeFormRef"
-          v-model="form.data"
-          :items="form.feeItems"
-          :rules="form.rules"
-          :span="8"
-          :gutter="24"
-          label-width="98px"
-          root-class="customer-price-edit__form"
-        />
-      </ArtSectionCard>
-
-      <ArtSectionCard
-        v-if="canViewSensitiveField('paymentAmounts')"
-        class="customer-price-edit__section"
-        preserve-content-structure
-        title="付款方式"
-      >
-        <ArtForm
-          ref="paymentFormRef"
-          v-model="form.data"
-          :items="form.paymentItems"
-          :rules="form.rules"
-          :span="8"
-          :gutter="24"
-          label-width="98px"
-          root-class="customer-price-edit__form"
-        />
-      </ArtSectionCard>
-    </div>
+      <template #receivingAddressDetail>
+        <div
+          class="customer-price-edit__address-card"
+          :class="{ 'is-empty': !form.data.receivingAddressDetail }"
+        >
+          <div class="customer-price-edit__address-main">
+            <div class="customer-price-edit__address-text">
+              {{ form.data.receivingAddressDetail || getAddressEmptyText('receiving') }}
+            </div>
+            <div v-if="form.data.receivingAddressDetail" class="customer-price-edit__address-meta">
+              <span
+                :class="{
+                  'is-warning': !getAddressCoordinateText('receiving')
+                }"
+              >
+                {{ getAddressCoordinateText('receiving') || '缺少经纬度' }}
+              </span>
+            </div>
+          </div>
+          <div v-if="canEditAddressSelection" class="customer-price-edit__address-actions">
+            <ElButton type="primary" plain @click="openAddressSelector('receiving')">
+              {{ form.data.receivingAddressDetail ? '更换' : '选择地址' }}
+            </ElButton>
+            <ElButton
+              v-if="form.data.receivingAddressDetail"
+              text
+              @click="handleAddressClear('receiving')"
+            >
+              清空
+            </ElButton>
+          </div>
+        </div>
+      </template>
+    </ArtForm>
 
     <ArtStickyActionBar
       class="customer-price-edit__footer"
@@ -310,13 +245,13 @@
         :loading="page.saving"
         @click="handleSave"
       >
-        保存客户价
+        保存客户协议价
       </ElButton>
     </ArtStickyActionBar>
 
     <ArtTableSingleSelect
       ref="addressSelectRef"
-      v-model="addressSelector"
+      v-model="addressSelector.value"
       v-model:selected-data="addressSelector.selectedRows"
       :api-fn="fetchAddressSelectorData"
       :columns="addressSelector.columns"
@@ -336,52 +271,23 @@
       <template #trigger></template>
       <template #empty><TmsDataSourceEmptyActions source="customer-address" /></template>
     </ArtTableSingleSelect>
-
-    <ArtTableMultipleSelect
-      ref="cargoSelectRef"
-      v-model="cargoSelector.value"
-      v-model:selected-data="cargoSelector.selectedRows"
-      :api-fn="fetchCargoSelectorData"
-      :columns="cargoSelector.columns"
-      title="批量选择货物"
-      subtitle="从货物管理中选择后，会自动带入计量单位、单件体积和单件重量。"
-      row-key="id"
-      label-key="cargoName"
-      description-key="cargoCode"
-      search-placeholder="请输入货物名称、编码、单位或备注"
-      empty-text="暂无可选货物"
-      empty-description="当前租户还没有启用的货物资料，请先维护货物编码、名称和计量单位。"
-      dialog-width="xl"
-      show-pagination
-      :page-size="10"
-      @confirm="handleCargoSelectorConfirm"
-    >
-      <template #trigger></template>
-      <template #empty><TmsDataSourceEmptyActions source="cargo" /></template>
-    </ArtTableMultipleSelect>
   </ArtPageShell>
 </template>
 
 <script setup lang="tsx">
+  import { normalizeAgreementOrderConfig } from '../modules/agreement-order-config'
+
+  import OrderConfig from '../../order-open/modules/order-config.vue'
+  import AgreementCargoEditor from '../modules/agreement-cargo-editor.vue'
+  import { useAgreementPriceTerms } from '../modules/use-agreement-price-terms'
   import { formatCoordinateValue } from '@/utils/ui/coordinates'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import { cloneDeep } from 'lodash-es'
   import type { FormRules, TagProps } from 'element-plus'
-  import {
-    ElAlert,
-    ElAutocomplete,
-    ElButton,
-    ElIcon,
-    ElInputNumber,
-    ElMessage,
-    ElOption,
-    ElSelect,
-    ElTag
-  } from 'element-plus'
+  import { ElAlert, ElButton, ElIcon, ElMessage, ElTag } from 'element-plus'
   import { Check } from '@element-plus/icons-vue'
-  import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
-  import ArtTableMultipleSelect from '@/components/core/forms/art-data-select/table-multiple.vue'
+
   import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
   import TmsDataSourceEmptyActions from '../../components/tms-data-source-empty-actions.vue'
   import type {
@@ -391,13 +297,11 @@
     DataSelectRecord
   } from '@/components/core/forms/art-data-select/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import ArtTable from '@/components/core/tables/art-table/index.vue'
-  import type { ColumnOption } from '@/types'
+
   import { formatNameCodeOption } from '@/utils/form'
   import {
     addCustomerPrice,
     editCustomerPrice,
-    fetchCargoList,
     fetchCustomerAddressList,
     fetchCustomerOptions,
     fetchCustomerPriceDetail
@@ -406,11 +310,10 @@
   import { clearFormRefsValidation, validateFormRefs } from '@/utils/form/validation'
   import { formatCompactNumberValue } from '@/utils/ui/format'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
-  import PriceCargoSection from '../modules/price-cargo-section.vue'
+
   import {
     calculateCargoSummary,
     getResponseData,
-    mergeCargoSelections,
     roundNumber,
     splitRegionPath,
     toNumber,
@@ -427,17 +330,10 @@
   import { canEditField, canViewField, type FieldAccessLevel } from '@/utils/field-permission'
 
   defineOptions({ name: 'TmsCustomerPriceEdit' })
-
-  type CargoMaster = Api.Tms.BasicData.Cargo
   type CustomerOption = Api.Tms.BasicData.CustomerOption
   type CustomerAddress = Api.Tms.BasicData.CustomerAddress
   type CustomerPriceFieldKey = Api.Tms.BasicData.CustomerPriceFieldKey
   type AddressMode = 'shipping' | 'receiving'
-  type CargoSuggestionCallback = (items: CargoSuggestion[]) => void
-
-  interface CargoSuggestion extends CargoMaster {
-    value: string
-  }
 
   interface FormExpose {
     validate: () => Promise<boolean>
@@ -463,12 +359,6 @@
     columns: DataSelectColumn[]
   }
 
-  interface CargoSelectorGroup {
-    value: Array<string | number>
-    selectedRows: DataSelectRecord[]
-    columns: DataSelectColumn[]
-  }
-
   interface FormGroup {
     data: CustomerPriceForm
     customerOptions: CustomerOption[]
@@ -482,11 +372,9 @@
     baseItems: ComputedRef<FormItem[]>
     shippingItems: ComputedRef<FormItem[]>
     receivingItems: ComputedRef<FormItem[]>
-    vehicleItems: ComputedRef<FormItem[]>
     feeItems: ComputedRef<FormItem[]>
     paymentItems: ComputedRef<FormItem[]>
     rules: ComputedRef<FormRules<CustomerPriceForm>>
-    cargoColumns: ComputedRef<ColumnOption<CustomerPriceCargoItem>[]>
     cargoItems: ComputedRef<CustomerPriceCargoItem[]>
     cargoSummary: ComputedRef<CargoSummary>
     cargoQuantityText: ComputedRef<string>
@@ -508,21 +396,8 @@
   const userStore = useUserStore()
   const { getDictMap } = storeToRefs(userStore)
   const baseFormRef = ref<FormExpose>()
-  const shippingFormRef = ref<FormExpose>()
-  const receivingFormRef = ref<FormExpose>()
-  const vehicleFormRef = ref<FormExpose>()
-  const feeFormRef = ref<FormExpose>()
-  const paymentFormRef = ref<FormExpose>()
   const addressSelectRef = ref<ArtDataSelectExpose>()
-  const cargoSelectRef = ref<ArtDataSelectExpose>()
-  const validatedFormRefs = [
-    baseFormRef,
-    shippingFormRef,
-    receivingFormRef,
-    vehicleFormRef,
-    feeFormRef,
-    paymentFormRef
-  ]
+  const validatedFormRefs = [baseFormRef]
 
   const isEdit = computed(() => Boolean(route.params.id))
   const sensitiveFieldFallback = computed<FieldAccessLevel>(() =>
@@ -566,41 +441,12 @@
     return {
       label,
       key: String(key),
+      span: 8,
       type: editable ? 'number' : 'input',
+      hidden: !canViewSensitiveField(field),
       props: editable ? moneyProps : { disabled: true, class: '!w-full' }
     }
   }
-
-  const countProps = {
-    min: 0,
-    precision: 0,
-    controlsPosition: 'right',
-    class: '!w-full'
-  }
-
-  const cargoSelector = reactive<CargoSelectorGroup>({
-    value: [],
-    selectedRows: [],
-    columns: [
-      { prop: 'cargoCode', label: '货物编码', width: 150 },
-      { prop: 'cargoName', label: '货物名称', minWidth: 220 },
-      { prop: 'unit', label: '单位', width: 100, formatter: formatCargoUnit },
-      {
-        prop: 'volumeM3',
-        label: '单件体积(m³)',
-        width: 140,
-        align: 'right',
-        formatter: (row) => formatCargoNumber((row as CargoMaster).volumeM3, 3)
-      },
-      {
-        prop: 'weightKg',
-        label: '单件重量(kg)',
-        width: 140,
-        align: 'right',
-        formatter: (row) => formatCargoNumber((row as CargoMaster).weightKg, 2)
-      }
-    ]
-  })
 
   const createInitialCargoItem = createInitialCustomerPriceCargoItem
   const createInitialForm = createInitialCustomerPriceForm
@@ -647,6 +493,7 @@
         span: 12,
         description: '更换客户会重新读取默认发货地址，并清空原收货信息。',
         api: fetchCustomerOptions,
+        beforeFetch: (params) => ({ ...params, tenantId: resourceTenantId.value }),
         resultField: 'data',
         labelField: 'customerName',
         valueField: 'id',
@@ -666,28 +513,6 @@
         type: 'input',
         span: 12,
         props: { disabled: true, placeholder: '选择客户后自动带入' }
-      },
-      {
-        label: '运输类型',
-        key: 'transportType',
-        type: 'select',
-        span: 12,
-        props: {
-          options: form.transportTypeOptions,
-          clearable: true,
-          placeholder: '请选择运输类型'
-        }
-      },
-      {
-        label: '货物类型',
-        key: 'cargoType',
-        type: 'select',
-        span: 12,
-        props: {
-          options: form.cargoTypeOptions,
-          clearable: true,
-          placeholder: '请选择货物类型'
-        }
       }
     ]),
     shippingItems: computed<FormItem[]>(() => [
@@ -696,7 +521,7 @@
             {
               label: '发货地址',
               key: 'shippingAddressDetail',
-              type: 'input',
+              type: 'addressReference',
               span: 24,
               props: { disabled: true, maxlength: 200, placeholder: '请选择发货地址' }
             } satisfies FormItem
@@ -706,7 +531,8 @@
         label: '始发地',
         key: 'originRegionPath',
         type: 'input',
-        span: 24
+        span: 24,
+        props: { readonly: true, modelValue: getRegionText('shipping') }
       },
       {
         label: '联系人',
@@ -737,7 +563,7 @@
             {
               label: '收货地址',
               key: 'receivingAddressDetail',
-              type: 'input',
+              type: 'addressReference',
               span: 24,
               props: { disabled: true, maxlength: 200, placeholder: '请选择收货地址' }
             } satisfies FormItem
@@ -747,7 +573,8 @@
         label: '目的地',
         key: 'destinationRegionPath',
         type: 'input',
-        span: 24
+        span: 24,
+        props: { readonly: true, modelValue: getRegionText('receiving') }
       },
       {
         label: '联系人',
@@ -772,33 +599,7 @@
           ]
         : [])
     ]),
-    vehicleItems: computed<FormItem[]>(() => [
-      {
-        label: '车型',
-        key: 'vehicleType',
-        type: 'select',
-        props: { options: form.vehicleTypeOptions, clearable: true, placeholder: '请选择' }
-      },
-      {
-        label: '车长',
-        key: 'vehicleLength',
-        type: 'select',
-        props: { options: form.vehicleLengthOptions, clearable: true, placeholder: '请选择' }
-      },
-      {
-        label: '用车数量',
-        key: 'vehicleCount',
-        type: 'number',
-        props: countProps
-      }
-    ]),
     feeItems: computed<FormItem[]>(() => [
-      {
-        label: '计费方式',
-        key: 'billingMethod',
-        type: 'select',
-        props: { options: form.billingMethodOptions, clearable: true, placeholder: '请选择' }
-      },
       createSensitiveMoneyItem('运输费', 'transportFee', 'quoteAmounts'),
       createSensitiveMoneyItem('保险费', 'insuranceFee', 'quoteAmounts'),
       createSensitiveMoneyItem('包装费', 'packageFee', 'quoteAmounts'),
@@ -824,10 +625,8 @@
       destinationRegionPath: [
         { required: true, type: 'array', message: '请选择目的地', trigger: 'change' }
       ],
-      transportType: [{ required: true, message: '请选择运输类型', trigger: 'change' }],
       shippingContactName: [{ required: true, message: '请输入发货联系人', trigger: 'blur' }],
       receivingContactName: [{ required: true, message: '请输入收货联系人', trigger: 'blur' }],
-      billingMethod: [{ required: true, message: '请选择计费方式', trigger: 'change' }],
       ...(canEditSensitiveField('contactPhones')
         ? {
             shippingContactPhone: [
@@ -852,89 +651,6 @@
         ? { transportFee: [{ required: true, message: '请输入运输费', trigger: 'blur' }] }
         : {})
     })),
-    cargoColumns: computed<ColumnOption<CustomerPriceCargoItem>[]>(() => [
-      { type: 'globalIndex', label: '序号', width: 70 },
-      {
-        prop: 'cargoName',
-        label: '货物名称',
-        minWidth: 180,
-        formatter: (row) => (
-          <ElAutocomplete
-            v-model={row.cargoName}
-            fetchSuggestions={(keyword, callback) =>
-              void fetchCargoSuggestions(keyword, callback as CargoSuggestionCallback)
-            }
-            triggerOnFocus={true}
-            valueKey="value"
-            maxlength={80}
-            clearable
-            placeholder="请选择或输入货物名称"
-            onSelect={(item) => handleCargoSelect(row, item)}
-          />
-        )
-      },
-      {
-        prop: 'quantity',
-        label: '数量',
-        width: 150,
-        formatter: (row) => (
-          <ElInputNumber
-            v-model={row.quantity}
-            min={0}
-            precision={2}
-            controls={false}
-            class="w-full!"
-          />
-        )
-      },
-      {
-        prop: 'unit',
-        label: '单位',
-        width: 150,
-        formatter: (row) => (
-          <ElSelect v-model={row.unit} class="w-full!" clearable filterable placeholder="请选择">
-            {form.cargoUnitOptions.map((item) => (
-              <ElOption key={item.value} label={item.label || item.name} value={item.value} />
-            ))}
-          </ElSelect>
-        )
-      },
-      {
-        prop: 'volumeM3',
-        label: '体积（m³）',
-        width: 170,
-        formatter: (row) => (
-          <ElInputNumber
-            v-model={row.volumeM3}
-            min={0}
-            precision={3}
-            controls={false}
-            class="w-full!"
-          />
-        )
-      },
-      {
-        prop: 'weightKg',
-        label: '重量（kg）',
-        width: 170,
-        formatter: (row) => (
-          <ElInputNumber
-            v-model={row.weightKg}
-            min={0}
-            precision={2}
-            controls={false}
-            class="w-full!"
-          />
-        )
-      },
-      {
-        prop: 'operation',
-        label: '操作',
-        width: 100,
-        fixed: 'right',
-        formatter: (row) => <ArtButtonTable type="delete" onClick={() => removeCargoItem(row)} />
-      }
-    ]),
     cargoItems: computed(() => form.data.cargoItems ?? []),
     cargoSummary: computed(() => calculateCargoSummary(form.data.cargoItems ?? [])),
     cargoQuantityText: computed(() => formatCompactNumberValue(form.cargoSummary.quantity, 0)),
@@ -973,8 +689,8 @@
         complete:
           !canEditSensitiveField('quoteAmounts') ||
           Boolean(
-            form.data.transportType &&
-            form.data.billingMethod &&
+            form.data.orderConfig.loadType &&
+            form.data.orderConfig.billingMode &&
             form.data.cargoItems?.some((item) => item.cargoName)
           )
       }
@@ -1016,20 +732,29 @@
     void initializePage()
   })
 
+  let pageRevision = 0
+  onBeforeUnmount(() => {
+    pageRevision++
+    addressLoadRequestId++
+  })
   async function initializePage(): Promise<void> {
+    const revision = ++pageRevision
+    addressLoadRequestId++
     page.loading = true
     page.error = null
     try {
       await Promise.all([
-        loadDetail(),
+        loadDetail(revision),
         ...dictCodes.map((code) => userStore.ensureDictLoaded(code))
       ])
       await nextTick()
+      if (revision !== pageRevision) return
       clearFormRefsValidation(validatedFormRefs)
     } catch (error) {
-      page.error = error instanceof Error ? error : new Error('客户价信息加载失败')
+      if (revision !== pageRevision) return
+      page.error = error instanceof Error ? error : new Error('客户协议价信息加载失败')
     } finally {
-      page.loading = false
+      if (revision === pageRevision) page.loading = false
     }
   }
 
@@ -1061,16 +786,24 @@
     { immediate: true }
   )
 
-  async function loadDetail(): Promise<void> {
-    if (!isEdit.value) return
+  async function loadDetail(revision: number): Promise<void> {
+    if (!isEdit.value) {
+      if (typeof route.query.customerId === 'string') {
+        form.data.customerId = route.query.customerId
+        await loadCustomerAddressOptions(route.query.customerId, true)
+      }
+      return
+    }
 
     const id = String(route.params.id || '')
     const { data } = await fetchCustomerPriceDetail(id)
-    if (!data) throw new Error('客户价不存在或无权访问')
+    if (revision !== pageRevision) return
+    if (!data) throw new Error('客户协议价不存在或无权访问')
 
     replaceForm({
       ...createInitialForm(),
       ...data,
+      orderConfig: normalizeAgreementOrderConfig(data),
       customerCode: data.customer?.customerCode ?? '',
       originRegionPath: splitRegionPath(data.originRegion),
       destinationRegionPath: splitRegionPath(data.destinationRegion),
@@ -1082,7 +815,9 @@
   }
 
   function replaceForm(nextForm: CustomerPriceForm): void {
-    Object.assign(form.data, createInitialForm(), cloneDeep(nextForm))
+    Object.assign(form.data, createInitialForm(), cloneDeep(nextForm), {
+      orderConfig: normalizeAgreementOrderConfig(nextForm)
+    })
   }
 
   function syncCustomerOptions(result: unknown): unknown {
@@ -1275,8 +1010,8 @@
 
     Object.assign(form.data, patchMap[mode])
     void nextTick(() => {
-      if (mode === 'shipping') shippingFormRef.value?.clearValidate()
-      else receivingFormRef.value?.clearValidate()
+      if (mode === 'shipping') baseFormRef.value?.clearValidate()
+      else baseFormRef.value?.clearValidate()
       baseFormRef.value?.clearValidate()
     })
   }
@@ -1351,102 +1086,6 @@
     return hasAddress ? 'success' : 'info'
   }
 
-  function addCargoItem(): void {
-    form.data.cargoItems = [...(form.data.cargoItems ?? []), createInitialCargoItem()]
-  }
-
-  async function openCargoSelector(): Promise<void> {
-    await nextTick()
-    await cargoSelectRef.value?.open()
-  }
-
-  async function fetchCargoSelectorData(params: DataSelectFetchParams) {
-    const { from, to } = buildSupabasePageRange({ current: params.page, size: params.pageSize })
-    const { data, total } = await fetchCargoList({
-      keyword: String(params.keyword ?? '').trim(),
-      enabled: true,
-      from,
-      to
-    })
-    return { data: data ?? [], total: total ?? 0 }
-  }
-
-  function handleCargoSelectorConfirm(_value: unknown, rows: DataSelectRecord[]): void {
-    const selectedCargoes = rows as CargoMaster[]
-    const currentItems = form.data.cargoItems ?? []
-    const result = mergeCargoSelections(
-      currentItems,
-      selectedCargoes,
-      createCargoItemFromMaster,
-      (item) =>
-        !Object.values(item).some((value) => value !== null && value !== undefined && value !== '')
-    )
-
-    if (!result.addedCount) return
-
-    form.data.cargoItems = result.items
-    cargoSelector.value = []
-    cargoSelector.selectedRows = []
-  }
-
-  async function fetchCargoSuggestions(
-    keyword: string,
-    callback: CargoSuggestionCallback
-  ): Promise<void> {
-    try {
-      const result = await fetchCargoList({
-        keyword: String(keyword ?? '').trim(),
-        enabled: true,
-        from: 0,
-        to: 19
-      })
-      callback((result.data ?? []).map((item) => ({ ...item, value: item.cargoName })))
-    } catch {
-      callback([])
-    }
-  }
-
-  function handleCargoSelect(row: CustomerPriceCargoItem, item: Record<string, unknown>): void {
-    const cargo: CargoMaster = {
-      cargoName: String(item.cargoName ?? item.value ?? ''),
-      unit: String(item.unit ?? ''),
-      weightKg: typeof item.weightKg === 'number' ? item.weightKg : null,
-      volumeM3: typeof item.volumeM3 === 'number' ? item.volumeM3 : null
-    }
-    Object.assign(row, createCargoItemFromMaster(cargo), {
-      quantity: row.quantity
-    })
-  }
-
-  function createCargoItemFromMaster(cargo: CargoMaster): CustomerPriceCargoItem {
-    return {
-      cargoName: cargo.cargoName,
-      quantity: null,
-      unit: cargo.unit || '',
-      volumeM3: cargo.volumeM3 ?? null,
-      weightKg: cargo.weightKg ?? null
-    }
-  }
-
-  function formatCargoUnit(row: DataSelectRecord): string {
-    const unit = String(row.unit ?? '')
-    return form.cargoUnitOptions.find((item) => String(item.value) === unit)?.label || unit || '-'
-  }
-
-  function formatCargoNumber(value?: number | null, precision = 2): string {
-    const numberValue = Number(value)
-    return Number.isFinite(numberValue) ? numberValue.toFixed(precision) : '-'
-  }
-
-  function removeCargoItem(row: CustomerPriceCargoItem): void {
-    const rows = form.data.cargoItems ?? []
-    if (rows.length <= 1) {
-      form.data.cargoItems = [createInitialCargoItem()]
-      return
-    }
-    form.data.cargoItems = rows.filter((item) => item !== row)
-  }
-
   function normalizePayload(): CustomerPrice {
     const payload = normalizeCustomerPricePayload(toRaw(form.data))
     if (!canEditAddressSelection.value) removePayloadFields(payload, ['customerId'])
@@ -1462,11 +1101,16 @@
         'shippingLatitude',
         'receivingAddressDetail',
         'receivingLongitude',
-        'receivingLatitude'
+        'receivingLatitude',
+        'distanceKm'
       ])
     }
     if (!canEditSensitiveField('quoteAmounts')) {
       removePayloadFields(payload, [
+        'cargoItems',
+        'cargoQuantityTotal',
+        'cargoVolumeTotal',
+        'cargoWeightTotal',
         'transportFee',
         'insuranceFee',
         'packageFee',
@@ -1495,15 +1139,19 @@
   }
 
   async function handleSave(): Promise<void> {
+    if (page.saving || page.loading) return
+    const revision = pageRevision
     const valid = await validateFormRefs(validatedFormRefs, pageRef)
+    if (!(await configRef.value?.validate())) return
     if (!valid) return
+    if (revision !== pageRevision) return
 
     page.saving = true
     try {
       const payload = normalizePayload()
       if (form.data.id) await editCustomerPrice(payload)
       else await addCustomerPrice(payload)
-      goBack(true)
+      if (revision === pageRevision) goBack(true)
     } catch {
       // API 层已经展示错误信息，当前页保持编辑状态。
     } finally {
@@ -1522,6 +1170,36 @@
         : undefined
     })
   }
+  const configRef = ref<{ validate: () => Promise<boolean> }>()
+  const {
+    agreementItems,
+    agreementRules,
+    configItems,
+    configRules,
+    handleConfigSchema,
+    resourceTenantId,
+    calculateDistance,
+    distanceLoading
+  } = useAgreementPriceTerms(
+    'customer',
+    computed(() => form.data),
+    computed(() => page.loading),
+    () => canEditSensitiveField('addressDetails')
+  )
+  const allFormItems = computed<FormItem[]>(() => [
+    ...form.baseItems,
+    ...form.shippingItems,
+    ...form.receivingItems,
+    ...form.feeItems,
+    ...form.paymentItems,
+    ...agreementItems.value,
+    ...configItems.value
+  ])
+  const allFormRules = computed(() => ({
+    ...form.rules,
+    ...agreementRules.value,
+    ...configRules.value
+  }))
 </script>
 
 <style scoped lang="scss">

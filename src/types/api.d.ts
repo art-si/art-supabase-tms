@@ -18,7 +18,8 @@ declare global {
           'contactPhone' | 'idCardNo' | 'homeAddress' | 'emergencyContact' | 'identityDocuments'
         type DriverFieldAccessMap = Partial<Record<DriverFieldKey, FieldAccessLevel>>
         type SensitiveNumber = number | string | null
-        type CarrierPriceFieldKey = 'contactPhones' | 'costAmounts' | 'paymentAmounts'
+        type CarrierPriceFieldKey =
+          'contactPhones' | 'addressDetails' | 'costAmounts' | 'paymentAmounts'
         type CarrierPriceFieldAccessMap = Partial<Record<CarrierPriceFieldKey, FieldAccessLevel>>
         type CustomerPriceFieldKey =
           'contactPhones' | 'addressDetails' | 'quoteAmounts' | 'paymentAmounts'
@@ -111,6 +112,9 @@ declare global {
           isRecordOwner?: boolean
         }
 
+        type CustomerContact = import('@/api/customer-children').CustomerContact
+        type CustomerFinance = import('@/api/customer-children').CustomerFinance
+
         interface CustomerAddress {
           id?: string
           tenantId?: string
@@ -167,6 +171,8 @@ declare global {
           originAddress?: CustomerAddress | null
           destinationAddressId: string
           destinationAddress?: CustomerAddress | null
+          waypointStationIds?: string[]
+          returnTrip?: boolean
           distanceKm?: number | string | null
           estimatedMinutes?: number | null
           enabled: boolean
@@ -181,22 +187,35 @@ declare global {
           Pick<FavoriteRoute, 'tenantId' | 'customerId' | 'enabled'> &
             Api.Common.CommonSearchParams & {
               keyword?: string
+              recordId?: string
             }
         >
 
-        interface CustomerPriceCargoItem {
-          cargoName?: string | null
-          quantity?: number | null
-          unit?: string | null
-          volumeM3?: number | null
-          weightKg?: number | null
-        }
+        type CustomerPriceCargoItem = Api.Tms.Order.CargoItem
+
+        type PriceAgreementStatus = 'draft' | 'pending' | 'effective' | 'expired'
 
         interface CustomerPrice {
           id?: string
           tenantId?: string
           customerId: string
           customer?: CustomerOption | null
+          contractId?: string | null
+          contract?: {
+            id: string
+            contractNo: string
+            contractName: string
+            contractStatus?: string | null
+            customerId: string | null
+            carrierId: string | null
+            effectiveDate: string | null
+            expiryDate: string | null
+          } | null
+          effectiveFrom?: string | null
+          effectiveTo?: string | null
+          agreementStatus?: PriceAgreementStatus
+          distanceKm?: number | string | null
+          orderConfig?: Api.Tms.Order.OrderConfig | null
           originRegion: string
           destinationRegion: string
           transportType: string
@@ -292,6 +311,8 @@ declare global {
           bankName?: string
           bankAccountName?: string
           bankAccount?: string
+          contacts?: CarrierContact[]
+          billingAccounts?: CarrierBillingAccount[]
           signedContract?: boolean
           contractAttachmentUrl?: string
           remark?: string
@@ -301,6 +322,31 @@ declare global {
           updateTime?: string
           fieldAccess?: CarrierFieldAccessMap
           isRecordOwner?: boolean
+        }
+
+        interface CarrierContact {
+          id?: string
+          name: string
+          alias?: string
+          position?: string
+          department?: string
+          mobile?: string
+          landline?: string
+          email?: string
+          qq?: string
+          isDefault: boolean
+          role?: string
+        }
+
+        interface CarrierBillingAccount {
+          id?: string
+          invoiceTitle: string
+          taxNo?: string
+          bankName?: string
+          bankAccount?: string
+          bankBranch?: string
+          isDefault: boolean
+          remark?: string
         }
 
         type CarrierSearchParams = Partial<
@@ -316,6 +362,12 @@ declare global {
           id: string
           carrierCode?: string
           companyName: string
+          carrierType?: string
+          carrierTypes?: string[]
+          dispatchChannel?: string
+          dispatchChannels?: string[]
+          parentUnitId?: string | null
+          parentUnitName?: string | null
           enabled?: boolean
           contactName?: string
           contactPhone?: string
@@ -395,7 +447,7 @@ declare global {
           assessment: CarrierPerformanceAssessment
         }
 
-        interface CarrierPriceCargoItem {
+        interface CarrierPriceCargoItem extends Api.Tms.Order.CargoItem {
           orderNo?: string | null
           originRegion?: string | null
           destinationRegion?: string | null
@@ -415,6 +467,22 @@ declare global {
           quoteNo: string
           carrierId: string
           carrier?: CarrierOption | null
+          contractId?: string | null
+          contract?: {
+            id: string
+            contractNo: string
+            contractName: string
+            contractStatus?: string | null
+            customerId: string | null
+            carrierId: string | null
+            effectiveDate: string | null
+            expiryDate: string | null
+          } | null
+          effectiveFrom?: string | null
+          effectiveTo?: string | null
+          agreementStatus?: PriceAgreementStatus
+          distanceKm?: number | string | null
+          orderConfig?: Api.Tms.Order.OrderConfig | null
           driverId?: string | null
           driver?: DriverOption | null
           vehicleId?: string | null
@@ -422,6 +490,18 @@ declare global {
           originRegion: string
           destinationRegion: string
           transportMode: string
+          shippingAddressId?: string | null
+          receivingAddressId?: string | null
+          shippingContactName?: string | null
+          shippingContactPhone?: string | null
+          shippingAddressDetail?: string | null
+          shippingLongitude?: number | string | null
+          shippingLatitude?: number | string | null
+          receivingContactName?: string | null
+          receivingContactPhone?: string | null
+          receivingAddressDetail?: string | null
+          receivingLongitude?: number | string | null
+          receivingLatitude?: number | string | null
           contactName?: string | null
           contactPhone?: string | null
           driverName?: string | null
@@ -489,6 +569,15 @@ declare global {
           remark?: string
           carrier?: CarrierOption | null
           assignedVehicles?: DriverAssignedVehicle[]
+          driverOwnership?: string
+          registrationStatus?: string
+          identityAuthStatus?: string
+          licenseAuthStatus?: string
+          qualificationAuthStatus?: string
+          portraitUrl?: string | null
+          portraitPreviewUrl?: string | null
+          companyName?: string | null
+          isBlacklisted?: boolean
           createBy?: string
           createTime?: string
           updateBy?: string
@@ -628,6 +717,7 @@ declare global {
         >
 
         type ContractStatus = 'draft' | 'pending' | 'approved' | 'rejected' | 'terminated'
+        type ContractLifecycleStatus = 'pending_effective' | 'effective' | 'expired' | 'terminated'
         type ContractBusinessType = 'customer' | 'carrier'
         type FieldAccessLevel = 'hidden' | 'masked' | 'read' | 'edit'
         type ContractFieldKey =
@@ -663,6 +753,11 @@ declare global {
           contractNo?: string
           contractName: string
           contractStatus?: ContractStatus
+          lifecycleStatus?: ContractLifecycleStatus
+          terminatedAt?: string | null
+          terminatedByUserId?: string | null
+          terminationReason?: string | null
+          billingUnit?: string | null
           paperContractNo?: string | null
           mnemonicCode?: string | null
           contractCategory: string
@@ -707,7 +802,7 @@ declare global {
         type ContractSearchParams = Partial<
           Pick<
             Contract,
-            | 'contractStatus'
+            | 'lifecycleStatus'
             | 'businessContractType'
             | 'contractCategory'
             | 'customerId'
@@ -763,6 +858,10 @@ declare global {
           stationType: string
           stationRoles?: Api.Tms.Station.StationRoleRecord[]
           regionCode?: string | null
+          region?: string | null
+          addressDetail?: string | null
+          longitude?: number | string | null
+          latitude?: number | string | null
         }
 
         interface CustomerSelectorItem {
@@ -948,6 +1047,7 @@ declare global {
           transferStationRef?: StationOption | null
           deliveryMethod: string
           shippingCustomerId?: string | null
+          invoiceAccountId?: string | null
           contractId?: string | null
           contract?: Pick<
             BasicData.Contract,
@@ -1167,6 +1267,7 @@ declare global {
         interface DispatchPlanExecution {
           dispatchMode?: 'carrier' | 'self_operated' | 'individual_driver'
           dispatchCarrierId?: string | null
+          carrierBillingAccountId?: string | null
           dispatchAgreementId?: string | null
           dispatchVehicleId?: string | null
           dispatchDriverId?: string | null
@@ -1324,8 +1425,8 @@ declare global {
           eventTime: string
           operatorName?: string | null
           locationText?: string | null
-          longitude?: number | null
-          latitude?: number | null
+          longitude?: number | string | null
+          latitude?: number | string | null
           payload: Record<string, unknown>
           remark?: string | null
           createBy?: string | null
@@ -1354,6 +1455,7 @@ declare global {
           status: WaybillStatus | string
           orderId?: string | null
           carrierId?: string | null
+          carrierBillingAccountId?: string | null
           driverId?: string | null
           vehicleId?: string | null
           cargoId?: string | null
@@ -1420,6 +1522,7 @@ declare global {
 
         type WaybillSearchParams = Partial<
           Api.Tms.Order.OrderSearchParams & {
+            customerId?: string
             dispatchStatus?: DispatchStatus | string
             dispatchStatuses?: Array<DispatchStatus | string>
             waybillStatus?: string
@@ -1440,6 +1543,7 @@ declare global {
           certificateRiskOverrideReason?: string | null
           dispatchMode: 'carrier' | 'self_operated' | 'individual_driver'
           dispatchCarrierId?: string | null
+          carrierBillingAccountId?: string | null
           dispatchAgreementId?: string | null
           dispatchVehicleId: string
           dispatchDriverId?: string | null
@@ -1931,6 +2035,16 @@ declare global {
           stationType: StationType | string
           stationRoles?: StationRoleRecord[]
           regionCode?: string | null
+          region?: string | null
+          addressDetail?: string | null
+          regionAdcode?: string | null
+          longitude?: number | null
+          latitude?: number | null
+          coordinateSystem?: string | null
+          coordinateSource?: string | null
+          coordinateStatus?: string | null
+          geocodeProvider?: string | null
+          geocodedAt?: string | null
           managerName?: string | null
           contactPhone?: string | null
           enabled?: boolean

@@ -3,16 +3,29 @@
     ref="dialogRef"
     size="xl"
     show-fullscreen-button
-    :aria-label="form.id ? '编辑司机' : '新增司机'"
+    :aria-label="viewOnly ? '查看司机' : form.id ? '编辑司机' : '新增司机'"
     @close="handleDialogClose"
   >
     <div class="driver-dialog__summary">
-      <span class="driver-dialog__avatar"><ArtSvgIcon icon="ri:steering-2-line" /></span>
+      <span class="driver-dialog__avatar">
+        <img
+          v-if="form.portraitUrl"
+          :src="form.portraitUrl"
+          :alt="`${form.driverName || '司机'}的照片`"
+          width="48"
+          height="48"
+          class="h-full w-full rounded object-cover"
+        />
+        <ArtSvgIcon v-else icon="ri:steering-2-line" />
+      </span>
       <div>
         <strong>{{ form.driverName || '新司机' }}</strong>
         <p
           >{{ form.phone || '待填写手机号码' }} ·
-          {{ form.driverOwnership === 'carrier' ? '承运商司机' : '司机档案' }}</p
+          {{ form.driverOwnership === 'carrier' ? '承运商司机' : '司机档案' }} ·
+          <b class="font-semibold">{{
+            form.companyName || form.carrier?.companyName || '所属公司待确认'
+          }}</b></p
         >
       </div>
     </div>
@@ -23,7 +36,7 @@
       <div class="driver-dialog__record-heading">
         <div><strong>司机证件</strong><p>与车辆证件共用到期预警和责任人处置。</p></div>
         <ElButton
-          v-if="form.id && canManageCertificates"
+          v-if="form.id && canManageCertificates && !viewOnly"
           type="primary"
           @click="openCertificateCenter"
           >管理证件</ElButton
@@ -50,6 +63,7 @@
         :driver-id="form.id"
         :tenant-id="form.tenantId"
         :selected-rule-id="selectedCommissionRuleId"
+        :readonly="viewOnly"
       />
     </section>
     <div
@@ -88,6 +102,7 @@
           :upload-request="uploadDriverDocument"
           :show-resource-picker="false"
           :readonly="
+            viewOnly ||
             !form.tenantId ||
             !canEditDriverField('identityDocuments') ||
             !hasAuth('TmsDriver:UploadDocument')
@@ -99,7 +114,7 @@
           title="历史影像未在此处展示；请上传到私有存储以替换。"
           :closable="false"
         />
-        <div v-if="activeImage !== 'portraitUrl'" class="driver-dialog__ocr-actions">
+        <div v-if="activeImage !== 'portraitUrl' && !viewOnly" class="driver-dialog__ocr-actions">
           <ElButton
             v-auth="'TmsDriver:Ocr'"
             type="primary"
@@ -139,7 +154,7 @@
       <div class="driver-dialog__form-area">
         <div class="driver-dialog__section-heading"
           ><strong>{{ activeTabLabel }}</strong
-          ><span>请核对后保存</span></div
+          ><span>{{ viewOnly ? '已保存的司机档案' : '请核对后保存' }}</span></div
         >
         <div v-if="activeTab === 'other' && form.id" class="mb-4 flex flex-wrap items-center gap-3">
           <ElAlert
@@ -174,7 +189,10 @@
             show-icon
           />
           <ElButton v-if="certificationError" @click="loadCertification">重新加载</ElButton>
-          <div v-else-if="canReviewCertification" class="flex shrink-0 items-center gap-2">
+          <div
+            v-else-if="canReviewCertification && !viewOnly"
+            class="flex shrink-0 items-center gap-2"
+          >
             <ElButton
               v-auth="'TmsDriver:Audit'"
               type="primary"
@@ -365,6 +383,7 @@
       .map((tenant) => ({ label: tenant.tenantName, value: tenant.id }))
   ])
   const dialogRef = ref<ArtDialogExpose<Driver | undefined>>()
+  const viewOnly = ref(false)
   const {
     version: formSession,
     invalidate: invalidateFormSession,
@@ -533,7 +552,7 @@
       prop: 'certificateType',
       label: '证件类型',
       minWidth: 110,
-      formatter: (row) => certificateTypeLabels[row.certificateType] ?? row.certificateType
+      formatter: (row) => certificateTypeLabels[row.certificateType] ?? '待核对'
     },
     { prop: 'certificateNo', label: '证件编号', minWidth: 150, showOverflowTooltip: true },
     {
@@ -565,14 +584,16 @@
                   ? 'warning'
                   : row.status === 'handled'
                     ? 'info'
-                    : 'success',
+                    : row.status === 'valid'
+                      ? 'success'
+                      : 'info',
             effect: 'light',
             title:
               row.status === 'revoked' && row.revokedReason
                 ? `作废原因：${row.revokedReason}`
                 : undefined
           },
-          () => certificateStatusLabels[row.status] ?? row.status
+          () => certificateStatusLabels[row.status] ?? '待核对'
         )
     },
     {
@@ -665,6 +686,15 @@
   const licenseClassOptions = computed(() => getDictMap.value.tmsDriverLicenseType ?? [])
   const qualificationTypeOptions = computed(() => getDictMap.value.tmsDriverQualificationType ?? [])
   const authStatusOptions = computed(() => getDictMap.value.tmsDriverAuthStatus ?? [])
+  const identityAuthStatusOptions = computed(() => {
+    const options = authStatusOptions.value.filter((item) =>
+      ['unverified', 'verified'].includes(item.value)
+    )
+    const current = form.value.identityAuthStatus
+    return current && !options.some((item) => item.value === current)
+      ? [...options, { value: current, label: '状态待核对', disabled: true }]
+      : options
+  })
   const registrationOptions = computed(() => getDictMap.value.tmsDriverRegistrationStatus ?? [])
 
   const profileKeys = [
@@ -1428,7 +1458,7 @@
       label: '身份证状态',
       key: 'identityAuthStatus',
       type: 'select',
-      props: { options: authStatusOptions.value, disabled: true }
+      props: { options: identityAuthStatusOptions.value, disabled: true }
     },
     {
       label: '驾驶证状态',
@@ -1519,11 +1549,14 @@
   }
   const visibleItems = computed<FormItem[]>(() => {
     const fields = tabFields[activeTab.value]
-    return [...formItems.value, ...profileItems.value].filter(
+    const items = [...formItems.value, ...profileItems.value].filter(
       (item) =>
         fields.includes(item.key) &&
         (item.key !== 'carrierId' || form.value.driverOwnership === 'carrier')
     )
+    return viewOnly.value
+      ? items.map((item) => ({ ...item, props: { ...item.props, disabled: true } }))
+      : items
   })
 
   watch(
@@ -1738,8 +1771,10 @@
     row?: Driver,
     initial?: { phone: string; driverOwnership: string; carrierId: string | null },
     initialTab?: DriverTab,
-    commissionRuleId?: string
+    commissionRuleId?: string,
+    readonlyMode = false
   ): Promise<void> => {
+    viewOnly.value = readonlyMode
     await resetForm()
     try {
       await userStore.ensureDictLoaded('hrEthnicity')
@@ -1828,9 +1863,11 @@
     selectedCommissionRuleId.value = commissionRuleId ?? ''
 
     await dialogRef.value?.handleOpen(row, {
-      title: isEdit ? '编辑司机' : '新增司机',
-      subtitle: '维护司机基础资料与证件信息',
+      title: viewOnly.value ? '查看司机' : isEdit ? '编辑司机' : '新增司机',
+      subtitle: viewOnly.value ? '查看司机基础资料与证件信息' : '维护司机基础资料与证件信息',
       contentMaxHeight: '72vh',
+      showConfirmButton: !viewOnly.value,
+      cancelText: viewOnly.value ? '关闭' : '取消',
       onOpen: async () => {
         await reloadAssignedVehicles()
       },
@@ -1899,8 +1936,9 @@
       display: grid;
       flex: 0 0 auto;
       place-items: center;
-      width: 38px;
-      height: 38px;
+      width: 48px;
+      height: 48px;
+      overflow: hidden;
       font-size: 20px;
       color: var(--theme-color);
       background: var(--art-gray-100);

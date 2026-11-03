@@ -1,5 +1,17 @@
 <template>
   <ArtDialog ref="dialogRef" size="xl">
+    <ArtEntitySummary
+      icon="ri:building-line"
+      eyebrow="客户主档"
+      :title="form.customerName || '新增客户'"
+      :description="form.customerCode || '保存后可维护联系人、财务账户与关联业务'"
+    >
+      <template #aside
+        ><ElTag :type="form.enabled ? 'success' : 'info'">{{
+          form.enabled ? '启用' : '停用'
+        }}</ElTag></template
+      >
+    </ArtEntitySummary>
     <ArtForm
       ref="formRef"
       v-model:active-tab="activeTab"
@@ -24,10 +36,67 @@
           v-model:geocode-provider="form.geocodeProvider"
           v-model:geocoded-at="form.geocodedAt"
           :region-api="fetchRegionOptions"
-          :disabled="!canEditCustomerField('addressDetail')"
+          :disabled="readonly || !canEditCustomerField('addressDetail')"
           label-width="108px"
         />
       </template>
+      <template #contacts>
+        <CustomerChildRecords
+          v-if="form.id && activeTab === 'contactSection'"
+          kind="contact"
+          :customer-id="form.id"
+          :tenant-id="form.tenantId"
+          :field-access="form.fieldAccess"
+          @changed="handleChildChanged"
+        />
+      </template>
+      <template #finances>
+        <CustomerChildRecords
+          v-if="form.id && activeTab === 'financeSection'"
+          kind="finance"
+          :customer-id="form.id"
+          :tenant-id="form.tenantId"
+          :field-access="form.fieldAccess"
+          @changed="handleChildChanged"
+        />
+      </template>
+      <template #relatedContracts
+        ><ContractPage
+          v-if="form.id && activeTab === 'contractsSection'"
+          :customer-id="form.id"
+          :customer-tenant-id="form.tenantId"
+          embedded
+      /></template>
+      <template #relatedPrices
+        ><CustomerPricePage
+          v-if="form.id && activeTab === 'pricesSection'"
+          :customer-id="form.id"
+          embedded
+      /></template>
+      <template #relatedWaybills
+        ><CustomerBusinessRecords
+          v-if="form.id && activeTab === 'waybillsSection'"
+          kind="waybill"
+          :customer-id="form.id"
+      /></template>
+      <template #relatedElectronic
+        ><ElectronicContractPage
+          v-if="form.id && activeTab === 'electronicSection'"
+          :customer="form"
+          embedded
+      /></template>
+      <template #relatedAgreements
+        ><TransportAgreementPage
+          v-if="form.id && activeTab === 'agreementsSection'"
+          :customer="form"
+          embedded
+      /></template>
+      <template #relatedStatements
+        ><CustomerBusinessRecords
+          v-if="form.id && activeTab === 'statementsSection'"
+          kind="statement"
+          :customer-id="form.id"
+      /></template>
     </ArtForm>
   </ArtDialog>
 </template>
@@ -45,6 +114,11 @@
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtAddressPicker from '@/components/core/forms/art-address-picker/index.vue'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
+  import ArtEntitySummary from '@/components/core/surfaces/art-entity-summary/index.vue'
+  import CustomerChildRecords from '@/components/business/customer-child-records/index.vue'
+  import CustomerBusinessRecords from './customer-business-records.vue'
+  import { useAuth } from '@/hooks/core/useAuth'
+  import { omit } from 'lodash-es'
   import { useDocumentNumberRule } from '@/hooks/core/useDocumentNumberRule'
   import { useTenantScopeFormPolicy } from '@/hooks/core/useTenantScopeFormPolicy'
   import { addCustomer, editCustomer, fetchCustomerList } from '@tms/api'
@@ -57,6 +131,28 @@
   import { loadAllDocumentPages } from '@/utils/business/document-detail-list'
 
   defineOptions({ name: 'TmsCustomerDialog' })
+  // Shared child editor binds these exact permissions for this page.
+  const customerChildPermissions = [
+    'TmsCustomer:ContactAdd',
+    'TmsCustomer:ContactEdit',
+    'TmsCustomer:ContactCopy',
+    'TmsCustomer:ContactDelete',
+    'TmsCustomer:FinanceAdd',
+    'TmsCustomer:FinanceEdit',
+    'TmsCustomer:FinanceCopy',
+    'TmsCustomer:FinanceDelete'
+  ] as const
+  void customerChildPermissions
+  const ContractPage = defineAsyncComponent(() => import('../../contract/index.vue'))
+  const CustomerPricePage = defineAsyncComponent(() => import('../../customer-price/index.vue'))
+  const ElectronicContractPage = defineAsyncComponent(
+    () => import('../../electronic-contract/index.vue')
+  )
+  const TransportAgreementPage = defineAsyncComponent(
+    () => import('../../transport-agreement/index.vue')
+  )
+  const { hasAuth } = useAuth()
+  const readonly = ref(false)
 
   type Customer = Api.Tms.BasicData.Customer
   type CustomerForm = Customer & { addressPicker?: undefined; regionPath: string[] }
@@ -65,6 +161,7 @@
     row?: Customer
     groups: MasterGroup[]
     initialGroupId?: string
+    readonly?: boolean
   }
 
   interface DialogExposeForm {
@@ -199,8 +296,8 @@
     const tree = parentUnitTree.listToTree(customers.filter((item) => item.tenantId === tenantId))
     return parentUnitTree.removeNode(tree, currentId).tree
   }
-  const formItems = computed<FormItem[]>(() => [
-    { label: '基础信息', key: 'baseSection', type: 'tab', span: 24 },
+  const baseFormItems = computed<FormItem[]>(() => [
+    { label: '客户识别', key: 'baseSection', type: 'tab', span: 24 },
     ...(shouldExposeTenantField.value
       ? [
           {
@@ -339,87 +436,55 @@
         placeholder: '请输入备注信息'
       }
     },
-    { label: '联系人信息', key: 'contactSection', type: 'tab', span: 24 },
-    {
-      label: '姓名',
-      key: 'contactName',
-      type: 'input',
-      props: { maxlength: 50, placeholder: '请输入联系人姓名' }
-    },
-    {
-      label: '手机号码',
-      key: 'contactPhone',
-      type: 'input',
-      hidden: !canViewCustomerField('contactPhone'),
-      props: {
-        maxlength: 20,
-        placeholder: '请输入联系电话',
-        disabled: !canEditCustomerField('contactPhone')
-      }
-    },
-    {
-      label: '部门',
-      key: 'contactDepartment',
-      type: 'input',
-      props: { maxlength: 50, placeholder: '请输入部门' }
-    },
-    {
-      label: '职位',
-      key: 'contactPosition',
-      type: 'input',
-      props: { maxlength: 50, placeholder: '请输入职位' }
-    },
-    {
-      label: 'E-mail',
-      key: 'contactEmail',
-      type: 'input',
-      props: { maxlength: 100, placeholder: '请输入邮箱地址' }
-    },
-    {
-      label: 'QQ',
-      key: 'contactQq',
-      type: 'input',
-      props: { maxlength: 20, placeholder: '请输入 QQ' }
-    },
-    ...(canViewCustomerField('taxNo') || canViewCustomerField('bankAccount')
-      ? [{ label: '财务信息', key: 'financeSection', type: 'tab', span: 24 } satisfies FormItem]
-      : []),
-    {
-      label: '发票抬头',
-      key: 'invoiceTitle',
-      type: 'input',
-      props: { maxlength: 100, placeholder: '请输入发票抬头' }
-    },
-    {
-      label: '纳税人识别号',
-      key: 'taxNo',
-      type: 'input',
-      hidden: !canViewCustomerField('taxNo'),
-      props: {
-        maxlength: 40,
-        placeholder: '请输入纳税人识别号',
-        disabled: !canEditCustomerField('taxNo')
-      }
-    },
-    {
-      label: '开户行',
-      key: 'bankName',
-      type: 'input',
-      props: { maxlength: 100, placeholder: '请输入开户行' }
-    },
-    {
-      label: '银行账号',
-      key: 'bankAccount',
-      type: 'input',
-      span: 16,
-      hidden: !canViewCustomerField('bankAccount'),
-      props: {
-        maxlength: 50,
-        placeholder: '请输入银行账号',
-        disabled: !canEditCustomerField('bankAccount')
-      }
-    }
+    ...relatedItems.value
   ])
+
+  const relatedItems = computed<FormItem[]>(() => {
+    if (!form.value.id) return []
+    const sections = [
+      ['联系人', 'contactSection', 'contacts', true],
+      ['财务信息', 'financeSection', 'finances', true],
+      ['运输合同', 'contractsSection', 'relatedContracts', hasAuth('TmsContract:View')],
+      ['客户协议价', 'pricesSection', 'relatedPrices', hasAuth('TmsCustomerPrice:View')],
+      ['运单列表', 'waybillsSection', 'relatedWaybills', hasAuth('TmsLoadedWaybillList:View')],
+      ['电子合同', 'electronicSection', 'relatedElectronic', hasAuth('TmsElectronicContract:View')],
+      ['运输协议', 'agreementsSection', 'relatedAgreements', hasAuth('TmsTransportAgreement:View')],
+      [
+        '客户对账',
+        'statementsSection',
+        'relatedStatements',
+        hasAuth('FinanceCustomerSettlement:View')
+      ]
+    ] as const
+    return sections
+      .filter((section) => section[3])
+      .flatMap(([label, key, contentKey]) => [
+        { label, key, type: 'tab', span: 24 },
+        { label: '', key: contentKey, span: 24, labelWidth: 0 }
+      ])
+  })
+  const formItems = computed<FormItem[]>(() =>
+    baseFormItems.value.map((item) =>
+      item.type && item.type !== 'tab' && item.key !== 'addressPicker'
+        ? { ...item, props: { ...item.props, disabled: readonly.value || item.props?.disabled } }
+        : item
+    )
+  )
+  const handleChildChanged = async (): Promise<void> => {
+    if (!form.value.id) return
+    const result = await fetchCustomerList({ customerId: form.value.id, from: 0, to: 0 })
+    const customer = result.data?.[0]
+    if (customer)
+      Object.assign(form.value, {
+        contactName: customer.contactName,
+        contactPhone: customer.contactPhone,
+        contactDepartment: customer.contactDepartment,
+        contactPosition: customer.contactPosition,
+        contactEmail: customer.contactEmail,
+        contactQq: customer.contactQq
+      })
+    emit('success', 'edit')
+  }
 
   const replaceForm = (nextForm: CustomerForm): void => {
     Object.keys(form.value).forEach((key) => delete form.value[key as keyof CustomerForm])
@@ -427,14 +492,21 @@
   }
 
   const buildSubmitPayload = (data: CustomerForm): Customer => {
-    const { regionPath, ...rawPayload } = data
+    const { regionPath, ...rawData } = data
+    const rawPayload = omit(rawData, [
+      'contactName',
+      'contactPhone',
+      'contactDepartment',
+      'contactPosition',
+      'contactEmail',
+      'contactQq',
+      'invoiceTitle',
+      'taxNo',
+      'bankName',
+      'bankAccount'
+    ])
     delete rawPayload.addressPicker
 
-    if (data.id && !canEditField(data.fieldAccess, 'contactPhone')) {
-      delete rawPayload.contactPhone
-    }
-    if (data.id && !canEditField(data.fieldAccess, 'taxNo')) delete rawPayload.taxNo
-    if (data.id && !canEditField(data.fieldAccess, 'bankAccount')) delete rawPayload.bankAccount
     if (data.id && !canEditField(data.fieldAccess, 'addressDetail')) {
       delete rawPayload.region
       delete rawPayload.regionAdcode
@@ -501,6 +573,8 @@
   }
 
   const handleSubmit = async (): Promise<boolean> => {
+    if (readonly.value || !hasAuth(form.value.id ? 'TmsCustomer:Edit' : 'TmsCustomer:Add'))
+      return false
     try {
       if (!(await validateArtFormForSubmit(formRef.value))) return false
     } catch (error) {
@@ -511,8 +585,8 @@
     try {
       const payload = buildSubmitPayload(structuredClone(toRaw(form.value)))
       const type = form.value.id ? 'edit' : 'add'
-      if (type === 'edit') await editCustomer(payload)
-      else await addCustomer(payload)
+      if (type === 'edit') await editCustomer(payload, { showErrorMessage: false })
+      else await addCustomer(payload, { showErrorMessage: false })
       emit('success', type)
       return true
     } catch (error) {
@@ -522,6 +596,7 @@
   }
 
   const handleOpen = async (data: CustomerDialogOpenData): Promise<void> => {
+    readonly.value = data.readonly === true || Boolean(data.row?.id && !hasAuth('TmsCustomer:Edit'))
     activeTab.value = 'baseSection'
     await resetForm()
     groups.value = data.groups
@@ -543,8 +618,12 @@
     }
 
     await dialogRef.value?.handleOpen(data, {
-      title: isEdit ? '编辑客户' : '新增客户',
-      subtitle: '维护客户基础、联系人和财务信息',
+      title: isEdit ? (readonly.value ? '客户档案' : '编辑客户') : '新增客户',
+      subtitle: isEdit
+        ? `当前客户：${row?.customerName ?? ''}`
+        : '保存客户后，可维护联系人、财务账户和关联业务。',
+      showConfirmButton: !readonly.value,
+      confirmText: '保存客户',
       contentMaxHeight: '72vh',
       loading: true,
       onOpen: async (_openData, api) => {

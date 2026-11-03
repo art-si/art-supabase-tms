@@ -21,10 +21,10 @@
         <span>合同状态</span>
         <ElTag
           v-if="detail.data?.contractStatus"
-          :type="statusMeta[detail.data.contractStatus].type"
+          :type="contractLifecycleMeta[getContractLifecycleStatus(detail.data)].type"
           effect="light"
         >
-          {{ statusMeta[detail.data.contractStatus].label }}
+          {{ contractLifecycleMeta[getContractLifecycleStatus(detail.data)].label }}
         </ElTag>
         <strong v-else>--</strong>
       </article>
@@ -55,9 +55,9 @@
           <template #item-contractStatus>
             <ElTag
               v-if="detail.data?.contractStatus"
-              :type="statusMeta[detail.data.contractStatus].type"
+              :type="contractLifecycleMeta[getContractLifecycleStatus(detail.data)].type"
             >
-              {{ statusMeta[detail.data.contractStatus].label }}
+              {{ contractLifecycleMeta[getContractLifecycleStatus(detail.data)].label }}
             </ElTag>
             <span v-else>--</span>
           </template>
@@ -139,6 +139,10 @@
   import type { ColumnOption } from '@/types'
   import { fetchContractDetail } from '@tms/api'
   import {
+    contractLifecycleMeta,
+    getContractLifecycleStatus
+  } from '../contract/modules/contract-lifecycle'
+  import {
     canViewField,
     formatSensitiveNumber,
     formatSensitiveNumberWithAffix
@@ -147,9 +151,7 @@
   defineOptions({ name: 'TmsContractDetail' })
 
   type Contract = Api.Tms.BasicData.Contract
-  type ContractStatus = Api.Tms.BasicData.ContractStatus
   type ContractFieldKey = Api.Tms.BasicData.ContractFieldKey
-  type StatusTagType = 'success' | 'warning' | 'danger' | 'info'
 
   interface PageState {
     loading: boolean
@@ -170,7 +172,13 @@
   const canViewSensitiveField = (field: ContractFieldKey): boolean =>
     canViewField(fieldAccess.value, field)
   const baseDescriptionItems = computed<ArtDescriptionItem<Partial<Contract>>[]>(() => [
-    { key: 'contractStatus', label: '合同状态', field: 'contractStatus' },
+    {
+      key: 'contractStatus',
+      label: '审核状态',
+      field: 'contractStatus',
+      dictCode: 'tmsContractStatus',
+      dictDisplay: 'text'
+    },
     { key: 'contractNo', label: '合同编号', field: 'contractNo', copyable: true },
     { key: 'paperContractNo', label: '纸质合同编号', field: 'paperContractNo', copyable: true },
     { key: 'mnemonicCode', label: '助记码', field: 'mnemonicCode' },
@@ -218,6 +226,13 @@
       label: '计费方式',
       field: 'billingMethod',
       dictCode: 'tmsContractBillingMethod',
+      dictDisplay: 'text'
+    },
+    {
+      key: 'billingUnit',
+      label: '计费单位',
+      field: 'billingUnit',
+      dictCode: 'tmsCargoUnit',
       dictDisplay: 'text'
     },
     ...(canViewSensitiveField('contractAmount')
@@ -270,6 +285,17 @@
     { key: 'signTime', label: '签订时间', field: 'signTime', format: 'datetime' },
     { key: 'effectiveDate', label: '生效日期', field: 'effectiveDate', format: 'date' },
     { key: 'expiryDate', label: '到期日期', field: 'expiryDate', format: 'date' },
+    ...(detail.data?.contractStatus === 'terminated'
+      ? [
+          {
+            key: 'terminatedAt',
+            label: '终止时间',
+            field: 'terminatedAt',
+            format: 'datetime' as const
+          },
+          { key: 'terminationReason', label: '终止原因', field: 'terminationReason', span: 3 }
+        ]
+      : []),
     {
       key: 'isCompleted',
       label: '是否完成',
@@ -299,14 +325,6 @@
     { key: 'otherDeductionTerms', label: '其他扣款约定', field: 'otherDeductionTerms', span: 4 },
     { key: 'contractDescription', label: '合同说明摘要', field: 'contractDescription', span: 4 }
   ]
-
-  const statusMeta: Record<ContractStatus, { label: string; type: StatusTagType }> = {
-    draft: { label: '草稿', type: 'info' },
-    pending: { label: '待审核', type: 'warning' },
-    approved: { label: '已审核', type: 'success' },
-    rejected: { label: '已驳回', type: 'danger' },
-    terminated: { label: '已终止', type: 'info' }
-  }
 
   const attachments = computed(() => detail.data?.attachments ?? [])
   const transportDetails = computed(() => detail.data?.transportDetails ?? [])

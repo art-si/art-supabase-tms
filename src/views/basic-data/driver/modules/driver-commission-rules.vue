@@ -144,12 +144,17 @@
     type DriverCommissionRule
   } from '@tms/api'
 
-  const props = defineProps<{ driverId?: string; tenantId?: string; selectedRuleId?: string }>()
+  const props = defineProps<{
+    driverId?: string
+    tenantId?: string
+    selectedRuleId?: string
+    readonly?: boolean
+  }>()
   const { hasAuth } = useAuth()
-  const canEdit = computed(() => hasAuth('TmsDriver:Edit'))
+  const canEdit = computed(() => !props.readonly && hasAuth('TmsDriver:Edit'))
   const canView = computed(() => hasAuth('TmsDriver:View'))
-  const canConfirm = computed(() => hasAuth('TmsDriver:ConfirmCommission'))
-  const canNotify = computed(() => hasAuth('TmsDriver:NotifyCommission'))
+  const canConfirm = computed(() => !props.readonly && hasAuth('TmsDriver:ConfirmCommission'))
+  const canNotify = computed(() => !props.readonly && hasAuth('TmsDriver:NotifyCommission'))
   const rules = ref<DriverCommissionRule[]>([])
   const history = ref<DriverCommissionRevision[]>([])
   const historyRule = ref<DriverCommissionRule | null>(null)
@@ -430,7 +435,13 @@
             permission="TmsDriver:View"
             onClick={() => openHistory(row)}
           />
-          <ArtButtonTable type="edit" permission="TmsDriver:Edit" onClick={() => openEditor(row)} />
+          {canEdit.value && (
+            <ArtButtonTable
+              type="edit"
+              permission="TmsDriver:Edit"
+              onClick={() => openEditor(row)}
+            />
+          )}
         </div>
       )
     }

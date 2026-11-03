@@ -65,6 +65,12 @@
           保存
         </ElButton>
         <ElButton
+          v-if="
+            !form.data.id ||
+            form.data.contractStatus === 'draft' ||
+            form.data.contractStatus === 'rejected'
+          "
+          v-auth="'TmsContract:Submit'"
           type="primary"
           :loading="loading && submitMode === 'submit'"
           @click="handleFooterConfirm(api, 'submit')"
@@ -82,15 +88,21 @@
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
+  import { useAuth } from '@/hooks/core/useAuth'
   import { useDraftAttachmentRemoval } from '@/hooks/core/useDraftAttachmentRemoval'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import { cloneDeep, omit } from 'lodash-es'
   import type { FormRules } from 'element-plus'
-  import { ElButton, ElMessage } from 'element-plus'
+  import { ElButton, ElMessage, ElMessageBox } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtUploadFile from '@/components/core/forms/art-upload-file/index.vue'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
+  import type {
+    DataSelectColumn,
+    DataSelectFetchParams,
+    DataSelectRecord
+  } from '@/components/core/forms/art-data-select/types'
   import { useDocumentNumberRule } from '@/hooks/core/useDocumentNumberRule'
   import { useTenantScopeFormPolicy } from '@/hooks/core/useTenantScopeFormPolicy'
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
@@ -111,12 +123,12 @@
   import { canEditField, canViewField, getFieldAccess } from '@/utils/field-permission'
   import { usesCarrierParty } from './contract-business-type'
   import ContractTransportDetails from './contract-transport-details.vue'
+  import { carrierSelections } from '../../carrier/modules/carrier-selection'
 
   defineOptions({ name: 'TmsContractDialog' })
 
   type Contract = Api.Tms.BasicData.Contract
   type ContractAttachment = Api.Tms.BasicData.ContractAttachment
-  type ContractBusinessType = Api.Tms.BasicData.ContractBusinessType
   type ContractTransportDetail = Api.Tms.BasicData.ContractTransportDetail
   type ContractFieldKey = Api.Tms.BasicData.ContractFieldKey
   type FieldAccessLevel = Api.Tms.BasicData.FieldAccessLevel
@@ -144,6 +156,11 @@
   }
 
   const emit = defineEmits<Emits>()
+  const router = useRouter()
+  const { hasAuth } = useAuth()
+  const contextCustomerId = ref<string>()
+  const contextCustomerTenantId = ref<string>()
+  const activeWriteTenantId = ref<string>()
   const userStore = useUserStore()
   const { getDictMap } = storeToRefs(userStore)
   const { defaultWriteTenantId } = useTenantScopeFormPolicy()
@@ -151,6 +168,7 @@
   const dialogRef = ref<ArtDialogExpose<Contract | undefined>>()
   const formRef = ref<FormExpose>()
   const transportDetailsRef = ref<InstanceType<typeof ContractTransportDetails>>()
+  const selectedCarrier = ref<CarrierOption[]>([])
   const contractNumber = useDocumentNumberRule('tms.contract')
   const submitMode = ref<SubmitMode>('save')
 
@@ -171,6 +189,70 @@
   const businessTypeOptions = computed(() => getDictMap.value.tmsContractBusinessType ?? [])
   const transportModeOptions = computed(() => getDictMap.value.tmsContractTransportMode ?? [])
   const cargoUnitOptions = computed(() => getDictMap.value.tmsCargoUnit ?? [])
+  const billingUnitOptions = computed(() =>
+    cargoUnitOptions.value.filter((item) => {
+      if (form.data.billingMethod === 'by_weight') return ['kg', 'ton'].includes(item.value)
+      if (form.data.billingMethod === 'by_volume')
+        return ['cubic_meter', 'liter'].includes(item.value)
+      return (
+        form.data.billingMethod === 'by_vehicle' &&
+        !['kg', 'ton', 'cubic_meter', 'liter'].includes(item.value)
+      )
+    })
+  )
+  const carrierColumns: DataSelectColumn[] = [
+    { prop: 'carrierCode', label: '承运商编码', minWidth: 140 },
+    { prop: 'companyName', label: '公司名称', minWidth: 200 },
+    {
+      prop: 'carrierTypes',
+      label: '承运商类型',
+      minWidth: 140,
+      formatter: (record) => {
+        const row = record as CarrierOption
+        return (
+          carrierSelections(row.carrierTypes, row.carrierType)
+            .map((value) => userStore.getDictLabelByValue('tmsCarrierType', value, value))
+            .join('、') || '-'
+        )
+      }
+    },
+    {
+      prop: 'dispatchChannels',
+      label: '调度渠道',
+      minWidth: 120,
+      formatter: (record) => {
+        const row = record as CarrierOption
+        return (
+          carrierSelections(row.dispatchChannels, row.dispatchChannel)
+            .map((value) =>
+              userStore.getDictLabelByValue('tmsCarrierDispatchChannel', value, value)
+            )
+            .join('、') || '-'
+        )
+      }
+    },
+    {
+      prop: 'parentUnitName',
+      label: '上级单位',
+      minWidth: 180,
+      formatter: (record) => (record as CarrierOption).parentUnitName || '-'
+    }
+  ]
+
+  const fetchCarrierRows = async (params: DataSelectFetchParams) => {
+    const result = await fetchCarrierOptions({
+      tenantId: activeWriteTenantId.value,
+      companyName: params.keyword,
+      maxRows: 1000
+    })
+    const rows = result.data ?? []
+    const from = (params.page - 1) * params.pageSize
+    return {
+      data: rows.slice(from, from + params.pageSize),
+      total: rows.length,
+      error: result.error
+    }
+  }
   const completionOptions = computed(() =>
     (getDictMap.value.commonBoolean ?? []).map((item) => ({
       ...item,
@@ -187,13 +269,14 @@
     mnemonicCode: '',
     contractCategory: 'annual_framework',
     transportMode: 'road',
-    businessContractType: 'carrier',
+    businessContractType: 'customer',
     customerId: null,
     carrierId: null,
     contactName: '',
     waybillNo: '',
     customerSignatory: '',
     billingMethod: '',
+    billingUnit: '',
     contractAmount: null,
     transportUnitPrice: null,
     roadConsumptionRate: null,
@@ -274,6 +357,7 @@
         key: 'businessContractType',
         type: 'radioGroup',
         span: 16,
+        disabled: () => Boolean(contextCustomerId.value),
         props: {
           options: businessTypeOptions.value,
           onChange: handleBusinessTypeChange
@@ -293,28 +377,34 @@
       {
         label: '承运商',
         key: 'carrierId',
-        type: 'select',
-        hidden: () => !usesCarrierParty(form.data.businessContractType),
-        api: fetchCarrierOptions,
-        immediate: false,
-        resultField: 'data',
-        labelField: 'companyName',
-        valueField: 'id',
-        labelFn: (option) => formatNameCodeOption(option, 'companyName', 'carrierCode'),
-        afterFetch: syncCarrierOptions,
+        type: 'dataSelect',
+        description: '从承运商主档选择签约主体。',
         props: {
-          clearable: true,
-          filterable: true,
+          mode: 'table',
+          apiFn: fetchCarrierRows,
+          selectedData: selectedCarrier.value,
+          rowKey: 'id',
+          labelKey: 'companyName',
+          title: '选择承运商',
+          subtitle: '按承运商编码或名称搜索，确认签约主体。',
+          searchPlaceholder: '搜索承运商编码或名称',
           placeholder: '请选择承运商',
-          onChange: handleCarrierChange
+          showSelectedPanel: false,
+          showPagination: true,
+          pageSize: 10,
+          columns: carrierColumns,
+          onChange: handleCarrierSelection
         }
       },
       {
         label: '客户/货主',
         key: 'customerId',
         type: 'select',
-        hidden: () => usesCarrierParty(form.data.businessContractType),
-        api: fetchCustomerOptions,
+        disabled: () => Boolean(contextCustomerId.value),
+        api: () =>
+          fetchCustomerOptions({
+            tenantId: activeWriteTenantId.value
+          }),
         immediate: false,
         resultField: 'data',
         labelField: 'customerName',
@@ -361,7 +451,20 @@
         props: {
           options: billingMethodOptions.value,
           clearable: true,
-          placeholder: '请选择计费方式'
+          placeholder: '请选择计费方式',
+          onChange: () => (form.data.billingUnit = '')
+        }
+      },
+      {
+        label: '计费单位',
+        key: 'billingUnit',
+        type: 'select',
+        props: {
+          options: billingUnitOptions.value,
+          disabled: !form.data.billingMethod,
+          filterable: true,
+          clearable: true,
+          placeholder: '选择与计费方式对应的单位'
         }
       },
       {
@@ -646,27 +749,24 @@
     return Array.isArray(data) ? data : []
   }
 
-  const syncCarrierOptions = (result: unknown): unknown => {
-    form.carrierOptions = getResponseData<CarrierOption>(result)
-    return result
-  }
-
   const syncCustomerOptions = (result: unknown): unknown => {
     form.customerOptions = getResponseData<CustomerOption>(result)
     return result
   }
 
-  const handleBusinessTypeChange = (businessType: ContractBusinessType): void => {
-    const partyPatch: Partial<Contract> = usesCarrierParty(businessType)
-      ? { customerId: null, customer: null, customerSignatory: '', contactName: '' }
-      : { carrierId: null, carrier: null, contactName: '' }
-    Object.assign(form.data, partyPatch)
+  const handleBusinessTypeChange = (): void => {
+    if (contextCustomerId.value) return
     void nextTick(() => formRef.value?.clearValidate(['carrierId', 'customerId']))
   }
 
-  const handleCarrierChange = (carrierId?: string): void => {
-    const carrier = form.carrierOptions.find((item) => item.id === carrierId)
+  const handleCarrierSelection = (_value: unknown, rows: DataSelectRecord[]): void => {
+    const carrier = rows[0] as CarrierOption | undefined
+    selectedCarrier.value = carrier ? [carrier] : []
+    form.carrierOptions = carrier ? [carrier] : []
+    form.data.carrierId = carrier?.id || null
+    form.data.carrier = carrier || null
     form.data.contactName = carrier?.contactName || ''
+    void nextTick(() => formRef.value?.clearValidate('carrierId'))
   }
 
   const handleCustomerChange = (customerId?: string): void => {
@@ -679,8 +779,10 @@
 
   const replaceForm = (data: Contract): void => {
     Object.assign(form.data, createInitialForm(), cloneDeep(toRaw(data)))
+    selectedCarrier.value = data.carrier ? [data.carrier] : []
+    form.carrierOptions = data.carrier ? [data.carrier] : []
     form.data.contractStatus ??= 'draft'
-    form.data.businessContractType ??= 'carrier'
+    form.data.businessContractType ??= 'customer'
     form.data.contractCategory ||= 'annual_framework'
     form.data.transportMode ||= 'road'
     form.data.isCompleted ??= false
@@ -713,12 +815,12 @@
     ]) as Contract
 
     if (!payload.contractNo) delete payload.contractNo
-    const hasCarrierParty = usesCarrierParty(payload.businessContractType)
     const normalized: Contract = {
       ...payload,
       contractStatus: payload.contractStatus || 'draft',
-      customerId: hasCarrierParty ? null : normalizeNullableText(payload.customerId),
-      carrierId: hasCarrierParty ? normalizeNullableText(payload.carrierId) : null,
+      customerId: normalizeNullableText(payload.customerId),
+      carrierId: normalizeNullableText(payload.carrierId),
+      billingUnit: normalizeNullableText(payload.billingUnit),
       paperContractNo: normalizeNullableText(payload.paperContractNo),
       mnemonicCode: normalizeNullableText(payload.mnemonicCode),
       contactName: normalizeNullableText(payload.contactName),
@@ -776,7 +878,7 @@
   }
 
   const handleSubmit = async (): Promise<boolean> => {
-    if (!form.data.id && form.data.tenantId !== defaultWriteTenantId.value) {
+    if (!form.data.id && form.data.tenantId !== activeWriteTenantId.value) {
       ElMessage.warning('租户范围已变化，请重新选择目标租户后新增合同')
       return false
     }
@@ -798,8 +900,33 @@
         payload.id = response.data?.id
         form.data.id = response.data?.id
       }
-      if (submitMode.value === 'submit') await submitContractForApproval(payload)
       emit('success', type)
+      if (submitMode.value === 'submit') {
+        try {
+          await submitContractForApproval(payload)
+        } catch (error) {
+          notifyFriendlyError(
+            error,
+            '合同已保存为草稿，但审批未发起。请检查运输合同审批流程是否已发布并启用后重试。'
+          )
+          if (hasAuth('WorkflowDefinition:Add')) {
+            try {
+              await ElMessageBox.confirm(
+                '合同已保存为草稿。可前往流程管理，基于“运输合同审批”模板配置并发布审批流程。',
+                '审批未发起',
+                { confirmButtonText: '前往流程管理', cancelButtonText: '稍后处理', type: 'warning' }
+              )
+              await router.push({
+                path: '/workflow/definition',
+                query: { designer: 'new', template: 'transport-contract' }
+              })
+            } catch {
+              // 用户选择稍后处理，草稿仍可重新提交。
+            }
+          }
+          return false
+        }
+      }
       return true
     } catch (error) {
       notifyFriendlyError(error, '合同保存或提审失败，请检查状态和网络后重试')
@@ -812,19 +939,26 @@
     await api.handleConfirm()
   }
 
-  const handleOpen = async (row?: Contract): Promise<void> => {
+  const handleOpen = async (
+    row?: Contract,
+    options?: { customerId?: string; customerTenantId?: string }
+  ): Promise<void> => {
     activeTab.value = 'baseSection'
-    const targetTenantId = defaultWriteTenantId.value
+    contextCustomerId.value = options?.customerId
+    contextCustomerTenantId.value = options?.customerTenantId
+    const targetTenantId =
+      row?.tenantId || contextCustomerTenantId.value || defaultWriteTenantId.value
+    activeWriteTenantId.value = targetTenantId || undefined
     if (!row?.id && !targetTenantId) {
       ElMessage.warning('无法确定新增合同的目标租户，请刷新后重试')
       return
     }
-    if (!row?.id && targetTenantId !== userStore.getUserInfo.tenantId) {
-      ElMessage.warning('当前合同服务暂不支持跨租户新增，请切换至所属租户后重试')
-      return
-    }
     await resetForm()
     if (!row?.id) form.data.tenantId = targetTenantId ?? undefined
+    if (contextCustomerId.value && !row?.id) {
+      form.data.businessContractType = 'customer'
+      form.data.customerId = contextCustomerId.value
+    }
     await dialogRef.value?.handleOpen(row, {
       title: row?.id ? '编辑合同' : '新增合同',
       subtitle: '维护合同相对方、履约条款、运输明细和附件',
@@ -832,6 +966,10 @@
       loading: true,
       onOpen: async (_data, api) => {
         try {
+          await Promise.all([
+            userStore.ensureDictLoaded('tmsCarrierType'),
+            userStore.ensureDictLoaded('tmsCarrierDispatchChannel')
+          ])
           if (row?.id) {
             const [, detailResponse] = await Promise.all([
               contractNumber.loadRule(),
@@ -843,6 +981,12 @@
               return
             }
             replaceForm(detailResponse.data)
+            form.data.tenantId = targetTenantId ?? undefined
+            if (contextCustomerId.value && form.data.customerId !== contextCustomerId.value) {
+              ElMessage.warning('合同所属客户与当前客户不一致')
+              await api.handleClose(true)
+              return
+            }
           } else {
             await contractNumber.loadRule()
           }

@@ -82,6 +82,33 @@
       </div>
     </section>
 
+    <section
+      v-if="detail.data?.carrierBillingAccountId"
+      class="art-card-xs mb-4 p-4"
+      aria-label="承运商开票账户"
+    >
+      <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <strong>承运商开票账户</strong>
+        <ElButton
+          v-if="billingSnapshot.error"
+          link
+          type="primary"
+          @click="loadBillingSnapshot(detail.data.id)"
+          >重试</ElButton
+        >
+      </div>
+      <p v-if="billingSnapshot.loading" class="m-0 text-sm">正在加载开票资料…</p>
+      <p v-else-if="billingSnapshot.error" class="m-0 text-sm">{{ billingSnapshot.error }}</p>
+      <p v-else-if="billingSnapshot.data" class="m-0 text-sm">
+        {{ billingSnapshot.data.invoiceTitle }}
+        <span v-if="billingSnapshot.data.bankName"> · {{ billingSnapshot.data.bankName }}</span>
+        <span v-if="billingSnapshot.data.bankAccount">
+          · {{ billingSnapshot.data.bankAccount }}</span
+        >
+      </p>
+      <p v-else class="m-0 text-sm">暂无开票资料快照。</p>
+    </section>
+
     <section v-if="detail.data" class="waybill-detail__journey art-card-xs">
       <div class="waybill-detail__journey-heading">
         <div>
@@ -179,7 +206,7 @@
   import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import ArtPageHeader from '@/components/core/layouts/art-page-header/index.vue'
   import ArtPageShell from '@/components/core/layouts/art-page-shell/index.vue'
-  import { fetchWaybillDetail } from '@tms/api'
+  import { fetchWaybillDetail, fetchWaybillCarrierBillingSnapshot } from '@tms/api'
   import { createDateTimeFormatter } from '@/utils/ui/format'
   import { canViewField } from '@/utils/field-permission'
   import { useAuth } from '@/hooks/core/useAuth'
@@ -235,6 +262,11 @@
     loaded: false,
     loading: false
   })
+  const billingSnapshot = reactive<{
+    loading: boolean
+    data: Api.Tms.BasicData.CarrierBillingAccount | null
+    error: string
+  }>({ loading: false, data: null, error: '' })
 
   const routeSubtitle = computed(() => {
     const data = detail.data
@@ -356,6 +388,9 @@
     try {
       const { data } = await fetchWaybillDetail(waybillId)
       detail.data = data ?? undefined
+      billingSnapshot.data = null
+      billingSnapshot.error = ''
+      if (data?.carrierBillingAccountId) void loadBillingSnapshot(waybillId)
       if (
         (detail.activeTab === 'documents' && !canView('proofAttachments')) ||
         (detail.activeTab === 'route' && !canView('routeCoordinates'))
@@ -367,6 +402,22 @@
     } finally {
       detail.loaded = true
       detail.loading = false
+    }
+  }
+
+  async function loadBillingSnapshot(waybillId: string): Promise<void> {
+    billingSnapshot.loading = true
+    billingSnapshot.error = ''
+    try {
+      const result = await fetchWaybillCarrierBillingSnapshot(waybillId)
+      if (detail.data?.id !== waybillId) return
+      if (result.error) throw result.error
+      billingSnapshot.data = result.data ?? null
+    } catch {
+      if (detail.data?.id !== waybillId) return
+      billingSnapshot.error = '开票资料加载失败，请重试。'
+    } finally {
+      billingSnapshot.loading = false
     }
   }
 

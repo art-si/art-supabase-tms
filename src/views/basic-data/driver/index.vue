@@ -58,7 +58,13 @@
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { normalizeNullableText } from '@/utils/form/normalize'
   import { formatWithDayjs } from '@/utils/time'
+  import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
+  import {
+    isPrivateAttachmentPath,
+    signPrivateAttachmentPaths
+  } from '@/utils/supabase/private-attachment'
   import { useUserStore } from '@/store/modules/user'
+  import { getDictionaryDisplayLabel } from '@/utils/form/option'
   import { useAuth } from '@/hooks/core/useAuth'
   import BusinessRecordLink from '@/components/business/business-record-link/index.vue'
   import {
@@ -96,7 +102,8 @@
       row?: Driver,
       initial?: { phone: string; driverOwnership: string; carrierId: string | null },
       initialTab?: 'commission',
-      commissionRuleId?: string
+      commissionRuleId?: string,
+      viewOnly?: boolean
     ) => Promise<void>
   }
 
@@ -108,7 +115,8 @@
     inspect: (options: MasterDataDeleteGuardOpenOptions) => Promise<boolean>
   }
 
-  const { getDictMap } = storeToRefs(useUserStore())
+  const userStore = useUserStore()
+  const { getDictMap } = storeToRefs(userStore)
   const { hasAuth } = useAuth()
   const route = useRoute()
   const deleteContext = useMasterDataDeleteProcessingContext()
@@ -173,6 +181,7 @@
 
   const genderOptions = computed(() => getDictMap.value.sex ?? [])
   const driverTypeOptions = computed(() => getDictMap.value.tmsDriverType ?? [])
+  const ownershipOptions = computed(() => getDictMap.value.tmsDriverOwnership ?? [])
   const commonBooleanOptions = computed(() =>
     (getDictMap.value.commonBoolean ?? []).map((item) => ({
       ...item,
@@ -266,20 +275,97 @@
     { type: 'selection', width: 50, fixed: 'left', reserveSelection: true },
     { type: 'globalIndex', label: '序号', width: 72 },
     {
+      prop: 'portraitUrl',
+      label: '照片',
+      width: 72,
+      formatter: (row) =>
+        row.portraitPreviewUrl ? (
+          <img
+            src={row.portraitPreviewUrl}
+            alt={`${row.driverName}的照片`}
+            width="36"
+            height="36"
+            class="h-9 w-9 rounded object-cover"
+          />
+        ) : (
+          <span
+            class="inline-flex h-9 w-9 items-center justify-center rounded bg-[var(--art-gray-100)] text-[var(--art-gray-600)]"
+            aria-label="暂无照片"
+          >
+            —
+          </span>
+        )
+    },
+    {
       prop: 'driverName',
       label: '姓名',
       minWidth: 180,
       formatter: (row) => (
-        <BusinessRecordLink
-          label={row.driverName || '未命名司机'}
-          to={
-            row.id && hasAuth('TmsDriverQuery:View')
-              ? `/tms/driver-query/detail/${row.id}`
-              : undefined
-          }
-          compact
-        />
+        <div class={row.isBlacklisted ? 'tms-driver__blocked' : undefined}>
+          <BusinessRecordLink
+            label={row.driverName || '未命名司机'}
+            meta={row.isBlacklisted ? '黑名单' : ''}
+            interactive={Boolean(row.id && hasAuth('TmsDriver:View'))}
+            onClick={() => openDialog(row, true)}
+            compact
+          />
+        </div>
       )
+    },
+    {
+      prop: 'driverOwnership',
+      label: '司机归属',
+      width: 120,
+      formatter: (row) =>
+        ownershipOptions.value.find((item) => item.value === (row.driverOwnership || 'self'))
+          ?.label || '—'
+    },
+    {
+      prop: 'companyName',
+      label: '所属公司',
+      minWidth: 210,
+      showOverflowTooltip: true,
+      formatter: (row) => row.companyName || row.carrier?.companyName || '—'
+    },
+    {
+      prop: 'registrationStatus',
+      label: '注册状态',
+      width: 110,
+      dict: {
+        code: 'tmsDriverRegistrationStatus',
+        display: 'tag',
+        value: (row) => row.registrationStatus || 'unregistered'
+      }
+    },
+    {
+      prop: 'identityAuthStatus',
+      label: '身份证状态',
+      width: 120,
+      dict: {
+        code: 'tmsDriverAuthStatus',
+        display: 'tag',
+        value: (row) => row.identityAuthStatus || 'unverified'
+      }
+    },
+    {
+      prop: 'licenseAuthStatus',
+      label: '驾驶证状态',
+      width: 120,
+      dict: {
+        code: 'tmsDriverAuthStatus',
+        display: 'tag',
+        value: (row) => row.licenseAuthStatus || 'unverified'
+      }
+    },
+    {
+      prop: 'qualificationAuthStatus',
+      label: '从业资格证状态',
+      width: 140,
+      dict: {
+        code: 'tmsDriverAuthStatus',
+        display: 'tag',
+        value: (row) => row.qualificationAuthStatus || 'unverified'
+      }
     },
     {
       prop: 'carrierName',
@@ -344,6 +430,22 @@
             minWidth: 260,
             showOverflowTooltip: true,
             formatter: (row: Driver) => row.homeAddress || '-'
+          } satisfies ColumnOption<Driver>
+        ]
+      : []),
+    ...(canViewField(driverFieldAccess.value, 'emergencyContact')
+      ? [
+          {
+            prop: 'emergencyContactName',
+            label: '紧急联系人',
+            minWidth: 125,
+            formatter: (row: Driver) => row.emergencyContactName || '—'
+          } satisfies ColumnOption<Driver>,
+          {
+            prop: 'emergencyContactPhone',
+            label: '紧急联系人电话',
+            width: 155,
+            formatter: (row: Driver) => row.emergencyContactPhone || '—'
           } satisfies ColumnOption<Driver>
         ]
       : []),
@@ -437,8 +539,26 @@
       exportColumns: [
         { key: 'driverName', title: '司机姓名' },
         { key: 'phone', title: '手机号码' },
-        { key: 'driverType', title: '司机类型' },
-        { key: 'licenseType', title: '准驾车型' },
+        {
+          key: 'driverType',
+          title: '司机类型',
+          formatter: (value) =>
+            getDictionaryDisplayLabel(
+              userStore.getDictDisplayItemByValue('tmsDriverType', String(value ?? '')),
+              value,
+              { emptyText: '', unknownText: '待核对' }
+            )
+        },
+        {
+          key: 'licenseType',
+          title: '准驾车型',
+          formatter: (value) =>
+            getDictionaryDisplayLabel(
+              userStore.getDictDisplayItemByValue('tmsDriverLicenseType', String(value ?? '')),
+              value,
+              { emptyText: '', unknownText: '待核对' }
+            )
+        },
         { key: 'licenseExpireDate', title: '驾驶证有效期' },
         {
           key: 'enabled',
@@ -446,12 +566,16 @@
           formatter: (value) => (value === true ? '启用' : '停用')
         }
       ] satisfies ArtTableQueryExcelColumn[],
-      exportApi: ({ selectedIds, searchParams, maxRows }) =>
-        exportDriverList({
+      exportApi: async ({ selectedIds, searchParams, maxRows }) => {
+        await Promise.all(
+          ['tmsDriverType', 'tmsDriverLicenseType'].map((code) => userStore.ensureDictLoaded(code))
+        )
+        return exportDriverList({
           ...(searchParams as SearchParams),
           ids: selectedIds.map(String),
           maxRows
         })
+      }
     },
     {
       permission: 'TmsDriver:Delete',
@@ -468,6 +592,19 @@
       result.fieldAccess,
       ...(result.data ?? []).map((record) => record.fieldAccess)
     )
+    const portraitPaths = (result.data ?? [])
+      .map((row) => row.portraitUrl)
+      .filter((path): path is string => Boolean(path && isPrivateAttachmentPath(path)))
+    if (portraitPaths.length) {
+      try {
+        const previews = await signPrivateAttachmentPaths('tms-driver-private', portraitPaths)
+        for (const row of result.data ?? []) {
+          row.portraitPreviewUrl = row.portraitUrl ? previews.get(row.portraitUrl) || null : null
+        }
+      } catch (error) {
+        notifyFriendlyError(error, '司机照片加载失败，可点击姓名查看资料')
+      }
+    }
     return result
   }
 
@@ -492,8 +629,8 @@
     )
   }
 
-  const openDialog = (row?: Driver): void => {
-    void dialogRef.value?.handleOpen(row)
+  const openDialog = (row?: Driver, viewOnly = false): void => {
+    void dialogRef.value?.handleOpen(row, undefined, undefined, undefined, viewOnly)
   }
 
   const lastDeepLink = ref('')
@@ -560,6 +697,16 @@
 
 <style lang="scss">
   .tms-driver {
+    &__blocked .business-record-link__control,
+    &__blocked .business-record-link__static {
+      color: var(--el-color-danger);
+    }
+
+    &__blocked .business-record-link__control {
+      background: var(--el-color-danger-light-9);
+      border-color: var(--el-color-danger-light-7);
+    }
+
     &__vehicle-links {
       display: flex;
       flex-wrap: wrap;

@@ -8,7 +8,24 @@
       :span="8"
       :gutter="20"
       label-width="100px"
-    />
+    >
+      <template #addressPicker>
+        <ArtAddressPicker
+          v-model:region-path="form.data.regionPath"
+          v-model:address-detail="form.data.addressDetail"
+          v-model:region-adcode="form.data.regionAdcode"
+          v-model:longitude="form.data.longitude"
+          v-model:latitude="form.data.latitude"
+          v-model:coordinate-system="form.data.coordinateSystem"
+          v-model:coordinate-source="form.data.coordinateSource"
+          v-model:coordinate-status="form.data.coordinateStatus"
+          v-model:geocode-provider="form.data.geocodeProvider"
+          v-model:geocoded-at="form.data.geocodedAt"
+          :region-api="fetchRegionOptions"
+          label-width="100px"
+        />
+      </template>
+    </ArtForm>
   </ArtDialog>
 </template>
 
@@ -22,6 +39,8 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
+  import ArtAddressPicker from '@/components/core/forms/art-address-picker/index.vue'
+  import { fetchRegionOptions } from '@/api/region-options'
   import { useDocumentNumberRule } from '@/hooks/core/useDocumentNumberRule'
   import { useTenantScopeFormPolicy } from '@/hooks/core/useTenantScopeFormPolicy'
   import { addStation, editStation } from '@tms/api'
@@ -32,7 +51,11 @@
   defineOptions({ name: 'TmsStationDialog' })
 
   type Station = Api.Tms.Station.StationRecord
-  type StationForm = Api.Tms.Station.StationSavePayload
+  type StationForm = Api.Tms.Station.StationSavePayload & {
+    regionPath: string[]
+    addressDetail: string
+    addressPicker?: undefined
+  }
 
   interface DialogExposeForm {
     validate: () => Promise<boolean>
@@ -64,6 +87,17 @@
     stationName: '',
     stationTypes: ['shipping'],
     regionCode: '',
+    region: '',
+    regionPath: [],
+    addressDetail: '',
+    regionAdcode: '',
+    longitude: null,
+    latitude: null,
+    coordinateSystem: 'gcj02',
+    coordinateSource: null,
+    coordinateStatus: null,
+    geocodeProvider: null,
+    geocodedAt: null,
     managerName: '',
     contactPhone: '',
     enabled: true,
@@ -144,15 +178,7 @@
           placeholder: '可选择多个站点类型'
         }
       },
-      {
-        label: '地区编码',
-        key: 'regionCode',
-        type: 'input',
-        props: {
-          maxlength: 30,
-          placeholder: '设置站点所属地区编码'
-        }
-      },
+      { label: '省市区与详细地址', key: 'addressPicker', type: 'slot', span: 24 },
       {
         label: '排序',
         key: 'sort',
@@ -219,15 +245,17 @@
     formRef.value?.clearValidate()
   }
 
-  const normalizePayload = (): StationForm => {
+  const normalizePayload = (): Api.Tms.Station.StationSavePayload => {
     const payload = omit(cloneDeep(toRaw(form.data)), [
+      'regionPath',
+      'addressPicker',
       'stationType',
       'stationRoles',
       'createBy',
       'createTime',
       'updateBy',
       'updateTime'
-    ]) as StationForm
+    ]) as Api.Tms.Station.StationSavePayload
 
     return {
       ...payload,
@@ -235,6 +263,9 @@
       stationName: trim(String(payload.stationName || '')),
       stationTypes: uniq(payload.stationTypes.map((item) => trim(String(item))).filter(Boolean)),
       regionCode: normalizeNullableText(payload.regionCode),
+      region: form.data.regionPath.join('/'),
+      addressDetail: normalizeNullableText(payload.addressDetail),
+      regionAdcode: normalizeNullableText(payload.regionAdcode),
       managerName: normalizeNullableText(payload.managerName),
       contactPhone: normalizeNullableText(payload.contactPhone),
       sort: toNumber(payload.sort ?? 0),
@@ -273,7 +304,9 @@
       replaceForm({
         ...createInitialForm(),
         ...omit(cloneDeep(toRaw(row)), ['stationType', 'stationRoles']),
-        stationTypes
+        stationTypes,
+        regionPath: row.region?.split('/').filter(Boolean) ?? [],
+        addressDetail: row.addressDetail || ''
       })
     }
 

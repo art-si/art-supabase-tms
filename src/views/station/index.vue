@@ -52,6 +52,7 @@
   import { ColumnOption, DialogType } from '@/types'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { normalizeImportedEnabled } from '@/utils/form/normalize'
+  import { getDictionaryDisplayLabel } from '@/utils/form/option'
   import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
   import { useUserStore } from '@/store/modules/user'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
@@ -91,7 +92,8 @@
     inspect: (options: MasterDataDeleteGuardOpenOptions) => Promise<boolean>
   }
 
-  const { getDictMap } = storeToRefs(useUserStore())
+  const userStore = useUserStore()
+  const { getDictMap } = storeToRefs(userStore)
   const { isAllTenants, tenantOptions } = storeToRefs(useTenantScopeStore())
   const { defaultWriteTenantId } = useTenantScopeFormPolicy()
   const tableQueryRef = ref<ArtTableQueryExpose>()
@@ -128,14 +130,6 @@
     return map
   })
 
-  const stationTypeValueToLabel = computed(() => {
-    const map = new Map<string, string>()
-    stationTypeOptions.value.forEach((item) => {
-      if (item.label && item.value) map.set(item.value, item.label)
-    })
-    return map
-  })
-
   const getStationTypes = (station: Station): string[] => {
     const roleTypes = (station.stationRoles ?? []).map((item) => String(item.roleType))
     return uniq(roleTypes.length ? roleTypes : [String(station.stationType || '')]).filter(Boolean)
@@ -150,13 +144,31 @@
       required: true,
       formatter: (_value, row) =>
         getStationTypes(row as Station)
-          .map((type) => stationTypeValueToLabel.value.get(type) || type)
+          .map((type) =>
+            getDictionaryDisplayLabel(
+              userStore.getDictDisplayItemByValue('tmsStationType', type),
+              type
+            )
+          )
           .join('、')
     },
     { key: 'regionCode', title: '地区编码' },
+    { key: 'region', title: '省市区' },
+    { key: 'addressDetail', title: '详细地址' },
+    { key: 'longitude', title: '经度' },
+    { key: 'latitude', title: '纬度' },
     { key: 'managerName', title: '负责人' },
     { key: 'contactPhone', title: '联系电话' },
-    { key: 'enabled', title: '状态' },
+    {
+      key: 'enabled',
+      title: '状态',
+      formatter: (value) =>
+        getDictionaryDisplayLabel(
+          userStore.getDictDisplayItemByValue('commonBoolean', String(value ?? '')),
+          value,
+          { emptyText: '' }
+        )
+    },
     { key: 'remark', title: '备注' }
   ]
   const stationExportColumns = computed<ArtTableQueryExcelColumn[]>(() =>
@@ -243,6 +255,8 @@
       minWidth: 130,
       formatter: (row) => row.regionCode || '-'
     },
+    { prop: 'region', label: '省市区', minWidth: 170, showOverflowTooltip: true },
+    { prop: 'addressDetail', label: '详细地址', minWidth: 200, showOverflowTooltip: true },
     {
       prop: 'managerName',
       label: '负责人',
@@ -330,12 +344,16 @@
       exportFilename: 'TMS站点资料',
       exportSheetName: '站点管理',
       exportColumns: stationExportColumns.value,
-      exportApi: ({ selectedIds, searchParams, maxRows }) =>
-        exportStationList({
+      exportApi: async ({ selectedIds, searchParams, maxRows }) => {
+        await Promise.all(
+          ['tmsStationType', 'commonBoolean'].map((code) => userStore.ensureDictLoaded(code))
+        )
+        return exportStationList({
           ...(searchParams as SearchParams),
           ids: selectedIds.map(String),
           maxRows
         })
+      }
     },
     {
       permission: 'TmsStation:Delete',
@@ -437,6 +455,14 @@
           actionLabel: '查看订单',
           routeName: 'TmsOrderList',
           order: 10
+        },
+        station_favorite_route: {
+          label: '关联常用线路',
+          unit: '条',
+          description: '常用线路仍将该站点用作途经点。请先调整线路中的途经点，再删除站点。',
+          actionLabel: '查看常用线路',
+          routeName: 'TmsFavoriteRoute',
+          order: 20
         }
       },
       fetchDependencies: async (ids) =>

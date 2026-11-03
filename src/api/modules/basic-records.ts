@@ -2,6 +2,7 @@ import { useSupabase } from '@/hooks/core/useSupabase'
 import { useTenantScopeStore } from '@/store/modules/tenant-scope'
 import { useUserStore } from '@/store/modules/user'
 import { normalizeNullableText } from '@/utils/form/normalize'
+import type { DataSelectFetchParams } from '@/components/core/forms/art-data-select/types'
 import { resolveTenantWriteTargetId } from '@/utils/tenant-scope-context'
 
 export interface TmsRecordAudit {
@@ -14,12 +15,38 @@ export interface TmsRecordAudit {
 }
 
 export interface DriverBlacklistRecord extends TmsRecordAudit {
+  driverId?: string | null
   driverName: string
-  phone: string
-  organizationName: string
+  phone?: string | null
+  organizationName?: string | null
+  driverOwnership?: string | null
+  driverType?: string | null
+  carrierName?: string | null
+  companyName?: string | null
+  plateNo?: string | null
+  portraitUrl?: string | null
+  portraitPreviewUrl?: string | null
   blacklistedAt: string
   reason: string
   remark: string | null
+  previousEnabled?: boolean | null
+  releasedAt?: string | null
+  status: 'active' | 'released' | 'legacy'
+}
+
+export interface BlacklistDriverCandidate {
+  id: string
+  tenantId: string
+  driverName: string
+  phone?: string | null
+  driverOwnership?: string | null
+  driverType?: string | null
+  carrierName?: string | null
+  companyName?: string | null
+  organizationName?: string | null
+  plateNo?: string | null
+  portraitUrl?: string | null
+  enabled: boolean
 }
 
 export interface ServiceCaseRecord extends TmsRecordAudit {
@@ -29,6 +56,7 @@ export interface ServiceCaseRecord extends TmsRecordAudit {
   complaintTypes: string[]
   title: string
   waybillNo: string | null
+  waybillId?: string | null
   contactName: string
   contactPhone: string
   content: string
@@ -40,6 +68,7 @@ export interface ServiceCaseRecord extends TmsRecordAudit {
 }
 
 export interface ElectronicContractRecord extends TmsRecordAudit {
+  customerId?: string | null
   contractNo: string
   contractName: string
   partyACompany: string
@@ -57,6 +86,7 @@ export interface ElectronicContractRecord extends TmsRecordAudit {
 }
 
 export interface TransportAgreementRecord extends TmsRecordAudit {
+  customerId?: string | null
   agreementNo: string
   shipperName: string
   carrierId: string
@@ -82,10 +112,9 @@ export interface TransportAgreementRecord extends TmsRecordAudit {
   partyBSignedOn: string
 }
 
-export type BlacklistInput = Pick<
-  DriverBlacklistRecord,
-  'driverName' | 'phone' | 'organizationName' | 'blacklistedAt' | 'reason' | 'remark'
-> & { tenantId?: string }
+export type BlacklistInput = Pick<DriverBlacklistRecord, 'blacklistedAt' | 'reason' | 'remark'> & {
+  driverId: string
+}
 
 export type ServiceCaseInput = Pick<
   ServiceCaseRecord,
@@ -93,6 +122,7 @@ export type ServiceCaseInput = Pick<
   | 'complaintTypes'
   | 'title'
   | 'waybillNo'
+  | 'waybillId'
   | 'contactName'
   | 'contactPhone'
   | 'content'
@@ -114,7 +144,7 @@ export type ElectronicContractInput = Pick<
   | 'endsOn'
   | 'contentHtml'
   | 'attachments'
-> & { tenantId?: string }
+> & { tenantId?: string; customerId?: string | null }
 
 export type TransportAgreementInput = Pick<
   TransportAgreementRecord,
@@ -136,7 +166,7 @@ export type TransportAgreementInput = Pick<
   | 'partyBSeal'
   | 'partyBRepresentative'
   | 'partyBSignedOn'
-> & { tenantId?: string }
+> & { tenantId?: string; customerId?: string | null }
 
 interface ListPage {
   from?: number
@@ -151,6 +181,7 @@ export interface BlacklistSearch extends ListPage {
 }
 
 export interface ServiceCaseSearch extends ListPage {
+  recordId?: string
   serviceNo?: string
   waybillNo?: string
   complaintType?: string
@@ -159,12 +190,16 @@ export interface ServiceCaseSearch extends ListPage {
 }
 
 export interface ElectronicContractSearch extends ListPage {
+  recordId?: string
+  customerId?: string
   contractNo?: string
   contractName?: string
   status?: string
 }
 
 export interface TransportAgreementSearch extends ListPage {
+  recordId?: string
+  customerId?: string
   agreementNo?: string
   shipperName?: string
   carrierId?: string
@@ -214,29 +249,61 @@ export async function fetchBasicRecordCarrierOptions(tenantId?: string) {
 }
 
 export async function fetchDriverBlacklistList(params: BlacklistSearch) {
-  let query = supabase
-    .from('tms_driver_blacklist')
-    .select('*', { count: 'exact' })
-    .order('blacklisted_at', { ascending: false })
-    .range(pageFrom(params), pageTo(params))
-  const tenantId = readTenantId(params.tenantId)
-  if (tenantId) query = query.eq('tenant_id', tenantId)
-  if (keyword(params.driverName))
-    query = query.ilike('driver_name', `%${keyword(params.driverName)}%`)
-  if (keyword(params.phone)) query = query.ilike('phone', `%${keyword(params.phone)}%`)
-  if (keyword(params.organizationName))
-    query = query.ilike('organization_name', `%${keyword(params.organizationName)}%`)
-  return await responseHandle<DriverBlacklistRecord[]>(() => query, { showErrorMessage: true })
+  const result = await responseHandle<{ records: DriverBlacklistRecord[]; total: number }>(
+    () =>
+      supabase.rpc('tms_list_driver_blacklist_secure', {
+        p_from: pageFrom(params),
+        p_to: pageTo(params),
+        p_driver_name: keyword(params.driverName),
+        p_phone: keyword(params.phone),
+        p_organization_name: keyword(params.organizationName)
+      }),
+    { showErrorMessage: true }
+  )
+  return { data: result.data?.records ?? [], total: result.data?.total ?? 0, error: result.error }
+}
+
+/** Read one blacklist history row through the same server-side View and tenant scope as the list. */
+export async function fetchDriverBlacklistDetail(id: string) {
+  return await responseHandle<DriverBlacklistRecord | null>(
+    () => supabase.rpc('tms_get_driver_blacklist_secure', { p_id: id }),
+    { showErrorMessage: false }
+  )
+}
+
+export async function fetchBlacklistDriverCandidates(params: {
+  from: number
+  to: number
+  keyword?: string
+}) {
+  const result = await responseHandle<{ records: BlacklistDriverCandidate[]; total: number }>(
+    () =>
+      supabase.rpc('tms_list_blacklist_driver_candidates_secure', {
+        p_from: params.from,
+        p_to: params.to,
+        p_keyword: keyword(params.keyword)
+      }),
+    { showErrorMessage: true }
+  )
+  return { data: result.data?.records ?? [], total: result.data?.total ?? 0, error: result.error }
 }
 
 export async function addDriverBlacklist(input: BlacklistInput) {
-  return await responseHandle<DriverBlacklistRecord>(
+  return await responseHandle<{ id: string }>(
     () =>
-      supabase
-        .from('tms_driver_blacklist')
-        .insert(keysToSnakeDeep({ ...input, tenantId: writeTenantId(input.tenantId) }))
-        .select()
-        .single(),
+      supabase.rpc('tms_add_driver_blacklist_secure', {
+        p_driver_id: input.driverId,
+        p_blacklisted_at: input.blacklistedAt,
+        p_reason: input.reason,
+        p_remark: input.remark
+      }),
+    { showMessage: true, breakReturn: true }
+  )
+}
+
+export async function releaseDriverBlacklist(id: string) {
+  return await responseHandle<{ id: string; driverId: string; restoredEnabled: boolean }>(
+    () => supabase.rpc('tms_release_driver_blacklist_secure', { p_id: id }),
     { showMessage: true, breakReturn: true }
   )
 }
@@ -249,6 +316,7 @@ export async function fetchServiceCaseList(params: ServiceCaseSearch) {
     .range(pageFrom(params), pageTo(params))
   const tenantId = readTenantId(params.tenantId)
   if (tenantId) query = query.eq('tenant_id', tenantId)
+  if (params.recordId) query = query.eq('id', params.recordId)
   if (keyword(params.serviceNo)) query = query.ilike('service_no', `%${keyword(params.serviceNo)}%`)
   if (keyword(params.waybillNo)) query = query.ilike('waybill_no', `%${keyword(params.waybillNo)}%`)
   if (params.complaintType) query = query.contains('complaint_types', [params.complaintType])
@@ -291,6 +359,115 @@ export async function editServiceCase(id: string, input: ServiceCaseInput) {
   )
 }
 
+export interface ServiceCaseMention {
+  kind: 'user' | 'organization' | 'role'
+  id: string
+  label: string
+}
+
+export interface ServiceCaseReply {
+  id: string
+  tenantId: string
+  serviceCaseId: string
+  replyToId: string | null
+  content: string
+  attachments: string[]
+  mentions: ServiceCaseMention[]
+  authorUserId: string
+  authorName: string
+  createTime: string
+}
+
+export interface ServiceCaseReplyInput {
+  tenantId: string
+  serviceCaseId: string
+  replyToId: string | null
+  content: string
+  attachments: string[]
+  mentions: ServiceCaseMention[]
+}
+
+export interface ServiceCaseWaybillOption {
+  id: string
+  tenantId: string
+  orderNo: string
+  waybillNo: string
+  dispatchMode: 'carrier' | 'self_operated' | 'individual_driver' | null
+  originStation: string
+  destinationStation: string
+  dispatchPlateNo: string | null
+  dispatchDriverName: string | null
+  dispatchDriverPhone: string | null
+}
+
+export async function fetchServiceCaseWaybillOptions(
+  tenantId: string,
+  params: DataSelectFetchParams & { recordId?: string }
+) {
+  const from = Math.max((params.page - 1) * params.pageSize, 0)
+  const result = await responseHandle<{ records: ServiceCaseWaybillOption[]; total: number }>(
+    () =>
+      supabase.rpc('tms_list_service_case_waybill_options_secure', {
+        p_tenant_id: tenantId,
+        p_keyword: normalizeNullableText(params.keyword),
+        p_from: from,
+        p_to: from + params.pageSize - 1,
+        p_record_id: params.recordId || null
+      }),
+    { breakReturn: true, showErrorMessage: false, errorMessage: '可选运单加载失败，请重试' }
+  )
+  return { data: result.data?.records ?? [], total: result.data?.total ?? 0, error: result.error }
+}
+
+export async function fetchServiceCaseReplies(serviceCaseId: string, tenantId: string) {
+  return await responseHandle<ServiceCaseReply[]>(
+    () =>
+      supabase
+        .from('tms_service_case_reply')
+        .select('*')
+        .eq('service_case_id', serviceCaseId)
+        .eq('tenant_id', tenantId)
+        .order('create_time')
+        .order('id'),
+    { breakReturn: true, showErrorMessage: false, errorMessage: '沟通记录加载失败，请重试' }
+  )
+}
+
+export async function fetchServiceCaseReplyDependencies(serviceCaseIds: string[]) {
+  if (!serviceCaseIds.length) return { data: [] as ServiceCaseReply[], error: null }
+  return await responseHandle<ServiceCaseReply[]>(
+    () => supabase.from('tms_service_case_reply').select('*').in('service_case_id', serviceCaseIds),
+    { breakReturn: true, showErrorMessage: false, errorMessage: '服务单关联回复检查失败，请重试' }
+  )
+}
+
+export async function addServiceCaseReply(input: ServiceCaseReplyInput) {
+  return await responseHandle<ServiceCaseReply>(
+    () =>
+      supabase.from('tms_service_case_reply').insert(keysToSnakeDeep(input)).select('*').single(),
+    {
+      breakReturn: true,
+      showMessage: true,
+      showErrorMessage: false,
+      errorMessage: '回复保存失败，请重试'
+    }
+  )
+}
+
+export async function fetchServiceCaseMentionOptions(serviceCaseId: string) {
+  const result = await responseHandle<{
+    users: { label: string; value: string }[]
+    organizations: { label: string; value: string }[]
+    roles: { label: string; value: string }[]
+  }>(
+    () =>
+      supabase.rpc('tms_list_service_case_mention_targets_secure', { p_case_id: serviceCaseId }),
+    { breakReturn: true, showErrorMessage: false, errorMessage: '提及对象加载失败，请重试' }
+  )
+  if (result.error || !result.data) throw result.error ?? new Error('提及对象未返回')
+  return result.data
+}
+
 export async function fetchElectronicContractList(params: ElectronicContractSearch) {
   let query = supabase
     .from('tms_electronic_contract')
@@ -299,6 +476,8 @@ export async function fetchElectronicContractList(params: ElectronicContractSear
     .range(pageFrom(params), pageTo(params))
   const tenantId = readTenantId(params.tenantId)
   if (tenantId) query = query.eq('tenant_id', tenantId)
+  if (params.customerId) query = query.eq('customer_id', params.customerId)
+  if (params.recordId) query = query.eq('id', params.recordId)
   if (keyword(params.contractNo))
     query = query.ilike('contract_no', `%${keyword(params.contractNo)}%`)
   if (keyword(params.contractName))
@@ -353,7 +532,7 @@ export async function terminateElectronicContract(id: string) {
         .eq('id', id)
         .select()
         .single(),
-    { showMessage: true, breakReturn: true, requireAffected: true }
+    { showMessage: true, showErrorMessage: false, breakReturn: true, requireAffected: true }
   )
 }
 
@@ -365,6 +544,8 @@ export async function fetchTransportAgreementList(params: TransportAgreementSear
     .range(pageFrom(params), pageTo(params))
   const tenantId = readTenantId(params.tenantId)
   if (tenantId) query = query.eq('tenant_id', tenantId)
+  if (params.customerId) query = query.eq('customer_id', params.customerId)
+  if (params.recordId) query = query.eq('id', params.recordId)
   if (keyword(params.agreementNo))
     query = query.ilike('agreement_no', `%${keyword(params.agreementNo)}%`)
   if (keyword(params.shipperName))
@@ -412,10 +593,7 @@ export async function editTransportAgreement(id: string, input: TransportAgreeme
 }
 
 type DeletableBasicTable =
-  | 'tms_driver_blacklist'
-  | 'tms_service_case'
-  | 'tms_electronic_contract'
-  | 'tms_transport_agreement'
+  'tms_service_case' | 'tms_electronic_contract' | 'tms_transport_agreement'
 
 export async function deleteTmsBasicRecords(table: DeletableBasicTable, ids: string[]) {
   return await responseHandle(() => supabase.from(table).delete({ count: 'exact' }).in('id', ids), {

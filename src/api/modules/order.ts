@@ -120,6 +120,7 @@ const ORDER_WRITE_FIELDS = [
   'transfer_station',
   'delivery_method',
   'shipping_customer_id',
+  'invoice_account_id',
   'receiving_customer_id',
   'shipping_contact_name',
   'shipping_contact_phone',
@@ -211,7 +212,10 @@ function toOrderWritePayload(params: OrderRecord): Record<string, unknown> {
     string,
     unknown
   >
-  if (!params.id) return payload
+  if (!params.id) {
+    if (!params.invoiceAccountId) delete payload.invoice_account_id
+    return payload
+  }
 
   // The edit form never changes a document number. Keep the server's existing value.
   delete payload.order_no

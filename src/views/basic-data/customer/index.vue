@@ -65,6 +65,7 @@
 <script setup lang="tsx">
   import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
   import { useArtFeedback } from '@/hooks/core/useArtFeedback'
+  import { useAuth } from '@/hooks/core/useAuth'
   import { ElMessage, ElTag } from 'element-plus'
   import { sumBy } from 'lodash-es'
   import MasterDataDeleteGuard, {
@@ -117,6 +118,7 @@
   defineOptions({ name: 'TmsCustomer' })
 
   const { confirmAction } = useArtFeedback()
+  const { hasAuth } = useAuth()
 
   type Customer = Api.Tms.BasicData.Customer
   type SearchParams = Api.Tms.BasicData.CustomerSearchParams
@@ -247,6 +249,30 @@
       actionLabel: '去删除报价',
       routeName: 'TmsCustomerPrice',
       order: 7
+    },
+    electronic_contract: {
+      label: '电子合同',
+      unit: '份',
+      action: '电子合同属于签署历史，请保留记录并停用客户。',
+      actionLabel: '查看电子合同',
+      routeName: 'TmsElectronicContract',
+      order: 8
+    },
+    transport_agreement: {
+      label: '运输协议',
+      unit: '份',
+      action: '运输协议属于履约历史，请保留记录并停用客户。',
+      actionLabel: '查看运输协议',
+      routeName: 'TmsTransportAgreement',
+      order: 9
+    },
+    order_invoice_account: {
+      label: '已使用开票账户的运单',
+      unit: '张',
+      action: '开票账户已被运单引用，请保留业务记录并停用客户。',
+      actionLabel: '查看关联运单',
+      routeName: 'TmsOrderQueryDetail',
+      order: 10
     }
   }
 
@@ -276,8 +302,6 @@
     { key: 'customerName', title: '客户名称', required: true },
     { key: 'industry', title: '所属行业' },
     { key: 'customerLevel', title: '客户级别' },
-    { key: 'contactName', title: '联系人' },
-    { key: 'contactPhone', title: '手机号码' },
     { key: 'region', title: '区域' },
     { key: 'addressDetail', title: '公司地址' },
     { key: 'postalCode', title: '邮编' },
@@ -286,9 +310,6 @@
 
   const visibleCustomerExcelColumns = computed(() =>
     customerExcelColumns.filter((column) => {
-      if (column.key === 'contactPhone') {
-        return canViewField(customerFieldAccess.value, 'contactPhone')
-      }
       if (column.key === 'addressDetail') {
         return canViewField(customerFieldAccess.value, 'addressDetail')
       }
@@ -351,7 +372,10 @@
       label: '客户名称',
       minWidth: 190,
       showOverflowTooltip: true,
-      link: { permission: 'TmsCustomer:View', onClick: openAddressManage }
+      link: {
+        permission: 'TmsCustomer:View',
+        onClick: (row) => openDialog(row, !hasAuth('TmsCustomer:Edit'))
+      }
     },
     {
       prop: 'groupId',
@@ -527,9 +551,10 @@
     return result
   }
 
-  const openDialog = (row?: Customer): void => {
+  const openDialog = (row?: Customer, readonly = false): void => {
     void dialogRef.value?.handleOpen({
       row,
+      readonly,
       groups: groupState.rows,
       initialGroupId: row ? undefined : groupState.selectedId || undefined
     })
@@ -634,7 +659,14 @@
     confirmed: '已确认',
     issued: '已开具',
     certified: '已认证',
-    voided: '已作废'
+    voided: '已作废',
+    pending_signed: '待签署',
+    signed: '已签署',
+    revision_requested: '待修订',
+    created: '已开单',
+    in_transit: '运输中',
+    completed: '已完成',
+    cancelled: '已取消'
   }
 
   const formatDependencyStatus = (status?: string | null): string =>
@@ -684,6 +716,20 @@
         {
           ...meta,
           description: meta.action,
+          ...(code === 'order_invoice_account'
+            ? {
+                canNavigate: () => hasAuth('TmsOrderQuery:View'),
+                routeParams: (record: { targetId: string }) => ({ id: record.targetId })
+              }
+            : code === 'electronic_contract'
+              ? {
+                  canNavigate: () => hasAuth('TmsElectronicContract:View')
+                }
+              : code === 'transport_agreement'
+                ? {
+                    canNavigate: () => hasAuth('TmsTransportAgreement:View')
+                  }
+                : {}),
           routeQuery: (record: { resourceId: string }) => ({
             fromCustomerDelete: '1',
             customerName:

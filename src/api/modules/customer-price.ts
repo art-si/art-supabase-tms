@@ -2,7 +2,7 @@ import { buildSupabaseRpcRange } from '@/utils/supabase'
 import { toDateStartTimestamp, toDateEndTimestamp } from '@/utils/time/date-boundary'
 import { normalizeNullableText } from '@/utils/form/normalize'
 import { useSupabase } from '@/hooks/core/useSupabase'
-import { pickDefinedPayload } from './payload'
+import { pickDefinedPayload } from '@/utils/form/pick-defined-payload'
 
 type CustomerPrice = Api.Tms.BasicData.CustomerPrice
 type CustomerPriceSearchParams = Api.Tms.BasicData.CustomerPriceSearchParams
@@ -17,6 +17,12 @@ const { supabase, keysToSnakeDeep, responseHandle } = useSupabase()
 
 const CUSTOMER_PRICE_PAYLOAD_KEYS = [
   'customerId',
+  'contractId',
+  'effectiveFrom',
+  'effectiveTo',
+  'agreementStatus',
+  'distanceKm',
+  'orderConfig',
   'originRegion',
   'destinationRegion',
   'transportType',
@@ -119,6 +125,32 @@ export async function fetchCustomerPriceDetail(id: string) {
   return await responseHandle<CustomerPrice | null>(
     () => supabase.rpc('tms_get_customer_price_secure', { p_id: id }),
     { showErrorMessage: true }
+  )
+}
+
+export interface ApplicableCustomerPriceParams {
+  customerId: string
+  originRegion: string
+  destinationRegion: string
+  transportType: string
+  vehicleType: string
+  billingMethod: string
+  effectiveDate: string
+}
+
+export async function fetchApplicableCustomerPrice(params: ApplicableCustomerPriceParams) {
+  return await responseHandle<CustomerPrice | null>(
+    () =>
+      supabase.rpc('tms_find_applicable_customer_price_secure', {
+        p_customer_id: params.customerId,
+        p_origin_region: params.originRegion,
+        p_destination_region: params.destinationRegion,
+        p_transport_type: params.transportType,
+        p_vehicle_type: params.vehicleType,
+        p_billing_method: params.billingMethod,
+        p_effective_date: params.effectiveDate
+      }),
+    { showErrorMessage: false, breakReturn: true, errorMessage: '协议价匹配失败，请稍后重试' }
   )
 }
 

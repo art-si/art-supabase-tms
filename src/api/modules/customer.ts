@@ -4,7 +4,7 @@ import { normalizeNullableText } from '@/utils/form/normalize'
 import { useSupabase } from '@/hooks/core/useSupabase'
 import { normalizeBooleanFilter, withRequestOptions } from '@/api/providers/supabase/query'
 import type { ApiRequestOptions } from '@/types/api/request'
-import { pickDefinedPayload } from './payload'
+import { pickDefinedPayload } from '@/utils/form/pick-defined-payload'
 
 type Customer = Api.Tms.BasicData.Customer
 type CustomerSearchParams = Api.Tms.BasicData.CustomerSearchParams
@@ -19,6 +19,7 @@ type CustomerSelectorRecord = CustomerSelectorItem
 
 interface WriteOptions {
   showMessage?: boolean
+  showErrorMessage?: boolean
 }
 
 interface CustomerOptionParams {
@@ -44,7 +45,10 @@ export type CustomerDeleteDependencyCode =
   | 'customer_price'
   | 'customer_statement'
   | 'customer_statement_item'
+  | 'electronic_contract'
   | 'invoice'
+  | 'order_invoice_account'
+  | 'transport_agreement'
 
 export interface CustomerDeleteDependency {
   customerId: string
@@ -103,16 +107,6 @@ const CUSTOMER_PAYLOAD_KEYS = [
   'geocodedAt',
   'postalCode',
   'enabled',
-  'contactName',
-  'contactPhone',
-  'contactDepartment',
-  'contactPosition',
-  'contactEmail',
-  'contactQq',
-  'invoiceTitle',
-  'taxNo',
-  'bankName',
-  'bankAccount',
   'remark'
 ] as const satisfies readonly (keyof Customer)[]
 
@@ -144,6 +138,21 @@ const CUSTOMER_ADDRESS_PAYLOAD_KEYS = [
   'geofenceUpdatedAt'
 ] as const satisfies readonly (keyof CustomerAddress)[]
 
+export {
+  fetchCustomerContactList,
+  addCustomerContact,
+  editCustomerContact,
+  copyCustomerContact,
+  deleteCustomerContact,
+  deleteCustomerContactBatch,
+  fetchCustomerFinanceList,
+  fetchCustomerDefaultFinance,
+  addCustomerFinance,
+  editCustomerFinance,
+  copyCustomerFinance,
+  deleteCustomerFinance,
+  deleteCustomerFinanceBatch
+} from '@/api/customer-children'
 const toCustomerListRpcParams = (
   params: CustomerSearchParams & { ids?: string[]; maxRows?: number },
   purpose: 'list' | 'export'
@@ -247,12 +256,16 @@ export async function addCustomer(params: Customer, options: WriteOptions = {}) 
       supabase.rpc('tms_create_customer_secure', {
         p_payload: keysToSnakeDeep(pickDefinedPayload(params, CUSTOMER_PAYLOAD_KEYS))
       }),
-    { showMessage: options.showMessage ?? true, breakReturn: true }
+    {
+      showMessage: options.showMessage ?? true,
+      showErrorMessage: options.showErrorMessage ?? true,
+      breakReturn: true
+    }
   )
   return { ...result, data: result.data ? { id: result.data } : null }
 }
 
-export async function editCustomer(params: Customer) {
+export async function editCustomer(params: Customer, options: WriteOptions = {}) {
   const { id, ...data } = params
   if (!id) throw new Error('客户 ID 不能为空')
   return await responseHandle<Customer>(
@@ -261,7 +274,7 @@ export async function editCustomer(params: Customer) {
         p_id: id,
         p_payload: keysToSnakeDeep(pickDefinedPayload(data, CUSTOMER_PAYLOAD_KEYS))
       }),
-    { showMessage: true, breakReturn: true }
+    { showMessage: true, showErrorMessage: options.showErrorMessage ?? true, breakReturn: true }
   )
 }
 
@@ -325,7 +338,7 @@ export async function cleanupCustomerDeleteSafeDependencies(
       supabase.rpc('cleanup_tms_customer_safe_delete_dependencies_secure', {
         p_customer_ids: customerIds
       }),
-    { breakReturn: true }
+    { breakReturn: true, showReferenceFeedback: false }
   )
   return (data ?? []).map((item) => ({
     ...item,
@@ -487,12 +500,13 @@ export async function fetchFavoriteRouteList(
   params: FavoriteRouteSearchParams,
   options?: ApiRequestOptions
 ) {
-  const { from = 0, to = 9, tenantId, customerId, enabled, keyword } = params
+  const { from = 0, to = 9, tenantId, customerId, enabled, keyword, recordId } = params
   const query = supabase.rpc('tms_list_favorite_routes_secure', {
     p_from: from,
     p_to: to,
     p_tenant_id: tenantId || null,
     p_customer_id: customerId || null,
+    p_record_id: recordId || null,
     p_enabled: enabled ?? null,
     p_keyword: normalizeNullableText(String(keyword ?? ''))
   })

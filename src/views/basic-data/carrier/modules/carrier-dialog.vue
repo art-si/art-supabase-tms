@@ -21,6 +21,61 @@
           label-width="118px"
         />
       </template>
+      <template #contactsEditor>
+        <CarrierChildEditor
+          v-model="form.contacts"
+          kind="contact"
+          :readonly="!canManageChildren || !canEditCarrierField('contactPhone')"
+        />
+      </template>
+      <template #accountsEditor>
+        <CarrierChildEditor
+          ref="billingEditorRef"
+          v-model="form.billingAccounts"
+          kind="billing"
+          :original-rows="loadedBillingAccounts"
+          :readonly="
+            !canManageChildren ||
+            !canEditCarrierField('taxNo') ||
+            !canEditCarrierField('bankAccount')
+          "
+        />
+      </template>
+      <template #driversList>
+        <CarrierRelatedList
+          v-if="activeTab === 'driversSection'"
+          kind="drivers"
+          :carrier-id="form.id"
+        />
+      </template>
+      <template #vehiclesList>
+        <CarrierRelatedList
+          v-if="activeTab === 'vehiclesSection'"
+          kind="vehicles"
+          :carrier-id="form.id"
+        />
+      </template>
+      <template #waybillsList>
+        <CarrierRelatedList
+          v-if="activeTab === 'waybillsSection'"
+          kind="waybills"
+          :carrier-id="form.id"
+        />
+      </template>
+      <template #pricesList>
+        <CarrierRelatedList
+          v-if="activeTab === 'pricesSection'"
+          kind="prices"
+          :carrier-id="form.id"
+        />
+      </template>
+      <template #statementsList>
+        <CarrierRelatedList
+          v-if="activeTab === 'statementsSection'"
+          kind="statements"
+          :carrier-id="form.id"
+        />
+      </template>
     </ArtForm>
   </ArtDialog>
 </template>
@@ -29,15 +84,23 @@
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import type { FormRules } from 'element-plus'
-  import { omit } from 'lodash-es'
+  import { cloneDeep, omit } from 'lodash-es'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtAddressPicker from '@/components/core/forms/art-address-picker/index.vue'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import { useDocumentNumberRule } from '@/hooks/core/useDocumentNumberRule'
-  import { addCarrier, editCarrier, fetchCarrierParentOptions } from '@tms/api'
+  import {
+    addCarrier,
+    editCarrier,
+    fetchCarrierChildren,
+    fetchCarrierParentOptions
+  } from '@tms/api'
+  import CarrierChildEditor from './carrier-child-editor.vue'
+  import CarrierRelatedList from './carrier-related-list.vue'
   import { fetchRegionOptions } from '@/api/region-options'
   import { useUserStore } from '@/store/modules/user'
+  import { useAuth } from '@/hooks/core/useAuth'
   import { useTenantScopeFormPolicy } from '@/hooks/core/useTenantScopeFormPolicy'
   import TreeUtils from '@/utils/tree'
   import { carrierSelections } from '@tms/views/basic-data/carrier/modules/carrier-selection'
@@ -51,7 +114,12 @@
   defineOptions({ name: 'TmsCarrierDialog' })
 
   type Carrier = Api.Tms.BasicData.Carrier
-  type CarrierForm = Carrier & { addressPicker?: undefined; regionPath: string[] }
+  type CarrierForm = Carrier & {
+    addressPicker?: undefined
+    regionPath: string[]
+    contacts: Api.Tms.BasicData.CarrierContact[]
+    billingAccounts: Api.Tms.BasicData.CarrierBillingAccount[]
+  }
 
   interface DialogExposeForm {
     validate: () => Promise<boolean>
@@ -63,14 +131,37 @@
     (event: 'success', type: 'add' | 'edit'): void
   }>()
 
-  const { getDictMap } = storeToRefs(useUserStore())
+  const userStore = useUserStore()
+  const { getDictMap } = storeToRefs(userStore)
+  const { hasAuth } = useAuth()
   const { defaultWriteTenantId } = useTenantScopeFormPolicy()
   const activeTab = ref('baseSection')
   const dialogRef = ref<ArtDialogExpose<Carrier | undefined>>()
   const formRef = ref<DialogExposeForm>()
+  const billingEditorRef = ref<{ recheckRemoved: () => Promise<boolean> }>()
+  const loadedBillingAccounts = ref<Api.Tms.BasicData.CarrierBillingAccount[]>([])
+  const childrenReady = ref(true)
 
-  const carrierTypeOptions = computed(() => getDictMap.value.tmsCarrierType ?? [])
-  const dispatchChannelOptions = computed(() => getDictMap.value.tmsCarrierDispatchChannel ?? [])
+  const carrierTypeOptions = computed(() => {
+    const current = getDictMap.value.tmsCarrierType ?? []
+    const selected = carrierSelections(form.value.carrierTypes, form.value.carrierType)
+    return [
+      ...current,
+      ...selected
+        .filter((value) => !current.some((item) => item.value === value))
+        .map((value) => ({ value, label: '原类型待核对（请移除后重选）' }))
+    ]
+  })
+  const dispatchChannelOptions = computed(() => {
+    const current = getDictMap.value.tmsCarrierDispatchChannel ?? []
+    const selected = carrierSelections(form.value.dispatchChannels, form.value.dispatchChannel)
+    return [
+      ...current,
+      ...selected
+        .filter((value) => !current.some((item) => item.value === value))
+        .map((value) => ({ value, label: '原渠道待核对（请移除后重选）' }))
+    ]
+  })
 
   const createInitialForm = (): CarrierForm => ({
     id: undefined,
@@ -102,6 +193,8 @@
     bankName: '',
     bankAccountName: '',
     bankAccount: '',
+    contacts: [],
+    billingAccounts: [],
     remark: '',
     fieldAccess: {
       contactPhone: 'edit',
@@ -114,6 +207,11 @@
   })
 
   const form = ref<CarrierForm>(createInitialForm())
+  const canManageChildren = computed(() =>
+    form.value.id
+      ? hasAuth('TmsCarrier:Edit') || Boolean(form.value.isRecordOwner)
+      : hasAuth('TmsCarrier:Add')
+  )
   const carrierNumber = useDocumentNumberRule('master.carrier', () => form.value.tenantId)
 
   const canViewCarrierField = (field: Api.Tms.BasicData.CarrierFieldKey): boolean =>
@@ -132,10 +230,30 @@
       { min: 2, max: 100, message: '长度应为 2 到 100 个字符', trigger: 'blur' }
     ],
     carrierTypes: [
-      { type: 'array', required: true, min: 1, message: '请选择承运商类型', trigger: 'change' }
+      { type: 'array', required: true, min: 1, message: '请选择承运商类型', trigger: 'change' },
+      {
+        validator: (_rule, value, callback) => {
+          const valid = new Set((getDictMap.value.tmsCarrierType ?? []).map((item) => item.value))
+          return Array.isArray(value) && value.every((item) => valid.has(String(item)))
+            ? callback()
+            : callback(new Error('原承运商类型已不在当前分类中，请移除并重新选择有效业务类型'))
+        },
+        trigger: 'change'
+      }
     ],
     dispatchChannels: [
-      { type: 'array', required: true, min: 1, message: '请选择调度渠道', trigger: 'change' }
+      { type: 'array', required: true, min: 1, message: '请选择调度渠道', trigger: 'change' },
+      {
+        validator: (_rule, value, callback) => {
+          const valid = new Set(
+            (getDictMap.value.tmsCarrierDispatchChannel ?? []).map((item) => item.value)
+          )
+          return Array.isArray(value) && value.every((item) => valid.has(String(item)))
+            ? callback()
+            : callback(new Error('原调度渠道已停用或不在当前分类中，请移除并重新选择'))
+        },
+        trigger: 'change'
+      }
     ],
     carrierCode: [
       {
@@ -168,9 +286,11 @@
 
   const parentUnitTree = new TreeUtils({ parentKey: 'parentUnitId' })
   const loadParentUnitOptions = async () => {
-    const tenantId = form.value.tenantId || defaultWriteTenantId.value
     const currentId = form.value.id ?? ''
-    const carriers = await fetchCarrierParentOptions({ tenantId, recordId: currentId || undefined })
+    const carriers = await fetchCarrierParentOptions({
+      tenantId: currentId ? undefined : form.value.tenantId || defaultWriteTenantId.value,
+      recordId: currentId || undefined
+    })
     const tree = parentUnitTree.listToTree(carriers)
     return parentUnitTree.removeNode(tree, currentId).tree
   }
@@ -315,101 +435,28 @@
       }
     },
     { label: '联系人信息', key: 'contactSection', type: 'tab', span: 24 },
-    {
-      label: '姓名',
-      key: 'contactName',
-      type: 'input',
-      props: { maxlength: 50, placeholder: '请输入联系人姓名' }
-    },
-    {
-      label: '手机号码',
-      key: 'contactPhone',
-      type: 'input',
-      hidden: !canViewCarrierField('contactPhone'),
-      props: {
-        maxlength: 20,
-        placeholder: '请输入联系电话',
-        disabled: !canEditCarrierField('contactPhone')
-      }
-    },
-    {
-      label: '部门',
-      key: 'contactDepartment',
-      type: 'input',
-      props: { maxlength: 50, placeholder: '请输入部门' }
-    },
-    {
-      label: '职位',
-      key: 'contactPosition',
-      type: 'input',
-      props: { maxlength: 50, placeholder: '请输入职位' }
-    },
-    {
-      label: 'E-mail',
-      key: 'contactEmail',
-      type: 'input',
-      props: { maxlength: 100, placeholder: '请输入邮箱地址' }
-    },
-    {
-      label: 'QQ',
-      key: 'contactQq',
-      type: 'input',
-      props: { maxlength: 20, placeholder: '请输入 QQ' }
-    },
+    { label: '', key: 'contactsEditor', type: 'input', span: 24, labelWidth: 0 },
     ...(canViewCarrierField('taxNo') || canViewCarrierField('bankAccount')
       ? [{ label: '财务信息', key: 'financeSection', type: 'tab', span: 24 } satisfies FormItem]
       : []),
     {
-      label: '发票抬头',
-      key: 'invoiceTitle',
+      label: '',
+      key: 'accountsEditor',
       type: 'input',
-      props: { maxlength: 100, placeholder: '请输入发票抬头' }
+      span: 24,
+      labelWidth: 0,
+      hidden: !canViewCarrierField('taxNo') && !canViewCarrierField('bankAccount')
     },
-    {
-      label: '纳税人识别号',
-      key: 'taxNo',
-      type: 'input',
-      hidden: !canViewCarrierField('taxNo'),
-      props: {
-        maxlength: 40,
-        placeholder: '请输入纳税人识别号',
-        disabled: !canEditCarrierField('taxNo')
-      }
-    },
-    {
-      label: '开户行',
-      key: 'bankName',
-      type: 'input',
-      hidden: !canViewCarrierField('bankAccount'),
-      props: {
-        maxlength: 100,
-        placeholder: '请输入开户行',
-        disabled: !canEditCarrierField('bankAccount')
-      }
-    },
-    {
-      label: '开户名称',
-      key: 'bankAccountName',
-      type: 'input',
-      hidden: !canViewCarrierField('bankAccount'),
-      props: {
-        maxlength: 100,
-        placeholder: '请输入开户名称',
-        disabled: !canEditCarrierField('bankAccount')
-      }
-    },
-    {
-      label: '银行账号',
-      key: 'bankAccount',
-      type: 'input',
-      span: 16,
-      hidden: !canViewCarrierField('bankAccount'),
-      props: {
-        maxlength: 50,
-        placeholder: '请输入银行账号',
-        disabled: !canEditCarrierField('bankAccount')
-      }
-    }
+    { label: '司机信息', key: 'driversSection', type: 'tab', span: 24 },
+    { label: '', key: 'driversList', type: 'input', span: 24, labelWidth: 0 },
+    { label: '车辆明细', key: 'vehiclesSection', type: 'tab', span: 24 },
+    { label: '', key: 'vehiclesList', type: 'input', span: 24, labelWidth: 0 },
+    { label: '承运单列表', key: 'waybillsSection', type: 'tab', span: 24 },
+    { label: '', key: 'waybillsList', type: 'input', span: 24, labelWidth: 0 },
+    { label: '承运商协议价', key: 'pricesSection', type: 'tab', span: 24 },
+    { label: '', key: 'pricesList', type: 'input', span: 24, labelWidth: 0 },
+    { label: '承运商对账', key: 'statementsSection', type: 'tab', span: 24 },
+    { label: '', key: 'statementsList', type: 'input', span: 24, labelWidth: 0 }
   ])
 
   const replaceForm = (nextForm: CarrierForm): void => {
@@ -424,7 +471,7 @@
   }
 
   const normalizePayload = (): Carrier => {
-    const { regionPath, ...rawPayload } = structuredClone(toRaw(form.value))
+    const { regionPath, ...rawPayload } = cloneDeep(toRaw(form.value))
     if (rawPayload.id && !canEditField(rawPayload.fieldAccess, 'contactPhone')) {
       delete rawPayload.contactPhone
     }
@@ -469,6 +516,13 @@
   }
 
   const handleSubmit = async (): Promise<boolean> => {
+    if (!childrenReady.value) {
+      notifyFriendlyError(
+        new Error('承运商子表加载失败'),
+        '联系人或开票账户未加载，请关闭弹窗后重试'
+      )
+      return false
+    }
     try {
       if (!(await validateArtFormForSubmit(formRef.value))) return false
     } catch (error) {
@@ -484,13 +538,18 @@
       emit('success', type)
       return true
     } catch (error) {
-      notifyFriendlyError(error, '承运商保存失败，请检查填写内容后重试')
+      const referenceBlocked = form.value.id
+        ? await billingEditorRef.value?.recheckRemoved()
+        : false
+      if (!referenceBlocked) notifyFriendlyError(error, '承运商保存失败，请检查填写内容后重试')
       return false
     }
   }
 
   const handleOpen = async (row?: Carrier): Promise<void> => {
     activeTab.value = 'baseSection'
+    loadedBillingAccounts.value = []
+    childrenReady.value = !row?.id
     await resetForm()
     const isEdit = Boolean(row?.id)
     if (row) {
@@ -513,9 +572,22 @@
       onOpen: async (_openData, api) => {
         try {
           await Promise.all([
+            userStore.ensureDictLoaded('tmsCarrierType'),
+            userStore.ensureDictLoaded('tmsCarrierDispatchChannel'),
             carrierNumber.loadRule(),
-            formRef.value?.reloadOptions('parentUnitId')
+            formRef.value?.reloadOptions('parentUnitId'),
+            row?.id
+              ? fetchCarrierChildren(row.id).then((result) => {
+                  if (result.error) throw result.error
+                  form.value.contacts = result.data?.contacts ?? []
+                  form.value.billingAccounts = result.data?.billingAccounts ?? []
+                  loadedBillingAccounts.value = structuredClone(result.data?.billingAccounts ?? [])
+                  childrenReady.value = true
+                })
+              : Promise.resolve()
           ])
+        } catch (error) {
+          notifyFriendlyError(error, '承运商关联资料加载失败，请关闭弹窗后重试')
         } finally {
           api.setLoading(false)
         }

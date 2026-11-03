@@ -40,12 +40,14 @@
   import { useUserStore } from '@/store/modules/user'
   import {
     addElectronicContract,
+    fetchCustomerOptions,
     fetchBasicRecordCarrierOptions,
     type ElectronicContractInput
   } from '@tms/api'
   import { useBasicRecordTenant } from '../../modules/basic-record-tenant'
 
   defineOptions({ name: 'TmsElectronicContractDialog' })
+  const props = defineProps<{ customer?: Api.Tms.BasicData.Customer }>()
 
   type ContractForm = ElectronicContractInput & {
     dateRange: string[]
@@ -64,9 +66,10 @@
   const dialogRef = ref<ArtDialogExpose>()
   const formRef = ref<FormExpose>()
   const initialForm = (): ContractForm => ({
-    tenantId: selectedTenantId.value,
+    tenantId: props.customer?.tenantId ?? selectedTenantId.value,
+    customerId: props.customer?.id ?? null,
     contractName: '',
-    partyACompany: '',
+    partyACompany: props.customer?.customerName ?? '',
     partyARepresentative: '',
     partyASubject: '',
     partyBCarrierId: '',
@@ -107,8 +110,23 @@
   )
 
   const formItems = computed<FormItem[]>(() => [
-    ...tenantField.value,
+    ...(props.customer ? [] : tenantField.value),
     { label: '合同信息', key: 'contractSection', type: 'tab', span: 24 },
+    {
+      label: '客户/货主',
+      key: 'customerId',
+      type: 'select',
+      api: () => fetchCustomerOptions({ tenantId: form.value.tenantId }),
+      labelField: 'customerName',
+      valueField: 'id',
+      props: {
+        filterable: true,
+        clearable: true,
+        disabled: Boolean(props.customer?.id),
+        placeholder: '请选择关联客户'
+      },
+      description: '关联后可在客户档案中查询此合同。'
+    },
     {
       label: '合同名称',
       key: 'contractName',
@@ -197,6 +215,7 @@
     }
     const payload: ElectronicContractInput = {
       tenantId: form.value.tenantId,
+      customerId: form.value.customerId,
       contractName: form.value.contractName.trim(),
       partyACompany: form.value.partyACompany.trim(),
       partyARepresentative: normalizeNullableText(form.value.partyARepresentative),

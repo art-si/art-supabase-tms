@@ -27,9 +27,19 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
+  import type {
+    DataSelectColumn,
+    DataSelectFetchParams
+  } from '@/components/core/forms/art-data-select/types'
   import { normalizeNullableText } from '@/utils/form/normalize'
-  import { addDriverBlacklist, type BlacklistInput } from '@tms/api'
-  import { useBasicRecordTenant } from '../../modules/basic-record-tenant'
+  import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
+  import {
+    addDriverBlacklist,
+    fetchBlacklistDriverCandidates,
+    type BlacklistDriverCandidate,
+    type BlacklistInput
+  } from '@tms/api'
+  import { driverOwnershipLabel, driverTypeLabel } from './driver-label'
 
   defineOptions({ name: 'TmsDriverBlacklistDialog' })
 
@@ -39,36 +49,141 @@
   }
 
   const emit = defineEmits<{ success: [] }>()
-  const { needsTenantChoice, tenantField, selectedTenantId } = useBasicRecordTenant()
   const dialogRef = ref<ArtDialogExpose>()
   const formRef = ref<FormExpose>()
-  const initialForm = (): BlacklistInput => ({
-    tenantId: selectedTenantId.value,
+  const selectedDrivers = ref<BlacklistDriverCandidate[]>([])
+  const ownershipOptions = useDictionaryOptions('tmsDriverOwnership')
+  const driverTypeOptions = useDictionaryOptions('tmsDriverType')
+  interface BlacklistForm extends BlacklistInput {
+    driverName: string
+    phone: string
+    organizationName: string
+    driverOwnership: string
+    driverType: string
+    carrierName: string
+    companyName: string
+    plateNo: string
+  }
+  const initialForm = (): BlacklistForm => ({
+    driverId: '',
     driverName: '',
     phone: '',
     organizationName: '',
+    driverOwnership: '',
+    driverType: '',
+    carrierName: '',
+    companyName: '',
+    plateNo: '',
     blacklistedAt: dayjs().format('YYYY-MM-DD HH:mm:ss'),
     reason: '',
     remark: null
   })
-  const form = ref<BlacklistInput>(initialForm())
+  const form = ref<BlacklistForm>(initialForm())
+
+  const columns: DataSelectColumn<BlacklistDriverCandidate>[] = [
+    { prop: 'driverName', label: '姓名', minWidth: 120 },
+    { prop: 'phone', label: '手机号码', minWidth: 150 },
+    {
+      prop: 'driverOwnership',
+      label: '司机归属',
+      minWidth: 125,
+      dict: { code: 'tmsDriverOwnership', display: 'text' }
+    },
+    {
+      prop: 'driverType',
+      label: '司机类型',
+      minWidth: 125,
+      dict: { code: 'tmsDriverType', display: 'text' }
+    },
+    { prop: 'carrierName', label: '所属承运商', minWidth: 160 },
+    { prop: 'companyName', label: '所属公司', minWidth: 160 },
+    { prop: 'plateNo', label: '车牌号', minWidth: 130 }
+  ]
+  const fetchDrivers = async (params: DataSelectFetchParams) => {
+    const result = await fetchBlacklistDriverCandidates({
+      from: (params.page - 1) * params.pageSize,
+      to: params.page * params.pageSize - 1,
+      keyword: params.keyword
+    })
+    return {
+      data: result.data,
+      total: result.total,
+      error: result.error
+    }
+  }
+  function selectDriver(_value: unknown, rows: BlacklistDriverCandidate[]): void {
+    const driver = rows[0]
+    if (!driver) return
+    selectedDrivers.value = rows
+    Object.assign(form.value, {
+      driverId: driver.id,
+      driverName: driver.driverName,
+      phone: driver.phone ?? '',
+      organizationName: driver.organizationName ?? driver.companyName ?? '',
+      driverOwnership: driver.driverOwnership ?? '',
+      driverType: driver.driverType ?? '',
+      carrierName: driver.carrierName ?? '',
+      companyName: driver.companyName ?? '',
+      plateNo: driver.plateNo ?? ''
+    })
+    formRef.value?.clearValidate()
+  }
 
   const formItems = computed<FormItem[]>(() => [
-    ...tenantField.value,
     {
-      label: '司机姓名',
-      key: 'driverName',
-      type: 'input',
-      props: { maxlength: 80, clearable: true }
+      label: '选择司机',
+      key: 'driverId',
+      type: 'dataSelect',
+      span: 24,
+      description: '从司机管理选择，姓名、手机号与所属组织会自动带入。',
+      props: {
+        mode: 'table',
+        apiFn: fetchDrivers,
+        selectedData: selectedDrivers.value,
+        columns,
+        rowKey: 'id',
+        labelKey: 'driverName',
+        descriptionKey: 'companyName',
+        title: '选择司机',
+        searchPlaceholder: '搜索司机姓名或手机号',
+        placeholder: '从司机管理选择司机',
+        emptyText: '没有可选司机',
+        emptyDescription: '请先在司机管理中维护司机；已在黑名单中的司机不会重复显示。',
+        dialogWidth: 'xl',
+        showSelectedPanel: false,
+        clearable: false,
+        onChange: selectDriver
+      }
     },
-    { label: '手机号', key: 'phone', type: 'input', props: { maxlength: 11, clearable: true } },
+    { label: '司机姓名', key: 'driverName', type: 'input', props: { readonly: true } },
+    { label: '手机号', key: 'phone', type: 'input', props: { readonly: true } },
     {
       label: '所属组织',
       key: 'organizationName',
       type: 'input',
-      span: 24,
-      props: { maxlength: 120, clearable: true, placeholder: '请输入司机所属公司或组织' }
+      props: { readonly: true }
     },
+    {
+      label: '司机归属',
+      key: 'driverOwnership',
+      type: 'text',
+      props: {
+        formatter: (value) =>
+          driverOwnershipLabel(typeof value === 'string' ? value : null, ownershipOptions)
+      }
+    },
+    {
+      label: '司机类型',
+      key: 'driverType',
+      type: 'text',
+      props: {
+        formatter: (value) =>
+          driverTypeLabel(typeof value === 'string' ? value : null, driverTypeOptions)
+      }
+    },
+    { label: '所属承运商', key: 'carrierName', type: 'input', props: { readonly: true } },
+    { label: '所属公司', key: 'companyName', type: 'input', props: { readonly: true } },
+    { label: '车牌号', key: 'plateNo', type: 'input', props: { readonly: true } },
     {
       label: '拉黑时间',
       key: 'blacklistedAt',
@@ -90,16 +205,8 @@
       props: { type: 'textarea', rows: 2, maxlength: 500, showWordLimit: true }
     }
   ])
-  const rules = computed<FormRules<BlacklistInput>>(() => ({
-    tenantId: needsTenantChoice.value
-      ? [{ required: true, message: '请选择所属租户', trigger: 'change' }]
-      : [],
-    driverName: [{ required: true, message: '请输入司机姓名', trigger: 'blur' }],
-    phone: [
-      { required: true, message: '请输入手机号', trigger: 'blur' },
-      { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: 'blur' }
-    ],
-    organizationName: [{ required: true, message: '请输入所属组织', trigger: 'blur' }],
+  const rules = computed<FormRules<BlacklistForm>>(() => ({
+    driverId: [{ required: true, message: '请从司机管理选择司机', trigger: 'change' }],
     blacklistedAt: [{ required: true, message: '请选择拉黑时间', trigger: 'change' }],
     reason: [{ required: true, message: '请输入拉黑原因', trigger: 'blur' }]
   }))
@@ -113,10 +220,7 @@
     }
     try {
       await addDriverBlacklist({
-        ...form.value,
-        driverName: form.value.driverName.trim(),
-        phone: form.value.phone.trim(),
-        organizationName: form.value.organizationName.trim(),
+        driverId: form.value.driverId,
         reason: form.value.reason.trim(),
         remark: normalizeNullableText(form.value.remark),
         blacklistedAt: new Date(form.value.blacklistedAt.replace(' ', 'T')).toISOString()
@@ -130,10 +234,11 @@
   }
 
   const handleOpen = async (): Promise<void> => {
-    Object.assign(form.value, initialForm())
+    form.value = initialForm()
+    selectedDrivers.value = []
     await dialogRef.value?.handleOpen(undefined, {
       title: '新增黑名单',
-      subtitle: '登记后可在列表中查看与导出，提交前请确认手机号和拉黑原因。',
+      subtitle: '登记后司机会暂停接单；解除黑名单时恢复登记前的启用状态。',
       onOpen: async () => {
         await nextTick()
         formRef.value?.clearValidate()

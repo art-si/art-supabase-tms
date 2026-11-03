@@ -5,18 +5,18 @@
     loading-mode="skeleton"
     :error="page.error"
     :empty="!detail.data"
-    empty-text="暂无客户价格详情"
-    empty-description="请返回客户价格列表重新选择，或刷新后重试。"
+    empty-text="暂无客户协议价详情"
+    empty-description="请返回客户协议价列表重新选择，或刷新后重试。"
     @retry="loadPage"
   >
     <ArtPageHeader
-      :title="detail.data?.customer?.customerName || '客户价格详情'"
+      :title="detail.data?.customer?.customerName || '客户协议价详情'"
       :subtitle="routeSubtitle"
       show-back
       @back="goBack"
     />
 
-    <section class="rate-card-detail__summary art-card-xs" aria-label="客户价格概览">
+    <section class="rate-card-detail__summary art-card-xs" aria-label="客户协议价概览">
       <article
         ><span>客户编码</span
         ><strong>{{ detail.data?.customer?.customerCode || '--' }}</strong></article
@@ -28,7 +28,7 @@
         ><span>货物明细</span><strong>{{ cargoItems.length }} 项</strong></article
       >
       <article v-if="canViewSensitiveField('quoteAmounts')"
-        ><span>报价合计</span
+        ><span>协议价合计</span
         ><strong>{{
           formatSensitiveNumberWithAffix(detail.data?.totalFee, { prefix: '¥ ' })
         }}</strong></article
@@ -69,7 +69,7 @@
           <article class="rate-card-detail__panel">
             <div class="rate-card-detail__panel-heading"
               ><b class="is-green">收</b
-              ><div><strong>收货信息</strong><span>本次报价对应的收货地址</span></div></div
+              ><div><strong>收货信息</strong><span>本协议价对应的收货地址</span></div></div
             >
             <ArtDescriptions :data="descriptionData" :items="receivingItems" :columns="1" />
           </article>
@@ -82,7 +82,7 @@
           :columns="cargoColumns"
           :pagination="undefined"
           empty-text="暂无货物明细"
-          empty-description="当前客户价格未维护货物明细。"
+          empty-description="当前客户协议价未维护货物明细。"
           empty-height="150px"
         />
       </ArtSectionCard>
@@ -134,7 +134,7 @@
     formatSensitiveNumber,
     formatSensitiveNumberWithAffix
   } from '@/utils/field-permission'
-  import { formatDateTimeValue } from '@/utils/ui/format'
+  import { formatCompactNumberValue, formatDateTimeValue } from '@/utils/ui/format'
 
   defineOptions({ name: 'TmsCustomerPriceDetail' })
 
@@ -165,6 +165,45 @@
       label: '客户编码',
       value: () => detail.data?.customer?.customerCode,
       copyable: true
+    },
+    {
+      key: 'contractName',
+      label: '关联合同名称',
+      value: () => detail.data?.contract?.contractName
+    },
+    {
+      key: 'contractNo',
+      label: '关联合同编号',
+      value: () => detail.data?.contract?.contractNo,
+      copyable: true
+    },
+    {
+      key: 'agreementStatus',
+      label: '协议状态',
+      field: 'agreementStatus',
+      dictCode: 'tmsPriceAgreementStatus',
+      dictDisplay: 'auto'
+    },
+    {
+      key: 'effectiveFrom',
+      label: '生效日期',
+      field: 'effectiveFrom',
+      formatter: (value) => formatDateTimeValue(value as string | null, { format: 'YYYY-MM-DD' })
+    },
+    {
+      key: 'effectiveTo',
+      label: '失效日期',
+      field: 'effectiveTo',
+      formatter: (value) => formatDateTimeValue(value as string | null, { format: 'YYYY-MM-DD' })
+    },
+    {
+      key: 'distanceKm',
+      label: '线路里程',
+      field: 'distanceKm',
+      formatter: (value) =>
+        value == null || value === ''
+          ? '--'
+          : `${formatCompactNumberValue(value as number | string, 2)} km`
     },
     {
       key: 'transportType',
@@ -304,9 +343,11 @@
       formatter: (value) => formatDateTimeValue(value as string | null)
     }
   ]
-  const cargoColumns: ColumnOption<CargoItem>[] = [
+  const cargoColumns = computed<ColumnOption<CargoItem>[]>(() => [
     { type: 'globalIndex', label: '序号', width: 68 },
     { prop: 'cargoName', label: '货物名称', minWidth: 180 },
+    { prop: 'cargoCode', label: '货物编码', minWidth: 140 },
+    { prop: 'specModel', label: '规格型号', minWidth: 140 },
     {
       prop: 'quantity',
       label: '数量',
@@ -328,15 +369,40 @@
       minWidth: 120,
       align: 'right',
       formatter: (row) => formatSensitiveNumber(row.weightKg, { maximumFractionDigits: 2 })
-    }
-  ]
+    },
+    {
+      prop: 'sourceContract',
+      label: '来源合同',
+      minWidth: 210,
+      formatter: (row) =>
+        [row.sourceContractName, row.sourceContractNo].filter(Boolean).join(' · ') || '-'
+    },
+    ...(canViewSensitiveField('quoteAmounts')
+      ? [
+          {
+            prop: 'unitPrice',
+            label: '协议单价（元）',
+            minWidth: 135,
+            align: 'right',
+            formatter: (row) => formatSensitiveNumber(row.unitPrice)
+          } as ColumnOption<CargoItem>,
+          {
+            prop: 'freight',
+            label: '货物运费（元）',
+            minWidth: 135,
+            align: 'right',
+            formatter: (row) => formatSensitiveNumber(row.freight)
+          } as ColumnOption<CargoItem>
+        ]
+      : [])
+  ])
 
   onMounted(() => void loadPage())
 
   async function loadPage(): Promise<void> {
     const id = String(route.params.id || '')
     if (!id) {
-      page.error = new Error('缺少客户价格标识')
+      page.error = new Error('缺少客户协议价标识')
       return
     }
     page.loading = true
@@ -345,7 +411,7 @@
       const { data } = await fetchCustomerPriceDetail(id)
       detail.data = data ?? undefined
     } catch (error) {
-      page.error = error instanceof Error ? error : new Error('客户价格详情加载失败')
+      page.error = error instanceof Error ? error : new Error('客户协议价详情加载失败')
     } finally {
       page.loading = false
     }

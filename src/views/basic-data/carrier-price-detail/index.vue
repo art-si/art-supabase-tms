@@ -5,20 +5,20 @@
     loading-mode="skeleton"
     :error="page.error"
     :empty="!detail.data"
-    empty-text="暂无承运商价格详情"
-    empty-description="请返回承运商价格列表重新选择，或刷新后重试。"
+    empty-text="暂无承运商协议价详情"
+    empty-description="请返回承运商协议价列表重新选择，或刷新后重试。"
     @retry="loadPage"
   >
     <ArtPageHeader
-      :title="detail.data?.quoteNo || '承运商价格详情'"
+      :title="detail.data?.quoteNo || '承运商协议价详情'"
       :subtitle="detail.data?.carrier?.companyName || '--'"
       show-back
       @back="goBack"
     />
 
-    <section class="rate-card-detail__summary art-card-xs" aria-label="承运商价格概览">
+    <section class="rate-card-detail__summary art-card-xs" aria-label="承运商协议价概览">
       <article
-        ><span>报价单号</span><strong>{{ detail.data?.quoteNo || '--' }}</strong></article
+        ><span>协议价编号</span><strong>{{ detail.data?.quoteNo || '--' }}</strong></article
       >
       <article
         ><span>承运商</span
@@ -58,14 +58,14 @@
           <article class="rate-card-detail__panel">
             <div class="rate-card-detail__panel-heading"
               ><b>承</b
-              ><div><strong>承运商信息</strong><span>报价对应的承运主体与联系人</span></div></div
+              ><div><strong>承运商信息</strong><span>协议价对应的承运主体与联系人</span></div></div
             >
             <ArtDescriptions :data="descriptionData" :items="carrierItems" :columns="1" />
           </article>
           <article class="rate-card-detail__panel">
             <div class="rate-card-detail__panel-heading"
               ><b class="is-orange">车</b
-              ><div><strong>司机与车辆</strong><span>执行本次线路报价的运力信息</span></div></div
+              ><div><strong>司机与车辆</strong><span>执行本协议价线路的运力信息</span></div></div
             >
             <ArtDescriptions :data="descriptionData" :items="capacityItems" :columns="2" />
           </article>
@@ -82,7 +82,7 @@
           :columns="cargoColumns"
           :pagination="undefined"
           empty-text="暂无货物明细"
-          empty-description="当前承运商价格未维护货物或拆分成本。"
+          empty-description="当前承运商协议价未维护货物或拆分成本。"
           empty-height="150px"
         />
       </ArtSectionCard>
@@ -129,7 +129,7 @@
     formatSensitiveNumber,
     formatSensitiveNumberWithAffix
   } from '@/utils/field-permission'
-  import { formatDateTimeValue } from '@/utils/ui/format'
+  import { formatCompactNumberValue, formatDateTimeValue } from '@/utils/ui/format'
 
   defineOptions({ name: 'TmsCarrierPriceDetail' })
 
@@ -145,7 +145,46 @@
   const cargoItems = computed(() => detail.data?.cargoItems ?? [])
 
   const routeItems: ArtDescriptionItem<Partial<CarrierPrice>>[] = [
-    { key: 'quoteNo', label: '报价单号', field: 'quoteNo', copyable: true },
+    { key: 'quoteNo', label: '协议价编号', field: 'quoteNo', copyable: true },
+    {
+      key: 'contractName',
+      label: '关联合同名称',
+      value: () => detail.data?.contract?.contractName
+    },
+    {
+      key: 'contractNo',
+      label: '关联合同编号',
+      value: () => detail.data?.contract?.contractNo,
+      copyable: true
+    },
+    {
+      key: 'agreementStatus',
+      label: '协议状态',
+      field: 'agreementStatus',
+      dictCode: 'tmsPriceAgreementStatus',
+      dictDisplay: 'auto'
+    },
+    {
+      key: 'effectiveFrom',
+      label: '生效日期',
+      field: 'effectiveFrom',
+      formatter: (value) => formatDateTimeValue(value as string | null, { format: 'YYYY-MM-DD' })
+    },
+    {
+      key: 'effectiveTo',
+      label: '失效日期',
+      field: 'effectiveTo',
+      formatter: (value) => formatDateTimeValue(value as string | null, { format: 'YYYY-MM-DD' })
+    },
+    {
+      key: 'distanceKm',
+      label: '线路里程',
+      field: 'distanceKm',
+      formatter: (value) =>
+        value == null || value === ''
+          ? '--'
+          : `${formatCompactNumberValue(value as number | string, 2)} km`
+    },
     {
       key: 'transportMode',
       label: '运输方式',
@@ -251,6 +290,8 @@
     { type: 'globalIndex', label: '序号', width: 68 },
     { prop: 'orderNo', label: '订单号', minWidth: 140 },
     { prop: 'cargoName', label: '货物名称', minWidth: 160 },
+    { prop: 'cargoCode', label: '货物编码', minWidth: 140 },
+    { prop: 'specModel', label: '规格型号', minWidth: 140 },
     {
       prop: 'quantity',
       label: '数量',
@@ -273,8 +314,29 @@
       align: 'right',
       formatter: (row) => formatSensitiveNumber(row.weightKg, { maximumFractionDigits: 2 })
     },
+    {
+      prop: 'sourceContract',
+      label: '来源合同',
+      minWidth: 210,
+      formatter: (row) =>
+        [row.sourceContractName, row.sourceContractNo].filter(Boolean).join(' · ') || '-'
+    },
     ...(canViewSensitiveField('costAmounts')
       ? [
+          {
+            prop: 'unitPrice',
+            label: '协议单价（元）',
+            minWidth: 135,
+            align: 'right',
+            formatter: (row) => formatSensitiveNumber(row.unitPrice)
+          } as ColumnOption<CargoItem>,
+          {
+            prop: 'freight',
+            label: '货物运费（元）',
+            minWidth: 135,
+            align: 'right',
+            formatter: (row) => formatSensitiveNumber(row.freight)
+          } as ColumnOption<CargoItem>,
           {
             prop: 'splitTransportFee',
             label: '拆分运费(元)',
@@ -305,7 +367,7 @@
   async function loadPage(): Promise<void> {
     const id = String(route.params.id || '')
     if (!id) {
-      page.error = new Error('缺少承运商价格标识')
+      page.error = new Error('缺少承运商协议价标识')
       return
     }
     page.loading = true
@@ -314,7 +376,7 @@
       const { data } = await fetchCarrierPriceDetail(id)
       detail.data = data ?? undefined
     } catch (error) {
-      page.error = error instanceof Error ? error : new Error('承运商价格详情加载失败')
+      page.error = error instanceof Error ? error : new Error('承运商协议价详情加载失败')
     } finally {
       page.loading = false
     }

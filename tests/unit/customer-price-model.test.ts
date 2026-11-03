@@ -31,9 +31,12 @@ test('customer price payload trims fields and owns calculated totals', () => {
   assert.equal(payload.paymentTotal, 12.5)
   assert.equal(payload.vehicleCount, null)
   assert.equal(payload.remark, '测试价格')
-  assert.deepEqual(payload.cargoItems, [
-    { cargoName: '配件', quantity: 2, unit: '箱', volumeM3: 1.25, weightKg: 3 }
-  ])
+  assert.equal(payload.cargoItems?.length, 1)
+  assert.equal(payload.cargoItems?.[0]?.cargoName, '配件')
+  assert.equal(payload.cargoItems?.[0]?.quantity, 2)
+  assert.equal(payload.cargoItems?.[0]?.unit, '箱')
+  assert.equal(payload.cargoItems?.[0]?.volumeM3, 1.25)
+  assert.equal(payload.cargoItems?.[0]?.weightKg, 3)
   assert.equal(payload.cargoQuantityTotal, 2)
   assert.equal(payload.cargoVolumeTotal, 1.25)
   assert.equal(payload.cargoWeightTotal, 3)

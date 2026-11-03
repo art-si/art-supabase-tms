@@ -184,6 +184,33 @@
                 label-width="88px"
                 root-class="order-open__form"
               />
+              <p
+                v-if="invoiceAccountsLoading"
+                class="mt-2 text-xs text-[var(--el-text-color-secondary)]"
+              >
+                正在加载开票账户…
+              </p>
+              <ElAlert
+                v-else-if="invoiceAccountsError"
+                class="mt-2"
+                type="error"
+                :title="invoiceAccountsError"
+                :closable="false"
+                show-icon
+              >
+                <ElButton
+                  link
+                  type="primary"
+                  @click="loadInvoiceAccounts(form.data.shippingCustomerId)"
+                  >重新加载</ElButton
+                >
+              </ElAlert>
+              <p
+                v-else-if="form.data.shippingCustomerId && !invoiceAccounts.length"
+                class="mt-2 text-xs text-[var(--el-text-color-secondary)]"
+              >
+                该客户尚未维护开票账户，可先保存运输单，再到客户管理补充。
+              </p>
               <ArtAddressPicker
                 v-if="canViewOrderField('shipperAddress')"
                 v-model:region-path="form.data.shippingRegionPath"
@@ -674,7 +701,7 @@
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import { useDateFormat, useIntervalFn, useNow } from '@vueuse/core'
   import dayjs from 'dayjs'
-  import { cloneDeep, isNil, round } from 'lodash-es'
+  import { cloneDeep, isNil, omit, round } from 'lodash-es'
   import type { FormRules } from 'element-plus'
   import {
     ElAutocomplete,
@@ -714,7 +741,8 @@
     editOrder,
     fetchCargoList,
     fetchCustomerDefaultAddress,
-    fetchCustomerPriceList,
+    fetchCustomerFinanceList,
+    fetchApplicableCustomerPrice,
     fetchOrderDetail,
     fetchOrderContractSummary,
     fetchStationOptions,
@@ -764,6 +792,7 @@
   type OrderContractCandidate = import('@tms/api').OrderContractCandidate
   type CustomerItem = Api.Tms.Order.CustomerSelectorItem
   type CustomerAddress = Api.Tms.BasicData.CustomerAddress
+  type CustomerFinance = Api.Tms.BasicData.CustomerFinance
   type CustomerPriceCargoItem = Api.Tms.BasicData.CustomerPriceCargoItem
   type FavoriteRoute = Api.Tms.BasicData.FavoriteRoute
   type StationOption = Api.Tms.Order.StationOption
@@ -994,6 +1023,10 @@
     error: null
   })
   const saveError = ref<string | null>(null)
+  const invoiceAccounts = ref<CustomerFinance[]>([])
+  const invoiceAccountsLoading = ref(false)
+  const invoiceAccountsError = ref<string | null>(null)
+  let invoiceAccountsRequest = 0
 
   const form: UnwrapNestedRefs<FormGroup> = reactive<FormGroup>({
     data: createInitialForm(),
@@ -1099,7 +1132,8 @@
               }
             }
           ]
-        : [])
+        : []),
+      ...invoiceAccountItems.value
     ]),
     receivingItems: computed<FormItem[]>(() => [
       {
@@ -1465,6 +1499,27 @@
       props: { size: 'small', maxlength: 50, placeholder: '请手工填写运单号' }
     }
   ]
+  const invoiceAccountItems = computed<FormItem[]>(() => [
+    {
+      key: 'invoiceAccountId',
+      label: '开票账户',
+      type: 'select',
+      description: '按发货客户带入默认开票账户；不同项目可选其他账户。',
+      props: {
+        options: invoiceAccounts.value.map((account) => ({
+          label: `${account.invoiceTitle}${account.bankName ? ` · ${account.bankName}` : ''}${account.bankAccount ? ` · ${account.bankAccount.slice(-4)}` : ''}${account.isDefaultInvoice ? ' · 默认' : ''}`,
+          value: account.id
+        })),
+        clearable: true,
+        filterable: true,
+        disabled:
+          !form.data.shippingCustomerId ||
+          invoiceAccountsLoading.value ||
+          !!invoiceAccountsError.value,
+        placeholder: form.data.shippingCustomerId ? '请选择开票账户' : '请先选择发货客户'
+      }
+    }
+  ])
   const journeyItems = computed<FormItem[]>(() => [
     {
       key: 'distanceKm',
@@ -1816,8 +1871,38 @@
     (current, previous) => {
       if (!page.loading && previous && current !== previous && form.data.contractId)
         clearOrderContract()
+      if (current !== previous && !page.loading) form.data.invoiceAccountId = null
+      void loadInvoiceAccounts(current)
     }
   )
+
+  async function loadInvoiceAccounts(customerId?: string | null): Promise<void> {
+    const request = ++invoiceAccountsRequest
+    invoiceAccounts.value = []
+    invoiceAccountsError.value = null
+    if (!customerId) {
+      form.data.invoiceAccountId = null
+      invoiceAccountsLoading.value = false
+      return
+    }
+    invoiceAccountsLoading.value = true
+    try {
+      const { data, error } = await fetchCustomerFinanceList(customerId)
+      if (request !== invoiceAccountsRequest) return
+      if (error) throw error
+      invoiceAccounts.value = data ?? []
+      const selected = invoiceAccounts.value.find((item) => item.id === form.data.invoiceAccountId)
+      if (!selected) {
+        form.data.invoiceAccountId =
+          invoiceAccounts.value.find((item) => item.isDefaultInvoice)?.id ?? null
+      }
+    } catch {
+      if (request === invoiceAccountsRequest)
+        invoiceAccountsError.value = '开票账户加载失败，请重试。'
+    } finally {
+      if (request === invoiceAccountsRequest) invoiceAccountsLoading.value = false
+    }
+  }
 
   function handleCargoSelectorConfirm(selectedCargoes: CargoMaster[]): void {
     const currentItems = form.data.cargoItems ?? []
@@ -2011,36 +2096,123 @@
     return patchMap[mode]
   }
 
-  async function applyCustomerPriceTemplate(customerId: string): Promise<void> {
-    try {
-      const { data } = await fetchCustomerPriceList({
-        customerId,
-        from: 0,
-        to: 0
-      })
-      const price = data?.[0]
-      if (!price) return
+  let priceLookupVersion = 0
+  let lastPriceLookupKey = ''
 
-      Object.assign(form.data, createCustomerPriceBusinessPatch(price, form.data.orderRemark))
+  async function applyCustomerPriceTemplate(customerId: string): Promise<void> {
+    const originRegion = (form.data.shippingRegionPath ?? []).filter(Boolean).join('/')
+    const destinationRegion = (form.data.receivingRegionPath ?? []).filter(Boolean).join('/')
+    const orderConfig = form.data.orderConfig
+    const transportType =
+      orderConfig?.loadType === 'ftl'
+        ? 'truckload'
+        : orderConfig?.loadType === 'ltl'
+          ? 'less_than_truckload'
+          : ''
+    const billingMethod =
+      orderConfig?.billingMode === 'weight'
+        ? 'by_weight'
+        : orderConfig?.billingMode === 'volume'
+          ? 'by_volume'
+          : orderConfig?.billingMode === 'quantity'
+            ? 'by_quantity'
+            : ''
+    const vehicleType = orderConfig?.vehicleType?.trim() ?? ''
+    const effectiveDate = form.data.departureAt
+      ? dayjs(form.data.departureAt).format('YYYY-MM-DD')
+      : dayjs().format('YYYY-MM-DD')
+    if (
+      !customerId ||
+      !originRegion ||
+      !destinationRegion ||
+      !transportType ||
+      !vehicleType ||
+      !billingMethod ||
+      !dayjs(effectiveDate).isValid()
+    ) {
+      lastPriceLookupKey = ''
+      priceLookupVersion += 1
+      return
+    }
+    const lookupKey = [
+      customerId,
+      originRegion,
+      destinationRegion,
+      transportType,
+      vehicleType,
+      billingMethod,
+      effectiveDate
+    ].join('|')
+    if (lookupKey === lastPriceLookupKey) return
+    lastPriceLookupKey = lookupKey
+    const version = ++priceLookupVersion
+    try {
+      const { data: price } = await fetchApplicableCustomerPrice({
+        customerId,
+        originRegion,
+        destinationRegion,
+        transportType,
+        vehicleType,
+        billingMethod,
+        effectiveDate
+      })
+      if (version !== priceLookupVersion || !price) return
+      if (!isReadableFieldAccess(price.fieldAccess?.quoteAmounts)) return
+
+      const pricePatch = createCustomerPriceBusinessPatch(price, form.data.orderRemark)
+      Object.assign(
+        form.data,
+        isReadableFieldAccess(price.fieldAccess?.paymentAmounts)
+          ? pricePatch
+          : omit(pricePatch, ['cashAmount', 'collectAmount', 'monthlyAmount'])
+      )
+      if (price.orderConfig) {
+        form.data.orderConfig = { ...form.data.orderConfig, ...price.orderConfig }
+      }
+      if (price.distanceKm != null) form.data.distanceKm = price.distanceKm
+      if (!form.data.contractId && price.contractId) form.data.contractId = price.contractId
       if (price.cargoItems?.length) {
         form.data.cargoItems = price.cargoItems.map(createCargoItemFromCustomerPrice)
       }
       await nextTick()
       clearFormRefsValidation(validatedFormRefs)
-      ElMessage.success('已带入客户价格维护中的费用与货物信息')
+      ElMessage.success('已带入当前有效的客户协议价')
     } catch {
-      // 价格模板只是辅助回填，查询失败时保留已选择的客户基础信息。
+      if (version === priceLookupVersion) {
+        lastPriceLookupKey = ''
+        ElMessage.warning('客户协议价匹配失败，请调整条件后重试')
+      }
     }
   }
 
+  watch(
+    () => [
+      form.data.shippingCustomerId,
+      (form.data.shippingRegionPath ?? []).join('/'),
+      (form.data.receivingRegionPath ?? []).join('/'),
+      form.data.orderConfig?.loadType,
+      form.data.orderConfig?.vehicleType,
+      form.data.orderConfig?.billingMode,
+      form.data.departureAt
+    ],
+    () => {
+      if (form.data.shippingCustomerId) {
+        void applyCustomerPriceTemplate(form.data.shippingCustomerId)
+      }
+    }
+  )
+
   function createCargoItemFromCustomerPrice(item: CustomerPriceCargoItem): CargoItem {
     return {
+      ...item,
       cargoName: textValue(item.cargoName),
-      packageType: textValue(item.unit),
+      packageType: textValue(item.packageType || item.unit),
       quantity: normalizeNullableNumber(item.quantity),
       unit: textValue(item.unit),
       weightKg: normalizeNullableNumber(item.weightKg),
-      volumeM3: normalizeNullableNumber(item.volumeM3)
+      volumeM3: normalizeNullableNumber(item.volumeM3),
+      unitPrice: normalizeNullableNumber(item.unitPrice),
+      freight: normalizeNullableNumber(item.freight)
     }
   }
 

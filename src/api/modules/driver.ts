@@ -6,7 +6,7 @@ import { useTenantScopeStore } from '@/store/modules/tenant-scope'
 import { normalizeBooleanFilter, withRequestOptions } from '@/api/providers/supabase/query'
 import type { ApiFeedbackOptions, ApiRequestOptions } from '@/types/api/request'
 import type { QueryResult } from '@/types/api/response'
-import { pickDefinedPayload } from './payload'
+import { pickDefinedPayload } from '@/utils/form/pick-defined-payload'
 
 type Driver = Api.Tms.BasicData.Driver
 type DriverProfile = Api.Tms.BasicData.DriverProfile

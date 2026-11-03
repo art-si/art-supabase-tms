@@ -37,8 +37,10 @@
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtTiptapEditor from '@/components/core/forms/art-tiptap-editor/index.vue'
   import { useUserStore } from '@/store/modules/user'
+  import { formatVehicleTypeDisplay } from '@/utils/business/vehicle-type-display'
   import {
     addTransportAgreement,
+    fetchCustomerOptions,
     editTransportAgreement,
     fetchBasicRecordCarrierOptions,
     fetchTmsVehicleOptions,
@@ -48,6 +50,7 @@
   import { useBasicRecordTenant } from '../../modules/basic-record-tenant'
 
   defineOptions({ name: 'TmsTransportAgreementDialog' })
+  const props = defineProps<{ customer?: Api.Tms.BasicData.Customer }>()
 
   type AgreementForm = TransportAgreementInput & {
     carrierName: string
@@ -63,7 +66,12 @@
 
   const emit = defineEmits<{ success: [mode: 'add' | 'edit'] }>()
   const userStore = useUserStore()
-  onMounted(() => void userStore.ensureDictLoaded('tmsTransportAgreementStatus'))
+  onMounted(() => {
+    void Promise.all([
+      userStore.ensureDictLoaded('tmsTransportAgreementStatus'),
+      userStore.ensureDictLoaded('vehicleType')
+    ]).catch((error: unknown) => notifyFriendlyError(error, '协议字典加载失败，请刷新页面后重试'))
+  })
   const { needsTenantChoice, tenantField, selectedTenantId } = useBasicRecordTenant()
   const activeTab = ref('transportSection')
   const dialogRef = ref<ArtDialogExpose<TransportAgreementRecord | undefined>>()
@@ -73,8 +81,9 @@
   const carrierLoadVersion = ref(0)
   const vehicleLoadVersion = ref(0)
   const initialForm = (): AgreementForm => ({
-    tenantId: selectedTenantId.value,
-    shipperName: '',
+    tenantId: props.customer?.tenantId ?? selectedTenantId.value,
+    customerId: props.customer?.id ?? null,
+    shipperName: props.customer?.customerName ?? '',
     carrierId: '',
     carrierName: '',
     contactPhone: '',
@@ -144,8 +153,22 @@
   )
 
   const formItems = computed<FormItem[]>(() => [
-    ...tenantField.value,
+    ...(props.customer ? [] : tenantField.value),
     { label: '运输信息', key: 'transportSection', type: 'tab', span: 24 },
+    {
+      label: '客户/货主',
+      key: 'customerId',
+      type: 'select',
+      api: () => fetchCustomerOptions({ tenantId: form.value.tenantId }),
+      labelField: 'customerName',
+      valueField: 'id',
+      props: {
+        filterable: true,
+        clearable: true,
+        disabled: Boolean(props.customer?.id) || Boolean(editingId.value),
+        placeholder: '请选择关联客户'
+      }
+    },
     { label: '托运方', key: 'shipperName', type: 'input', span: 12, props: { maxlength: 120 } },
     {
       label: '承运方',
@@ -177,8 +200,17 @@
     {
       label: '车型',
       key: 'vehicleType',
-      type: 'input',
-      props: { disabled: true, placeholder: '选择车辆后自动带入' }
+      type: 'text',
+      props: {
+        emptyText: '选择车辆后自动带入',
+        formatter: (value) =>
+          value == null || value === ''
+            ? '选择车辆后自动带入'
+            : formatVehicleTypeDisplay(
+                value,
+                userStore.getDictItemByValue('vehicleType', typeof value === 'string' ? value : '')
+              )
+      }
     },
     {
       label: '车长',
@@ -334,6 +366,7 @@
       }
       const payload: TransportAgreementInput = {
         tenantId: form.value.tenantId,
+        customerId: form.value.customerId,
         shipperName: form.value.shipperName.trim(),
         carrierId: form.value.carrierId,
         contactPhone: form.value.contactPhone.trim(),
@@ -371,6 +404,7 @@
     if (row) {
       Object.assign(form.value, {
         tenantId: row.tenantId,
+        customerId: row.customerId,
         shipperName: row.shipperName,
         carrierId: row.carrierId,
         carrierName: row.carrierName,

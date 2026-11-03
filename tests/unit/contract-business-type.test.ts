@@ -2,10 +2,10 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { usesCarrierParty } from '../../src/views/basic-data/contract/modules/contract-business-type'
 
-test('承运商合同以客户或货主为合同相对方', () => {
-  assert.equal(usesCarrierParty('carrier'), false)
+test('承运商合同要求承运商', () => {
+  assert.equal(usesCarrierParty('carrier'), true)
 })
 
-test('企业/货主端合同以承运商为合同相对方', () => {
-  assert.equal(usesCarrierParty('customer'), true)
+test('客户合同要求客户', () => {
+  assert.equal(usesCarrierParty('customer'), false)
 })

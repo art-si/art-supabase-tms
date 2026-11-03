@@ -1,6 +1,13 @@
 import { buildOrIlikeFilter } from '@/utils/supabase/search'
 import { useSupabase } from '@/hooks/core/useSupabase'
+import { normalizeNullableText } from '@/utils/form/normalize'
 import { loadAllDocumentPages } from '@/utils/business/document-detail-list'
+import { buildSupabasePageRange, fetchAllRangePages } from '@/utils/supabase/pagination'
+import type { DataSelectFetchParams } from '@/components/core/forms/art-data-select/types'
+import type {
+  MaterialSelectCategory,
+  MaterialSelectRecord
+} from '@/components/business/art-material-select/types'
 import {
   applyCreateTimeRange,
   normalizeBooleanFilter,
@@ -12,7 +19,7 @@ import type { ApiRequestOptions } from '@/types/api/request'
 type Cargo = Api.Tms.BasicData.Cargo
 type CargoSearchParams = Api.Tms.BasicData.CargoSearchParams
 
-export interface CargoMaterialOption {
+export interface CargoMaterialOption extends MaterialSelectRecord {
   id: string
   tenantId: string
   materialCode: string
@@ -20,7 +27,65 @@ export interface CargoMaterialOption {
   specificationModel?: string | null
   basicUnit: string
   materialGroupId?: string | null
+  categoryId?: string | null
+  description?: string | null
+  category?: { categoryName: string } | null
   baseUnit?: { unitName: string; symbol?: string | null } | null
+}
+
+export async function fetchCargoMaterialPage(
+  params: DataSelectFetchParams,
+  tenantId: string,
+  categoryIds?: string[]
+): Promise<{ data: CargoMaterialOption[]; total: number }> {
+  const { from, to } = buildSupabasePageRange({ current: params.page, size: params.pageSize })
+  let query = supabase
+    .from('mdm_material')
+    .select(
+      'id,tenant_id,material_code,material_name,description,specification_model,basic_unit,material_group_id,category_id,category:mdm_material_category(category_name),baseUnit:mdm_unit_of_measure!mdm_material_base_unit_fkey(unit_name,symbol)',
+      { count: 'exact' }
+    )
+    .eq('tenant_id', tenantId)
+    .eq('status', 'enabled')
+    .order('material_code')
+    .order('id')
+    .range(from, to)
+  if (categoryIds?.length) query = query.in('category_id', categoryIds)
+  if (params.keyword) {
+    query = query.or(
+      buildOrIlikeFilter(
+        ['material_code', 'material_name', 'description', 'specification_model'],
+        params.keyword
+      )
+    )
+  }
+  const result = await responseHandle<CargoMaterialOption[]>(() => query, {
+    breakReturn: true,
+    showErrorMessage: false,
+    errorMessage: '物料编码加载失败，请重试'
+  })
+  return { data: result.data ?? [], total: result.total ?? 0 }
+}
+
+export async function fetchCargoMaterialCategories(
+  tenantId: string
+): Promise<MaterialSelectCategory[]> {
+  const result = await fetchAllRangePages<MaterialSelectCategory>(({ from, to }) =>
+    responseHandle<MaterialSelectCategory[]>(
+      () =>
+        supabase
+          .from('mdm_material_category')
+          .select('id,parent_id,category_code,category_name')
+          .eq('tenant_id', tenantId)
+          .eq('status', 'enabled')
+          .order('sort')
+          .order('id')
+          .range(from, to),
+      { breakReturn: true, showErrorMessage: false, errorMessage: '物料分类加载失败，请重试' }
+    )
+  )
+  if (result.error) throw result.error
+  return result.data ?? []
 }
 
 interface WriteOptions {
@@ -44,12 +109,16 @@ const cargoWriteKeys = [
   'remark'
 ] as const satisfies readonly (keyof Cargo)[]
 
-const cargoPayload = (cargo: Cargo): Record<string, unknown> =>
-  keysToSnakeDeep(
-    Object.fromEntries(
-      cargoWriteKeys.filter((key) => cargo[key] !== undefined).map((key) => [key, cargo[key]])
-    )
+const cargoPayload = (cargo: Cargo): Record<string, unknown> => {
+  const payload = Object.fromEntries(
+    cargoWriteKeys.filter((key) => cargo[key] !== undefined).map((key) => [key, cargo[key]])
   )
+  // ArtForm keeps a cleared treeSelect as ''; PostgreSQL UUID columns require null.
+  if ('materialGroupId' in payload) {
+    payload.materialGroupId = normalizeNullableText(cargo.materialGroupId)
+  }
+  return keysToSnakeDeep(payload)
+}
 
 export async function fetchCargoMaterialOptions(tenantId: string): Promise<CargoMaterialOption[]> {
   return loadAllDocumentPages<CargoMaterialOption, { from?: number; to?: number }>(
@@ -123,6 +192,14 @@ export async function addCargo(params: Cargo, options: WriteOptions = {}) {
   return await responseHandle<Cargo>(
     () => supabase.from('mdm_cargo').insert(cargoPayload(params)).select(cargoSelect).single(),
     { showMessage: options.showMessage ?? true, breakReturn: true }
+  )
+}
+
+export async function addCargoBatch(params: Cargo[]) {
+  if (!params.length) throw new Error('请先选择物料编码')
+  return await responseHandle<Cargo[]>(
+    () => supabase.from('mdm_cargo').insert(params.map(cargoPayload)).select(cargoSelect),
+    { showMessage: true, breakReturn: true }
   )
 }
 

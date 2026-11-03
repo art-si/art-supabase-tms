@@ -73,6 +73,7 @@ export async function fetchDispatchWorkbench(
           omitBy(
             {
               recordId: params.recordId || null,
+              customerId: params.customerId || null,
               ids: params.ids?.length ? params.ids : null,
               orderStatus: params.orderStatus || null,
               paymentMethod: params.paymentMethod || null,

@@ -1,5 +1,9 @@
 import { cloneDeep, omit } from 'lodash-es'
 import {
+  createInitialOrderConfig,
+  normalizeCargoItems
+} from '../../../order-open/modules/order-open-model'
+import {
   normalizeNullableNumber,
   normalizeNullableText,
   normalizeNonNullableText
@@ -16,6 +20,8 @@ export type CustomerPrice = Api.Tms.BasicData.CustomerPrice
 export type CustomerPriceCargoItem = Api.Tms.BasicData.CustomerPriceCargoItem
 
 export type CustomerPriceForm = CustomerPrice & {
+  orderConfig: Api.Tms.Order.OrderConfig
+  cargoItems: CustomerPriceCargoItem[]
   customerCode?: string
   originRegionPath: string[]
   destinationRegionPath: string[]
@@ -54,6 +60,12 @@ export function createInitialCustomerPriceForm(): CustomerPriceForm {
     id: undefined,
     customerId: '',
     customerCode: '',
+    contractId: null,
+    effectiveFrom: null,
+    effectiveTo: null,
+    agreementStatus: 'draft',
+    distanceKm: null,
+    orderConfig: createInitialOrderConfig(),
     originRegion: '',
     destinationRegion: '',
     originRegionPath: [],
@@ -103,6 +115,7 @@ export function normalizeCustomerPriceCargoItems(
 ): CustomerPriceCargoItem[] {
   return (items ?? [])
     .map((item) => ({
+      ...normalizeCargoItems([item])[0],
       cargoName: normalizeNullableText(item.cargoName),
       quantity: normalizeNullableNumber(item.quantity),
       unit: normalizeNullableText(item.unit),
@@ -126,6 +139,7 @@ export function normalizeCustomerPricePayload(form: CustomerPriceForm): Customer
   const payload = omit(raw, [
     'tenantId',
     'customer',
+    'contract',
     'customerCode',
     'originRegionPath',
     'destinationRegionPath',
@@ -142,14 +156,24 @@ export function normalizeCustomerPricePayload(form: CustomerPriceForm): Customer
   Object.assign(payload, {
     originRegion: joinRegionPath(raw.originRegionPath),
     destinationRegion: joinRegionPath(raw.destinationRegionPath),
+    contractId: normalizeNullableText(raw.contractId),
+    effectiveFrom: normalizeNullableText(raw.effectiveFrom),
+    effectiveTo: normalizeNullableText(raw.effectiveTo),
+    distanceKm: normalizeNullableNumber(raw.distanceKm),
+    orderConfig: cloneDeep(raw.orderConfig),
+    transportType: raw.orderConfig.loadType === 'ftl' ? 'truckload' : 'less_than_truckload',
+    cargoType: raw.orderConfig.cargoCategory,
+    vehicleType: raw.orderConfig.vehicleType || null,
+    vehicleLength:
+      raw.orderConfig.vehicleLengthM == null ? null : String(raw.orderConfig.vehicleLengthM),
+    vehicleCount: raw.orderConfig.truckCount ?? null,
+    billingMethod: raw.orderConfig.billingMode
+      ? `by_${raw.orderConfig.billingMode}`
+      : raw.billingMethod,
     cargoItems,
     cargoQuantityTotal: cargoSummary.quantity,
     cargoVolumeTotal: cargoSummary.volume,
     cargoWeightTotal: cargoSummary.weight,
-    vehicleType: normalizeNullableText(raw.vehicleType),
-    vehicleLength: normalizeNullableText(raw.vehicleLength),
-    vehicleCount: normalizeNullableNumber(raw.vehicleCount),
-    cargoType: normalizeNullableText(raw.cargoType),
     remark: normalizeNullableText(raw.remark),
     transportFee: normalizeMoney(raw.transportFee),
     insuranceFee: normalizeMoney(raw.insuranceFee),

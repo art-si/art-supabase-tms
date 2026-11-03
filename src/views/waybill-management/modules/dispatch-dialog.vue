@@ -262,6 +262,7 @@
   import {
     dispatchWaybill,
     dispatchWaybillBatch,
+    fetchCarrierBillingAccountsForDispatch,
     checkDispatchCertificateRisk,
     recommendDispatchResourcesByAi,
     mergeWaybills
@@ -352,6 +353,9 @@
     DOMPurify.sanitize(agreementDetail.value?.contentHtml || '')
   )
   const formRef = ref<FormExpose>()
+  const carrierBillingAccounts = ref<Api.Tms.BasicData.CarrierBillingAccount[]>([])
+  const carrierBillingLoading = ref(false)
+  const carrierBillingError = ref('')
 
   const dialog: UnwrapNestedRefs<DialogGroup> = reactive<DialogGroup>({
     rows: [],
@@ -411,6 +415,26 @@
           onClear: handleCarrierClear,
           showSelectedPanel: false
         }
+      },
+      {
+        label: '开票账户',
+        key: 'carrierBillingAccountId',
+        type: 'select',
+        span: 24,
+        hidden: form.data.dispatchMode !== 'carrier',
+        options: carrierBillingAccounts.value.map((account) => ({
+          value: account.id,
+          label: `${account.invoiceTitle}${account.bankName ? ` · ${account.bankName}` : ''}${account.isDefault ? '（默认）' : ''}`
+        })),
+        props: {
+          clearable: true,
+          filterable: true,
+          loading: carrierBillingLoading.value,
+          disabled: !form.data.dispatchCarrierId || carrierBillingLoading.value,
+          placeholder: '未维护开票账户时可留空'
+        },
+        description:
+          carrierBillingError.value || '选择承运方后自动带出默认账户；可改选该承运方的其他账户。'
       },
       {
         label: form.data.dispatchMode === 'individual_driver' ? '个体司机' : '自营司机',
@@ -656,6 +680,7 @@
   function handleModeChange(): void {
     Object.assign(form.data, {
       dispatchCarrierId: null,
+      carrierBillingAccountId: null,
       dispatchAgreementId: null,
       dispatchDriverId: null,
       dispatchVehicleId: '',
@@ -666,6 +691,8 @@
       dispatchDriverPhone: ''
     })
     form.selectedCarriers = []
+    carrierBillingAccounts.value = []
+    carrierBillingError.value = ''
     form.selectedDrivers = []
     form.selectedIndividuals = []
     form.selectedVehicles = []
@@ -675,10 +702,36 @@
   function handleCarrierConfirm(_value: unknown, rows: DataSelectRecord[]): void {
     const carrier = rows[0] as DispatchCarrierCandidate | undefined
     form.data.dispatchCarrierId = carrier?.id ?? null
+    form.data.carrierBillingAccountId = null
+    carrierBillingAccounts.value = []
+    if (carrier?.id) void loadCarrierBillingAccounts(carrier.id)
+  }
+
+  async function loadCarrierBillingAccounts(carrierId: string): Promise<void> {
+    carrierBillingLoading.value = true
+    carrierBillingError.value = ''
+    try {
+      const result = await fetchCarrierBillingAccountsForDispatch(carrierId)
+      if (form.data.dispatchCarrierId !== carrierId) return
+      if (result.error) throw result.error
+      carrierBillingAccounts.value = result.data ?? []
+      form.data.carrierBillingAccountId =
+        carrierBillingAccounts.value.find((account) => account.isDefault)?.id ?? null
+    } catch (error) {
+      if (form.data.dispatchCarrierId !== carrierId) return
+      carrierBillingError.value = getFriendlySupabaseErrorMessage(
+        error,
+        '开票账户加载失败；可先完成调度，稍后在承运商档案中检查账户。'
+      )
+    } finally {
+      carrierBillingLoading.value = false
+    }
   }
 
   function handleCarrierClear(): void {
     form.data.dispatchCarrierId = null
+    form.data.carrierBillingAccountId = null
+    carrierBillingAccounts.value = []
     form.selectedCarriers = []
   }
 
@@ -768,6 +821,8 @@
     })
     Object.assign(form.data, createInitialForm())
     form.selectedCarriers = []
+    carrierBillingAccounts.value = []
+    carrierBillingError.value = ''
     form.selectedDrivers = []
     form.selectedIndividuals = []
     form.selectedVehicles = []
@@ -825,6 +880,7 @@
       ids: [],
       dispatchMode: 'self_operated',
       dispatchCarrierId: null,
+      carrierBillingAccountId: null,
       dispatchAgreementId: null,
       dispatchVehicleId: '',
       dispatchDriverId: null,
@@ -853,6 +909,12 @@
     return {
       ...toRaw(form.data),
       dispatchCarrierId: form.data.dispatchMode === 'carrier' ? form.data.dispatchCarrierId : null,
+      carrierBillingAccountId:
+        form.data.dispatchMode === 'carrier'
+          ? carrierBillingError.value
+            ? undefined
+            : form.data.carrierBillingAccountId
+          : null,
       dispatchAgreementId:
         form.data.dispatchMode === 'individual_driver' ? form.data.dispatchAgreementId : null,
       dispatchVehicleId:

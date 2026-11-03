@@ -1,12 +1,19 @@
 <template>
-  <div class="business-workspace-page art-full-height customer-price">
+  <div
+    :class="
+      embedded
+        ? 'customer-price flex h-[460px] min-w-0 flex-col'
+        : 'business-workspace-page art-full-height customer-price'
+    "
+  >
     <BusinessWorkspaceHeader
-      eyebrow="CUSTOMER RATE CARD"
-      title="客户报价"
-      description="按运输线路、货物与计费方式维护客户价格方案，支撑快速报价与运费核算。"
+      v-if="!embedded"
+      eyebrow="CUSTOMER AGREEMENT PRICE"
+      title="客户协议价"
+      description="按关联合同、有效期与运输线路维护客户协议价，支撑订单价格匹配和运费核算。"
       icon="ri:price-tag-3-line"
       :tags="[
-        { label: '销售报价', type: 'primary' },
+        { label: '销售协议价', type: 'primary' },
         { label: '线路计价', type: 'info' }
       ]"
     >
@@ -20,7 +27,7 @@
       v-if="customerDeleteContext.active"
       :customer-id="customerDeleteContext.customerId"
       :customer-name="customerDeleteContext.customerName"
-      action-hint="请核对关联客户报价。确认不再使用后，可直接在表格右侧删除该价格方案。"
+      action-hint="请核对关联客户协议价。确认不再使用后，可直接在表格右侧删除该协议价。"
     />
 
     <ArtTableQuery
@@ -30,16 +37,16 @@
       :api-fn="fetchTableData"
       :columns-factory="columnsFactory"
       :header-actions="headerActions"
-      header-actions-placement="workspace"
+      :header-actions-placement="embedded ? 'table' : 'workspace'"
       :search-bar-props="{ span: 6, labelWidth: 86, showExpand: false }"
       :table-props="{
         tableLayout: 'fixed',
         fit: false,
         showOverflowTooltip: false,
-        emptyText: '暂无客户报价',
-        emptyDescription: '可新增客户价，或调整线路、客户、运输类型和日期后重新查询。'
+        emptyText: '暂无客户协议价',
+        emptyDescription: '可新增客户协议价，或调整线路、客户、运输类型和日期后重新查询。'
       }"
-      focusable
+      :focusable="!embedded"
     />
     <MasterDataDeleteGuard ref="deleteGuardRef" />
   </div>
@@ -47,6 +54,7 @@
 
 <script setup lang="tsx">
   import { normalizePriceRegionSearch } from '../modules/price-form-utils'
+  import { formatRateDistanceKm, formatRateEffectivePeriod } from '../modules/rate-card-detail'
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
   import type {
     ArtTableQueryExpose,
@@ -69,6 +77,7 @@
   import { formatCompactNumberValue } from '@/utils/ui/format'
   import BusinessWorkspaceHeader from '@/components/business/business-workspace-header/index.vue'
   import BusinessTableWorkspaceActions from '@/components/business/business-table-workspace-actions/index.vue'
+  import BusinessTableRowActions from '@/components/business/business-table-row-actions/index.vue'
   import MasterDeleteProcessingNotice from '@/components/business/master-delete-processing-notice/index.vue'
   import { useMasterDataDeleteProcessingContext } from '@/hooks/core/useMasterDataDeleteProcessing'
   import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
@@ -81,6 +90,7 @@
   } from '@/utils/field-permission'
 
   defineOptions({ name: 'TmsCustomerPrice' })
+  const props = defineProps<{ embedded?: boolean; customerId?: string }>()
 
   const { hasAuth } = useAuth()
 
@@ -106,7 +116,7 @@
   const tableQueryRef = ref<ArtTableQueryExpose>()
   const { deleteGuardRef, deleteRecord, deleteRecords } = useRecordDeleteGuard(
     'tms_customer_price',
-    '客户报价'
+    '客户协议价'
   )
   const customerPriceFieldAccess = ref<CustomerPriceFieldAccessMap>({})
   const currentRows = ref<CustomerPrice[]>([])
@@ -116,7 +126,7 @@
       originRegionPath: [],
       destinationRegionPath: [],
       createTimeRange: [],
-      customerId: customerDeleteContext.value.customerId,
+      customerId: props.customerId ?? customerDeleteContext.value.customerId,
       keyword: '',
       recordId: customerDeleteContext.value.recordId
     }
@@ -126,6 +136,7 @@
   const transportTypeOptions = computed(() => getDictMap.value.tmsCustomerPriceTransportType ?? [])
   const cargoTypeOptions = computed(() => getDictMap.value.tmsCustomerPriceCargoType ?? [])
   const billingMethodOptions = computed(() => getDictMap.value.tmsCustomerPriceBillingMethod ?? [])
+  const agreementStatusOptions = computed(() => getDictMap.value.tmsPriceAgreementStatus ?? [])
 
   const customerPriceExcelColumns = computed<ArtTableQueryExcelColumn[]>(() => [
     { key: 'originRegion', title: '始发地' },
@@ -134,6 +145,31 @@
       key: 'customerName',
       title: '客户名称',
       formatter: (_value, row) => (row as CustomerPrice).customer?.customerName || ''
+    },
+    {
+      key: 'contractName',
+      title: '关联合同名称',
+      formatter: (_value, row) => (row as CustomerPrice).contract?.contractName || ''
+    },
+    {
+      key: 'contractNo',
+      title: '关联合同编号',
+      formatter: (_value, row) => (row as CustomerPrice).contract?.contractNo || ''
+    },
+    {
+      key: 'agreementStatus',
+      title: '协议状态',
+      formatter: (value) => getLabel(agreementStatusOptions.value, String(value ?? ''))
+    },
+    {
+      key: 'effectivePeriod',
+      title: '有效期',
+      formatter: (_value, row) => formatRateEffectivePeriod(row as CustomerPrice)
+    },
+    {
+      key: 'distanceKm',
+      title: '线路里程',
+      formatter: (value) => formatRateDistanceKm(value as number | string | null)
     },
     { key: 'shippingInfo', title: '发货信息', formatter: (_value, row) => formatShippingInfo(row) },
     {
@@ -267,6 +303,37 @@
         )
     },
     {
+      prop: 'contractName',
+      label: '关联合同名称',
+      minWidth: 190,
+      formatter: (row) => row.contract?.contractName || '-'
+    },
+    {
+      prop: 'contractNo',
+      label: '关联合同编号',
+      minWidth: 155,
+      formatter: (row) => row.contract?.contractNo || '-'
+    },
+    {
+      prop: 'agreementStatus',
+      label: '协议状态',
+      width: 110,
+      dict: { code: 'tmsPriceAgreementStatus', display: 'auto' }
+    },
+    {
+      prop: 'effectivePeriod',
+      label: '有效期',
+      minWidth: 210,
+      formatter: (row) => formatRateEffectivePeriod(row)
+    },
+    {
+      prop: 'distanceKm',
+      label: '线路里程',
+      width: 125,
+      align: 'right',
+      formatter: (row) => formatRateDistanceKm(row.distanceKm)
+    },
+    {
       prop: 'shippingInfo',
       label: '发货信息',
       minWidth: 240,
@@ -335,7 +402,7 @@
       width: 120,
       fixed: 'right',
       formatter: (row) => (
-        <div>
+        <BusinessTableRowActions>
           <ArtButtonTable
             type="edit"
             permission="TmsCustomerPrice:Edit"
@@ -346,7 +413,7 @@
             permission="TmsCustomerPrice:Delete"
             onClick={() => handleDelete(row)}
           />
-        </div>
+        </BusinessTableRowActions>
       )
     }
   ]
@@ -368,7 +435,7 @@
         await deleteRecords({
           resources: rows.map((row) => ({
             id: row.id ?? '',
-            label: `${row.customer?.customerName || '客户报价'} · ${row.originRegion} → ${row.destinationRegion}`
+            label: `${row.customer?.customerName || '客户协议价'} · ${row.originRegion} → ${row.destinationRegion}`
           })),
           permission: 'TmsCustomerPrice:Delete',
           remove: () => deleteCustomerPriceBatch(rows.map((row) => row.id ?? '')),
@@ -381,12 +448,13 @@
     {
       permission: 'TmsCustomerPrice:Export',
       type: 'export',
-      exportFilename: 'TMS客户价格维护',
-      exportSheetName: '客户价格维护',
+      exportFilename: 'TMS客户协议价',
+      exportSheetName: '客户协议价',
       exportColumns: customerPriceExcelColumns.value,
       exportApi: ({ selectedIds, searchParams, maxRows }) =>
         exportCustomerPriceList({
           ...normalizePriceRegionSearch(searchParams as SearchModel),
+          customerId: props.customerId || (searchParams as SearchModel).customerId,
           ids: selectedIds.map(String),
           maxRows
         })
@@ -397,6 +465,7 @@
     const { from, to } = buildSupabasePageRange({ current: params.current, size: params.size })
     const result = await fetchCustomerPriceList({
       ...normalizePriceRegionSearch(params),
+      customerId: props.customerId || params.customerId,
       from,
       to
     })
@@ -427,7 +496,7 @@
 
   const syncCustomerDeleteRoute = (forceRefresh = false): void => {
     const context = customerDeleteContext.value
-    const customerId = context.active ? context.customerId : ''
+    const customerId = props.customerId || (context.active ? context.customerId : '')
     const recordId = context.active ? context.recordId : ''
     const changed =
       table.searchQuery.customerId !== customerId || table.searchQuery.recordId !== recordId
@@ -471,7 +540,10 @@
       void router.push({ name: 'TmsCustomerPriceEdit', params: { id: row.id } })
       return
     }
-    void router.push({ name: 'TmsCustomerPriceEdit' })
+    void router.push({
+      name: 'TmsCustomerPriceEdit',
+      query: props.customerId ? { customerId: props.customerId } : {}
+    })
   }
 
   const openDetailPage = (row: CustomerPrice): void => {
@@ -483,7 +555,7 @@
     await deleteRecord({
       resource: {
         id: row.id ?? '',
-        label: `${row.customer?.customerName || '客户报价'} · ${row.originRegion} → ${row.destinationRegion}`
+        label: `${row.customer?.customerName || '客户协议价'} · ${row.originRegion} → ${row.destinationRegion}`
       },
       permission: 'TmsCustomerPrice:Delete',
       remove: () => deleteCustomerPrice(row.id ?? ''),

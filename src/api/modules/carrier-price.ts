@@ -2,7 +2,7 @@ import { buildSupabaseRpcRange } from '@/utils/supabase'
 import { toDateStartTimestamp, toDateEndTimestamp } from '@/utils/time/date-boundary'
 import { normalizeNullableText } from '@/utils/form/normalize'
 import { useSupabase } from '@/hooks/core/useSupabase'
-import { pickDefinedPayload } from './payload'
+import { pickDefinedPayload } from '@/utils/form/pick-defined-payload'
 
 type CarrierPrice = Api.Tms.BasicData.CarrierPrice
 type CarrierPriceSearchParams = Api.Tms.BasicData.CarrierPriceSearchParams
@@ -18,11 +18,29 @@ const { supabase, keysToSnakeDeep, responseHandle } = useSupabase()
 const CARRIER_PRICE_PAYLOAD_KEYS = [
   'quoteNo',
   'carrierId',
+  'contractId',
+  'effectiveFrom',
+  'effectiveTo',
+  'agreementStatus',
+  'distanceKm',
+  'orderConfig',
   'driverId',
   'vehicleId',
   'originRegion',
   'destinationRegion',
   'transportMode',
+  'shippingAddressId',
+  'receivingAddressId',
+  'shippingContactName',
+  'shippingContactPhone',
+  'shippingAddressDetail',
+  'shippingLongitude',
+  'shippingLatitude',
+  'receivingContactName',
+  'receivingContactPhone',
+  'receivingAddressDetail',
+  'receivingLongitude',
+  'receivingLatitude',
   'contactName',
   'contactPhone',
   'driverName',

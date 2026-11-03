@@ -63,6 +63,110 @@
               size="compact"
             />
           </ElTabPane>
+          <ElTabPane name="conversation" label="沟通记录">
+            <div
+              v-if="repliesLoading"
+              class="py-6 text-center text-sm text-[var(--el-text-color-secondary)]"
+              >正在加载沟通记录…</div
+            >
+            <div v-else-if="repliesError" class="flex items-center gap-3 py-6 text-sm">
+              <span>{{ repliesError }}</span
+              ><ElButton link type="primary" @click="loadReplies">重试</ElButton>
+            </div>
+            <ElScrollbar v-else max-height="320px" class="mb-5">
+              <div v-if="replies.length" class="space-y-3 pr-2">
+                <article
+                  v-for="reply in replies"
+                  :key="reply.id"
+                  class="rounded-md border border-[var(--el-border-color-light)] p-4"
+                >
+                  <div class="mb-2 flex flex-wrap items-center gap-2 text-sm">
+                    <strong class="text-[var(--el-text-color-primary)]">{{
+                      reply.authorName
+                    }}</strong>
+                    <span class="text-[var(--el-text-color-secondary)]">{{
+                      formatWithDayjs(reply.createTime, 'YYYY-MM-DD HH:mm')
+                    }}</span>
+                    <span v-if="reply.replyToId" class="text-[var(--el-text-color-secondary)]"
+                      >回复上一条沟通</span
+                    >
+                  </div>
+                  <p
+                    class="whitespace-pre-wrap break-words text-sm text-[var(--el-text-color-regular)]"
+                    >{{ reply.content }}</p
+                  >
+                  <div v-if="reply.mentions.length" class="mt-2 flex flex-wrap gap-2">
+                    <ElTag
+                      v-for="mention in reply.mentions"
+                      :key="`${mention.kind}:${mention.id}`"
+                      size="small"
+                      effect="plain"
+                      >@{{ mention.label }}</ElTag
+                    >
+                  </div>
+                  <ArtUploadFile
+                    v-if="reply.attachments.length"
+                    class="mt-3"
+                    :model-value="reply.attachments"
+                    title="回复附件"
+                    :limit="10"
+                    multiple
+                    readonly
+                  />
+                  <ElButton
+                    v-auth="'TmsServiceCase:Reply'"
+                    class="mt-2"
+                    link
+                    type="primary"
+                    @click="replyTo = reply"
+                    >回复</ElButton
+                  >
+                </article>
+              </div>
+              <ArtEmptyState
+                v-else
+                title="暂无沟通记录"
+                description="可回复这条服务单，补充处理过程和附件。"
+                :visual-size="72"
+                size="compact"
+              />
+            </ElScrollbar>
+            <div
+              v-if="hasAuth('TmsServiceCase:Reply')"
+              class="border-t border-[var(--el-border-color-light)] pt-4"
+            >
+              <div
+                v-if="replyTo"
+                class="mb-3 flex items-center gap-2 text-sm text-[var(--el-text-color-secondary)]"
+              >
+                <span>回复 {{ replyTo.authorName }}</span
+                ><ElButton link @click="replyTo = null">取消引用</ElButton>
+              </div>
+              <ArtForm
+                ref="replyFormRef"
+                v-model="replyForm"
+                :items="replyItems"
+                :rules="replyRules"
+                :span="12"
+                :gutter="16"
+                label-width="100px"
+              />
+              <div class="mt-3 flex justify-end"
+                ><ElButton
+                  type="primary"
+                  :loading="replySaving"
+                  :disabled="!!mentionOptionsError"
+                  v-auth="'TmsServiceCase:Reply'"
+                  @click="submitReply"
+                  >发送回复</ElButton
+                ></div
+              >
+              <p v-if="mentionOptionsError" class="mt-2 text-sm text-[var(--el-color-danger)]"
+                >{{ mentionOptionsError }}
+                <ElButton link type="primary" @click="loadMentionOptions">重试</ElButton></p
+              >
+            </div>
+          </ElTabPane>
         </ElTabs>
       </template>
     </ArtDialog>
@@ -72,7 +176,11 @@
 
 <script setup lang="tsx">
   import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
+  import { useAuth } from '@/hooks/core/useAuth'
+  import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
+  import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
+  import type { MasterDataDeleteGuardOpenOptions } from '@/components/business/master-data-delete-guard/index.vue'
 
   import { storeToRefs } from 'pinia'
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
@@ -83,6 +191,8 @@
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
   import ArtUploadFile from '@/components/core/forms/art-upload-file/index.vue'
+  import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
+  import type { FormRules } from 'element-plus'
   import BusinessWorkspaceHeader from '@/components/business/business-workspace-header/index.vue'
   import BusinessTableWorkspaceActions from '@/components/business/business-table-workspace-actions/index.vue'
   import BusinessTableRowActions from '@/components/business/business-table-row-actions/index.vue'
@@ -95,9 +205,18 @@
   import type { ColumnOption } from '@/types'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { formatWithDayjs } from '@/utils/time'
+  import { getDictionaryDisplayLabel } from '@/utils/form/option'
   import {
     deleteTmsBasicRecords,
+    addServiceCaseReply,
+    fetchServiceCaseReplies,
+    fetchServiceCaseReplyDependencies,
+    fetchServiceCaseMentionOptions,
     fetchServiceCaseList,
+    fetchServiceCaseWaybillOptions,
+    type ServiceCaseWaybillOption,
+    type ServiceCaseReply,
+    type ServiceCaseMention,
     type ServiceCaseRecord,
     type ServiceCaseSearch
   } from '@tms/api'
@@ -106,12 +225,188 @@
   defineOptions({ name: 'TmsServiceCase' })
 
   const userStore = useUserStore()
+  const { hasAuth } = useAuth()
   const { getDictMap } = storeToRefs(userStore)
   const tableRef = ref<ArtTableQueryExpose>()
   const { deleteGuardRef, deleteRecords } = useRecordDeleteGuard('tms_service_case', '投诉咨询记录')
+  const route = useRoute()
   const formDialogRef = ref<InstanceType<typeof ServiceCaseDialog>>()
   const detailDialogRef = ref<ArtDialogExpose<ServiceCaseRecord>>()
   const detail = ref<ServiceCaseRecord>()
+  const detailWaybill = ref<ServiceCaseWaybillOption>()
+  const detailWaybillError = ref(false)
+  const replies = ref<ServiceCaseReply[]>([])
+  const repliesLoading = ref(false)
+  const repliesError = ref('')
+  const replyTo = ref<ServiceCaseReply | null>(null)
+  const replySaving = ref(false)
+  const replyFormRef = ref<InstanceType<typeof ArtForm>>()
+  interface ReplyForm {
+    content: string
+    attachments: string[]
+    userIds: string[]
+    organizationIds: string[]
+    roleIds: string[]
+  }
+  const emptyReplyForm = (): ReplyForm => ({
+    content: '',
+    attachments: [],
+    userIds: [],
+    organizationIds: [],
+    roleIds: []
+  })
+  const replyForm = ref<ReplyForm>(emptyReplyForm())
+  type MentionOption = { label: string; value: string }
+  const mentionOptions = ref<{
+    users: MentionOption[]
+    organizations: MentionOption[]
+    roles: MentionOption[]
+  }>({ users: [], organizations: [], roles: [] })
+  const mentionOptionsError = ref('')
+  const replyRules: FormRules<ReplyForm> = {
+    content: [{ required: true, message: '请输入回复内容', trigger: 'blur' }]
+  }
+  const replyItems = computed<FormItem[]>(() => [
+    {
+      key: 'content',
+      label: '回复内容',
+      type: 'input',
+      span: 24,
+      props: {
+        type: 'textarea',
+        rows: 3,
+        maxlength: 3000,
+        showWordLimit: true,
+        placeholder: '记录处理过程或回复内容'
+      }
+    },
+    {
+      key: 'userIds',
+      label: '@用户',
+      type: 'select',
+      props: {
+        options: mentionOptions.value.users,
+        multiple: true,
+        filterable: true,
+        clearable: true,
+        collapseTags: true,
+        placeholder: '选择要提及的用户'
+      }
+    },
+    {
+      key: 'organizationIds',
+      label: '@部门',
+      type: 'select',
+      props: {
+        options: mentionOptions.value.organizations,
+        multiple: true,
+        filterable: true,
+        clearable: true,
+        collapseTags: true,
+        placeholder: '选择要提及的部门'
+      }
+    },
+    {
+      key: 'roleIds',
+      label: '@角色',
+      type: 'select',
+      props: {
+        options: mentionOptions.value.roles,
+        multiple: true,
+        filterable: true,
+        clearable: true,
+        collapseTags: true,
+        placeholder: '选择要提及的角色'
+      }
+    },
+    {
+      key: 'attachments',
+      label: '附件和图片',
+      type: 'uploadFile',
+      span: 24,
+      props: {
+        resourceTenantId: detail.value?.tenantId || '',
+        title: '选择或拖入附件、图片',
+        limit: 10,
+        multiple: true,
+        fileSize: 10 * 1024 * 1024
+      }
+    }
+  ])
+  let detailRevision = 0
+  const loadReplies = async (): Promise<void> => {
+    const current = detail.value
+    if (!current) return
+    const revision = ++detailRevision
+    repliesLoading.value = true
+    repliesError.value = ''
+    try {
+      const result = await fetchServiceCaseReplies(current.id, current.tenantId)
+      if (result.error) throw result.error
+      if (revision === detailRevision) replies.value = result.data ?? []
+    } catch {
+      if (revision === detailRevision) repliesError.value = '沟通记录加载失败，请重试。'
+    } finally {
+      if (revision === detailRevision) repliesLoading.value = false
+    }
+  }
+  const loadMentionOptions = async (): Promise<void> => {
+    const current = detail.value
+    if (!current) return
+    mentionOptionsError.value = ''
+    try {
+      const options = await fetchServiceCaseMentionOptions(current.id)
+      if (detail.value?.id === current.id) mentionOptions.value = options
+    } catch {
+      if (detail.value?.id === current.id)
+        mentionOptionsError.value = '提及对象加载失败，请重试后发送回复。'
+    }
+  }
+  const selectedMentions = (): ServiceCaseMention[] => {
+    const selected = [
+      { kind: 'user' as const, ids: replyForm.value.userIds, options: mentionOptions.value.users },
+      {
+        kind: 'organization' as const,
+        ids: replyForm.value.organizationIds,
+        options: mentionOptions.value.organizations
+      },
+      { kind: 'role' as const, ids: replyForm.value.roleIds, options: mentionOptions.value.roles }
+    ]
+    return selected.flatMap(({ kind, ids, options }) =>
+      ids.flatMap((id) => {
+        const option = options.find((item) => item.value === id)
+        return option ? [{ kind, id, label: option.label }] : []
+      })
+    )
+  }
+  const submitReply = async (): Promise<void> => {
+    const current = detail.value
+    if (!current || replySaving.value || mentionOptionsError.value) return
+    try {
+      if (!(await validateArtFormForSubmit(replyFormRef.value))) return
+    } catch (error) {
+      notifyFriendlyError(error, '回复校验未完成，请稍后重试', 'warning')
+      return
+    }
+    replySaving.value = true
+    try {
+      await addServiceCaseReply({
+        tenantId: current.tenantId,
+        serviceCaseId: current.id,
+        replyToId: replyTo.value?.id || null,
+        content: replyForm.value.content.trim(),
+        attachments: replyForm.value.attachments,
+        mentions: selectedMentions()
+      })
+      replyForm.value = emptyReplyForm()
+      replyTo.value = null
+      await loadReplies()
+    } catch (error) {
+      notifyFriendlyError(error, '回复保存失败，请重试')
+    } finally {
+      replySaving.value = false
+    }
+  }
   const search = ref<ServiceCaseSearch>({
     serviceNo: '',
     waybillNo: '',
@@ -126,18 +421,46 @@
         userStore.ensureDictLoaded(code)
       )
     )
+    void openRouteDetail()
   })
+
+  let lastRouteDetailId = ''
+  const openRouteDetail = async (): Promise<void> => {
+    const id = typeof route.query.serviceCaseId === 'string' ? route.query.serviceCaseId : ''
+    if (!id || id === lastRouteDetailId) return
+    lastRouteDetailId = id
+    try {
+      const result = await fetchServiceCaseList({ recordId: id, from: 0, to: 0 })
+      if (result.error || !result.data?.[0]) throw result.error ?? new Error('服务单未找到')
+      await showDetail(result.data[0])
+    } catch (error) {
+      notifyFriendlyError(error, '服务单打开失败，请返回列表重试')
+    }
+  }
+  watch(
+    () => route.query.serviceCaseId,
+    () => void openRouteDetail()
+  )
 
   const serviceTypeOptions = computed(() => getDictMap.value.tmsServiceType ?? [])
   const complaintTypeOptions = computed(() => getDictMap.value.tmsComplaintType ?? [])
   const statusOptions = computed(() => getDictMap.value.tmsServiceCaseStatus ?? [])
   const complaintLabels = (values: string[]) =>
     values
-      .map(
-        (value) =>
-          complaintTypeOptions.value.find((option) => option.value === value)?.label || value
+      .map((value) =>
+        getDictionaryDisplayLabel(
+          complaintTypeOptions.value.find((option) => option.value === value),
+          value,
+          { unknownText: '待核对' }
+        )
       )
       .join('、') || '—'
+  const exportDictLabel = (code: string, value: unknown): string =>
+    getDictionaryDisplayLabel(
+      userStore.getDictDisplayItemByValue(code, String(value ?? '')),
+      value,
+      { emptyText: '', unknownText: '待核对' }
+    )
 
   const searchItems = computed<SearchFormItem[]>(() => [
     {
@@ -183,6 +506,31 @@
     },
     { key: 'title', label: '标题', field: 'title', span: 2 },
     { key: 'waybillNo', label: '运单号', field: 'waybillNo' },
+    {
+      key: 'dispatchWaybillNo',
+      label: '调度运单号',
+      value: () =>
+        detailWaybill.value?.waybillNo || (detailWaybillError.value ? '关联运单暂不可见' : '—')
+    },
+    {
+      key: 'routeName',
+      label: '线路',
+      value: () =>
+        detailWaybill.value
+          ? `${detailWaybill.value.originStation || '—'} → ${detailWaybill.value.destinationStation || '—'}`
+          : '—'
+    },
+    { key: 'plateNo', label: '车牌号', value: () => detailWaybill.value?.dispatchPlateNo || '—' },
+    {
+      key: 'driverName',
+      label: '司机',
+      value: () => detailWaybill.value?.dispatchDriverName || '—'
+    },
+    {
+      key: 'driverPhone',
+      label: '手机号',
+      value: () => detailWaybill.value?.dispatchDriverPhone || '—'
+    },
     { key: 'contactName', label: '联系人', field: 'contactName' },
     { key: 'contactPhone', label: '联系电话', field: 'contactPhone' },
     { key: 'status', label: '状态', field: 'status', dictCode: 'tmsServiceCaseStatus' },
@@ -297,6 +645,41 @@
         await deleteRecords({
           resources,
           permission: 'TmsServiceCase:Delete',
+          inspectReferences: async (snapshot) => {
+            if (!deleteGuardRef.value) throw new Error('删除检查尚未就绪，请刷新后重试。')
+            const options: MasterDataDeleteGuardOpenOptions = {
+              resourceLabel: '投诉咨询记录',
+              resources: snapshot,
+              fetchDependencies: async (ids) => {
+                const result = await fetchServiceCaseReplyDependencies(ids)
+                if (result.error) throw result.error
+                return (result.data ?? []).map((reply) => ({
+                  resourceId: reply.serviceCaseId,
+                  dependencyCode: 'service_case_reply',
+                  recordId: reply.id,
+                  targetId: reply.serviceCaseId,
+                  recordNo: reply.authorName,
+                  recordSummary: reply.content.slice(0, 60),
+                  recordStatus: '已回复',
+                  createdAt: reply.createTime,
+                  cleanupAllowed: false
+                }))
+              },
+              dependencyMeta: {
+                service_case_reply: {
+                  label: '沟通回复',
+                  unit: '条',
+                  description: '此服务单已有沟通记录，请先保留业务历史。',
+                  actionLabel: '查看服务单',
+                  routePath: '/tms/basic-data/service-case',
+                  routeQuery: (reply) => ({ serviceCaseId: reply.resourceId }),
+                  canNavigate: () => hasAuth('TmsServiceCase:View'),
+                  order: 1
+                }
+              }
+            }
+            return deleteGuardRef.value.inspect(options)
+          },
           remove: () =>
             deleteTmsBasicRecords(
               'tms_service_case',
@@ -316,18 +699,38 @@
       exportColumns: [
         { key: 'organizationName', title: '所属组织' },
         { key: 'serviceNo', title: '服务单号' },
-        { key: 'serviceType', title: '服务类型' },
-        { key: 'complaintTypes', title: '投诉类型' },
+        {
+          key: 'serviceType',
+          title: '服务类型',
+          formatter: (value) => exportDictLabel('tmsServiceType', value)
+        },
+        {
+          key: 'complaintTypes',
+          title: '投诉类型',
+          formatter: (value) => complaintLabels(Array.isArray(value) ? value.map(String) : [])
+        },
         { key: 'title', title: '标题' },
         { key: 'waybillNo', title: '运单号' },
         { key: 'submittedAt', title: '提交时间' },
         { key: 'submittedBy', title: '提交人' },
         { key: 'remark', title: '备注' },
-        { key: 'status', title: '状态' }
+        {
+          key: 'status',
+          title: '状态',
+          formatter: (value) => exportDictLabel('tmsServiceCaseStatus', value)
+        }
       ],
-      exportApi: async ({ maxRows }) => ({
-        data: (await fetchServiceCaseList({ ...search.value, from: 0, to: maxRows - 1 })).data ?? []
-      })
+      exportApi: async ({ maxRows }) => {
+        await Promise.all(
+          ['tmsServiceType', 'tmsComplaintType', 'tmsServiceCaseStatus'].map((code) =>
+            userStore.ensureDictLoaded(code)
+          )
+        )
+        return {
+          data:
+            (await fetchServiceCaseList({ ...search.value, from: 0, to: maxRows - 1 })).data ?? []
+        }
+      }
     }
   ])
 
@@ -338,7 +741,38 @@
 
   const showDetail = async (row: ServiceCaseRecord): Promise<void> => {
     detail.value = row
-    await detailDialogRef.value?.handleOpen(row, { title: `服务详情 · ${row.serviceNo}` })
+    detailWaybill.value = undefined
+    detailWaybillError.value = false
+    mentionOptions.value = { users: [], organizations: [], roles: [] }
+    replies.value = []
+    replyTo.value = null
+    replyForm.value = emptyReplyForm()
+    await detailDialogRef.value?.handleOpen(row, {
+      title: `服务详情 · ${row.serviceNo}`,
+      onOpen: async () => {
+        await Promise.all([
+          loadReplies(),
+          loadMentionOptions(),
+          (async () => {
+            if (!row.waybillId) return
+            try {
+              const result = await fetchServiceCaseWaybillOptions(row.tenantId, {
+                keyword: '',
+                page: 1,
+                pageSize: 1,
+                filters: {},
+                recordId: row.waybillId
+              })
+              if (result.error) throw result.error
+              if (!result.data[0]) throw new Error('关联运单不可见')
+              if (detail.value?.id === row.id) detailWaybill.value = result.data?.[0]
+            } catch {
+              if (detail.value?.id === row.id) detailWaybillError.value = true
+            }
+          })()
+        ])
+      }
+    })
   }
 
   const refresh = (mode: 'add' | 'edit'): void => {

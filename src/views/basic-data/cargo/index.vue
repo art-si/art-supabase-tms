@@ -75,6 +75,10 @@
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { normalizeImportedEnabled, normalizeNullableNumber } from '@/utils/form/normalize'
   import { formatWithDayjs } from '@/utils/time'
+  import { formatUnitDisplayName } from '@/utils/business/unit-display'
+  import { getDictionaryDisplayLabel } from '@/utils/form/option'
+  import { useUnitDisplayNames } from '@/hooks/core/useUnitDisplayNames'
+  import { uniq } from 'lodash-es'
   import { useUserStore } from '@/store/modules/user'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import { useTenantScopeFormPolicy } from '@/hooks/core/useTenantScopeFormPolicy'
@@ -115,7 +119,21 @@
     inspect: (options: MasterDataDeleteGuardOpenOptions) => Promise<boolean>
   }
 
-  const { getDictMap } = storeToRefs(useUserStore())
+  const userStore = useUserStore()
+  const { getDictMap } = storeToRefs(userStore)
+  const { loadUnitDisplayNames, unitDisplayName } = useUnitDisplayNames()
+  const loadCargoUnits = (rows: Cargo[]) =>
+    loadUnitDisplayNames(
+      uniq(rows.map((row) => row.tenantId).filter((id): id is string => Boolean(id))),
+      'tmsCargoUnit'
+    )
+  const displayCargoUnit = (cargo: Cargo) => {
+    const stored = cargo.unit || cargo.material?.basicUnit || ''
+    const resolved = unitDisplayName(cargo.tenantId || '', stored)
+    return resolved !== stored
+      ? resolved
+      : formatUnitDisplayName(cargo.material?.baseUnit?.unitName || stored, '-')
+  }
   const { effectiveTenantId } = storeToRefs(useTenantScopeStore())
   const { defaultWriteTenantId } = useTenantScopeFormPolicy()
   const route = useRoute()
@@ -164,7 +182,7 @@
       title: 'MDM基本单位',
       formatter: (_value, record) => {
         const cargo = record as Cargo
-        return cargo.material?.baseUnit?.unitName || cargo.material?.basicUnit || cargo.unit || ''
+        return displayCargoUnit(cargo)
       }
     },
     { key: 'lengthM', title: '长(m)' },
@@ -173,7 +191,16 @@
     { key: 'volumeM3', title: '体积(m³)' },
     { key: 'weightKg', title: '重量(kg)' },
     { key: 'valueAmount', title: '价值(元)' },
-    { key: 'enabled', title: '状态' },
+    {
+      key: 'enabled',
+      title: '状态',
+      formatter: (value) =>
+        getDictionaryDisplayLabel(
+          userStore.getDictDisplayItemByValue('commonBoolean', String(value ?? '')),
+          value,
+          { emptyText: '', unknownText: '待核对' }
+        )
+    },
     { key: 'remark', title: '备注' }
   ]
   const cargoImportColumns = cargoExcelColumns.filter(
@@ -238,8 +265,7 @@
       prop: 'unit',
       label: '基本单位',
       width: 110,
-      formatter: (row) =>
-        row.material?.baseUnit?.unitName || row.material?.basicUnit || row.unit || '-'
+      formatter: (row) => displayCargoUnit(row)
     },
     {
       prop: 'materialGroupId',
@@ -354,13 +380,22 @@
       exportFilename: 'TMS货物资料',
       exportSheetName: '货物管理',
       exportColumns: cargoExcelColumns,
-      exportApi: ({ selectedIds, searchParams, maxRows }) =>
-        exportCargoList({
+      exportApi: async ({ selectedIds, searchParams, maxRows }) => {
+        await userStore.ensureDictLoaded('commonBoolean')
+        const result = await exportCargoList({
           ...(searchParams as SearchParams),
           materialGroupIds: selectedGroupIds.value,
           ids: selectedIds.map(String),
           maxRows
         })
+        if (!result.error)
+          try {
+            await loadCargoUnits(result.data ?? [])
+          } catch (error) {
+            notifyFriendlyError(error, '单位名称暂不可用，导出已使用货物已有单位', 'warning')
+          }
+        return result
+      }
     },
     {
       type: 'delete',
@@ -370,9 +405,21 @@
     }
   ])
 
-  const fetchTableData = (params: TableParams) => {
+  const fetchTableData = async (params: TableParams) => {
     const { from, to } = buildSupabasePageRange({ current: params.current, size: params.size })
-    return fetchCargoList({ ...params, materialGroupIds: selectedGroupIds.value, from, to })
+    const result = await fetchCargoList({
+      ...params,
+      materialGroupIds: selectedGroupIds.value,
+      from,
+      to
+    })
+    if (!result.error)
+      try {
+        await loadCargoUnits(result.data ?? [])
+      } catch (error) {
+        notifyFriendlyError(error, '单位名称暂不可用，仍可查看货物列表', 'warning')
+      }
+    return result
   }
 
   const formatNumber = (value?: number | null, digits = 2): string => {

@@ -224,6 +224,7 @@ function createPlanExecution(
   return {
     dispatchMode: params.dispatchMode,
     dispatchCarrierId: params.dispatchCarrierId,
+    carrierBillingAccountId: params.carrierBillingAccountId,
     dispatchAgreementId: params.dispatchAgreementId,
     dispatchVehicleId: params.dispatchVehicleId,
     dispatchDriverId: params.dispatchDriverId,

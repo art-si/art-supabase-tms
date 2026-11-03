@@ -55,6 +55,7 @@
   import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
   import { useUserStore } from '@/store/modules/user'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
+  import { useMasterDataDeleteProcessingContext } from '@/hooks/core/useMasterDataDeleteProcessing'
   import { ColumnOption, DialogType } from '@/types'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { formatWithDayjs } from '@/utils/time'
@@ -86,6 +87,8 @@
   const { isPlatformSuper } = storeToRefs(useUserStore())
   const statusOptions = useDictionaryOptions('commonEnabledStatus', (value) => value === 'enabled')
   const tableQueryRef = ref<ArtTableQueryExpose>()
+  const route = useRoute()
+  const deleteContext = useMasterDataDeleteProcessingContext()
   const { deleteGuardRef, deleteRecord, deleteRecords } = useRecordDeleteGuard(
     'tms_favorite_route',
     '常用线路'
@@ -93,7 +96,12 @@
   const dialogRef = ref<DialogExpose>()
   const tenantOptions = ref<Array<{ label: string; value: string }>>([])
   const table = reactive<TableGroup>({
-    searchQuery: { keyword: '', tenantId: undefined, customerId: undefined }
+    searchQuery: {
+      keyword: '',
+      tenantId: undefined,
+      customerId: undefined,
+      recordId: deleteContext.value.active ? deleteContext.value.recordId : ''
+    }
   })
 
   const searchItems = computed<SearchFormItem[]>(() => [
@@ -222,6 +230,13 @@
       formatter: (row) => (row.distanceKm ? `${Number(row.distanceKm).toFixed(2)} km` : '-')
     },
     {
+      prop: 'waypointStationIds',
+      label: '途经/返程',
+      width: 150,
+      formatter: (row) =>
+        `${row.waypointStationIds?.length ?? 0} 个途经点${row.returnTrip ? ' · 含返程' : ''}`
+    },
+    {
       prop: 'estimatedMinutes',
       label: '预计时长',
       width: 140,
@@ -332,6 +347,24 @@
       }))
   }
 
+  const syncDeleteRoute = (forceRefresh = false): void => {
+    const recordId = deleteContext.value.active ? deleteContext.value.recordId : ''
+    const changed = table.searchQuery.recordId !== recordId
+    if (changed) {
+      table.searchQuery.recordId = recordId
+      table.searchQuery.keyword = ''
+      table.searchQuery.customerId = undefined
+      table.searchQuery.enabled = undefined
+    }
+    if (changed || forceRefresh) void nextTick().then(() => tableQueryRef.value?.refreshCreate())
+  }
+
+  watch(
+    () => route.fullPath,
+    () => syncDeleteRoute(),
+    { flush: 'post' }
+  )
+  onActivated(() => syncDeleteRoute(true))
   onMounted(() => void loadTenantOptions())
 </script>
 
