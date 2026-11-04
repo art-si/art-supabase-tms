@@ -436,7 +436,7 @@
       : []),
     {
       key: 'transferStation',
-      label: '中转站',
+      label: '途经点',
       value: (record: Partial<OrderRecord>) =>
         formatTransferStationRoute(record.transferStationNames, record.transferStation)
     },

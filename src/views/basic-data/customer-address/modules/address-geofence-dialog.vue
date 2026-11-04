@@ -72,6 +72,7 @@
   import { fetchGeofenceConfig } from '@/api/system-manage'
   import { updateCustomerAddressGeofence } from '@tms/api'
   import { useAuth } from '@/hooks/core/useAuth'
+  import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
 
   defineOptions({ name: 'TmsCustomerAddressGeofenceDialog' })
 
@@ -96,6 +97,7 @@
   const formRef = ref<FormExpose>()
   const address = shallowRef<CustomerAddress>()
   const form = ref<GeofenceForm>({ enabled: false, radiusM: 1000 })
+  const addressTypeOptions = useDictionaryOptions('tmsAddressType')
   const canManage = computed(() => hasAuth('TmsCustomerAddress:Geofence'))
   const hasCoordinate = computed(
     () => normalizeCoordinatePair(address.value?.longitude, address.value?.latitude) !== null
@@ -108,8 +110,10 @@
       [address.value?.region, address.value?.addressDetail].filter(Boolean).join(' ') ||
       '未填写地址'
   )
-  const addressTypeLabel = computed(() =>
-    address.value?.addressType === 'shipping' ? '发货地址' : '收货地址'
+  const addressTypeLabel = computed(
+    () =>
+      addressTypeOptions.find((item) => item.value === address.value?.addressType)?.label ||
+      '地址类型未配置'
   )
   const addressTypeTag = computed(() =>
     address.value?.addressType === 'shipping' ? ('primary' as const) : ('success' as const)

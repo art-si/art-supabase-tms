@@ -45,6 +45,7 @@
 </template>
 
 <script setup lang="tsx">
+  import { formatAuditActorName } from '@/utils/business/audit-actor-display'
   import { normalizePriceRegionSearch } from '../modules/price-form-utils'
   import { formatRateDistanceKm, formatRateEffectivePeriod } from '../modules/rate-card-detail'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
@@ -208,7 +209,7 @@
             } satisfies ArtTableQueryExcelColumn
           ]
         : []),
-      { key: 'createBy', title: '创建人' },
+      { key: 'createBy', title: '创建人', formatter: (value) => formatAuditActorName(value) },
       {
         key: 'createTime',
         title: '创建时间',
@@ -436,7 +437,12 @@
             } as ColumnOption<CarrierPrice>
           ]
         : []),
-      { prop: 'createBy', label: '创建人', width: 120 },
+      {
+        prop: 'createBy',
+        label: '创建人',
+        width: 120,
+        formatter: (row) => formatAuditActorName(row.createBy)
+      },
       {
         prop: 'createTime',
         label: '创建时间',

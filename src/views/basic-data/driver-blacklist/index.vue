@@ -165,7 +165,12 @@
           <ArtDictDisplay dictCode="tmsDriverBlacklistStatus" value={row.status} display="tag" />
         )
     },
-    { key: 'releasedAt', label: '解除时间', field: 'releasedAt' },
+    {
+      key: 'releasedAt',
+      label: '解除时间',
+      value: (row: DriverBlacklistRecord) =>
+        row.releasedAt ? formatWithDayjs(row.releasedAt, 'YYYY-MM-DD HH:mm') : '—'
+    },
     { key: 'remark', label: '备注', field: 'remark', span: 2 },
     { key: 'createBy', label: '创建人', field: 'createBy' },
     {

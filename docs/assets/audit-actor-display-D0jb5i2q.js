@@ -1,0 +1,1 @@
+function e(e){let t=typeof e==`string`?e.trim():``;return t?t.toLowerCase()===`unknown`?`创建人待核对`:t:`—`}export{e as t};

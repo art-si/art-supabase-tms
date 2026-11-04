@@ -26,6 +26,7 @@ export {
   addTransportAgreement,
   copyElectronicContract,
   deleteTmsBasicRecords,
+  editElectronicContract,
   editServiceCase,
   editTransportAgreement,
   fetchBasicRecordCarrierOptions,
@@ -41,6 +42,12 @@ export {
   fetchServiceCaseMentionOptions,
   fetchServiceCaseWaybillOptions,
   fetchTransportAgreementList,
+  fetchTransportAgreementDriverOptions,
+  fetchTransportAgreementDriverEvidence,
+  signElectronicContract,
+  signTransportAgreement,
+  submitElectronicContractForApproval,
+  submitTransportAgreementForApproval,
   terminateElectronicContract
 } from '@tms/api/modules/basic-records'
 export type {
@@ -52,6 +59,9 @@ export type {
   ElectronicContractInput,
   ElectronicContractRecord,
   ElectronicContractSearch,
+  AgreementApprovalStatus,
+  AgreementSignatureInput,
+  SettlementCycle,
   ServiceCaseInput,
   ServiceCaseRecord,
   ServiceCaseReply,
@@ -61,7 +71,9 @@ export type {
   ServiceCaseSearch,
   TransportAgreementInput,
   TransportAgreementRecord,
-  TransportAgreementSearch
+  TransportAgreementSearch,
+  TransportAgreementDriverOption,
+  TransportAgreementDriverEvidence
 } from '@tms/api/modules/basic-records'
 export {
   addDriver,
@@ -206,9 +218,11 @@ export {
   deleteContract,
   deleteContractBatch,
   editContract,
+  exportContractDetailRows,
   exportContractList,
   fetchAvailableContractDetailList,
   fetchContractDetail,
+  fetchContractDetailRows,
   fetchContractList,
   fetchOrderContractCandidates,
   fetchOrderContractDetails,
@@ -216,7 +230,7 @@ export {
   submitContractForApproval,
   terminateContract
 } from '@tms/api/modules/contract'
-export type { OrderContractCandidate } from '@tms/api/modules/contract'
+export type { ContractDetailListRow, OrderContractCandidate } from '@tms/api/modules/contract'
 export {
   addStation,
   deleteStation,
@@ -240,12 +254,18 @@ export {
   exportOrderList,
   fetchOrderDetail,
   fetchOrderContractSummary,
+  fetchOrderExecutionSupplement,
   fetchOrderList,
   fetchOrderStatusCounts,
   generateAiOrderExample,
   reviewAiOrderArtifact
 } from '@tms/api/modules/order'
-export { fetchOrderQuote, saveOrderQuote } from '@tms/api/modules/order-quote'
+export {
+  fetchOrderQuote,
+  fetchOrderQuoteExpenseItems,
+  saveOrderQuote
+} from '@tms/api/modules/order-quote'
+export type { OrderQuoteExpenseItem } from '@tms/api/modules/order-quote'
 export {
   cancelWaybillDispatch,
   cancelWaybillDispatchBatch,
@@ -297,6 +317,7 @@ export {
   changeAppointmentStatus,
   deleteAppointment,
   fetchAppointmentCandidates,
+  fetchAppointmentDispatchSnapshot,
   fetchAppointmentList,
   fetchAppointmentWorkspace,
   recordAppointmentArrival,
@@ -305,6 +326,7 @@ export {
 export type {
   AppointmentArrivalPayload,
   AppointmentCandidate,
+  AppointmentDispatchSnapshot,
   AppointmentKind,
   AppointmentListRow,
   AppointmentRecord,

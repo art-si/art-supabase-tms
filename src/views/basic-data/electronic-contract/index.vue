@@ -36,8 +36,12 @@
     <ElectronicContractDialog
       ref="formDialogRef"
       :customer="customer"
-      @success="() => tableRef?.refreshCreate()"
+      @success="
+        (action) => (action === 'create' ? tableRef?.refreshCreate() : tableRef?.refreshUpdate())
+      "
     />
+    <ContractDocumentPreview ref="previewDialogRef" />
+    <ContractSigningDialog ref="signingDialogRef" />
     <ArtDialog
       ref="detailDialogRef"
       size="xl"
@@ -94,6 +98,9 @@
   import { RouterLink } from 'vue-router'
   import { storeToRefs } from 'pinia'
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
+  import ArtButtonMore, {
+    type ButtonMoreItem
+  } from '@/components/core/forms/art-button-more/index.vue'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtDescriptions from '@/components/core/base/art-descriptions/index.vue'
@@ -104,6 +111,9 @@
   import BusinessWorkspaceHeader from '@/components/business/business-workspace-header/index.vue'
   import BusinessTableWorkspaceActions from '@/components/business/business-table-workspace-actions/index.vue'
   import BusinessTableRowActions from '@/components/business/business-table-row-actions/index.vue'
+  import ContractDocumentPreview from '@/components/business/contract-document-preview/index.vue'
+  import type { ContractDocument } from '@/components/business/contract-document-preview/types'
+  import ContractSigningDialog from '@/components/business/contract-signing-dialog/index.vue'
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
   import type {
     ArtTableQueryExpose,
@@ -114,11 +124,14 @@
   import type { ColumnOption } from '@/types'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { formatWithDayjs } from '@/utils/time'
+  import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
   import {
     copyElectronicContract,
     deleteTmsBasicRecords,
     fetchElectronicContractDetail,
     fetchElectronicContractList,
+    signElectronicContract,
+    submitElectronicContractForApproval,
     terminateElectronicContract,
     type ElectronicContractRecord,
     type ElectronicContractSearch
@@ -132,6 +145,7 @@
   const router = useRouter()
   const { confirmAction } = useArtFeedback()
   const terminatingId = ref<string | null>(null)
+  const submittingId = ref<string | null>(null)
   const userStore = useUserStore()
   const { getDictMap } = storeToRefs(userStore)
   const tableRef = ref<ArtTableQueryExpose>()
@@ -140,6 +154,8 @@
     '电子合同'
   )
   const formDialogRef = ref<InstanceType<typeof ElectronicContractDialog>>()
+  const previewDialogRef = ref<InstanceType<typeof ContractDocumentPreview>>()
+  const signingDialogRef = ref<InstanceType<typeof ContractSigningDialog>>()
   const activeDetailTab = ref('identity')
   const detailDialogRef = ref<ArtDialogExpose<ElectronicContractRecord>>()
   const detail = ref<ElectronicContractRecord>()
@@ -152,6 +168,7 @@
 
   onMounted(() => void userStore.ensureDictLoaded('tmsElectronicContractStatus'))
   const statusOptions = computed(() => getDictMap.value.tmsElectronicContractStatus ?? [])
+  const settlementCycleOptions = useDictionaryOptions('tmsElectronicContractSettlementCycle')
 
   const searchItems = computed<SearchFormItem[]>(() => [
     {
@@ -185,6 +202,25 @@
     },
     { key: 'startsOn', label: '起始日期', field: 'startsOn' },
     { key: 'endsOn', label: '终止日期', field: 'endsOn' },
+    {
+      key: 'approvalStatus',
+      label: '审批状态',
+      field: 'approvalStatus',
+      dictCode: 'tmsElectronicContractApprovalStatus'
+    },
+    {
+      key: 'settlementCycle',
+      label: '结算周期',
+      field: 'settlementCycle',
+      dictCode: 'tmsElectronicContractSettlementCycle'
+    },
+    {
+      key: 'cycleStartDay',
+      label: '每期起始日',
+      value: (row) => (row.cycleStartDay ? `${row.cycleStartDay} 日` : '-')
+    },
+    { key: 'paymentTermDays', label: '账期', value: (row) => `${row.paymentTermDays} 天` },
+    { key: 'taxRate', label: '税率', value: (row) => `${Number((row.taxRate * 100).toFixed(2))}%` },
     { key: 'createBy', label: '创建人', field: 'createBy' },
     {
       key: 'createTime',
@@ -235,6 +271,12 @@
       width: 112,
       dict: { code: 'tmsElectronicContractStatus', display: 'auto' }
     },
+    {
+      prop: 'approvalStatus',
+      label: '审批状态',
+      width: 112,
+      dict: { code: 'tmsElectronicContractApprovalStatus', display: 'auto' }
+    },
     { prop: 'createBy', label: '创建人', width: 125, showOverflowTooltip: true },
     {
       prop: 'createTime',
@@ -245,7 +287,7 @@
     {
       prop: 'operation',
       label: '操作',
-      width: 132,
+      width: 200,
       fixed: 'right',
       formatter: (row) => (
         <BusinessTableRowActions>
@@ -255,12 +297,22 @@
             onClick={() => void showDetail(row)}
           />
           <ArtButtonTable
-            type="sign"
-            icon="ri:stop-circle-line"
-            label="终止"
-            permission="TmsElectronicContract:Terminate"
-            disabled={row.status === 'terminated' || terminatingId.value === row.id}
-            onClick={() => void terminate(row)}
+            type="view"
+            icon="ri:file-search-line"
+            label="预览合同"
+            permission="TmsElectronicContract:Preview"
+            onClick={() => void preview(row)}
+          />
+          {canEdit(row) && (
+            <ArtButtonTable
+              type="edit"
+              permission="TmsElectronicContract:Edit"
+              onClick={() => void formDialogRef.value?.handleOpen(row)}
+            />
+          )}
+          <ArtButtonMore
+            list={getMoreActions(row)}
+            onClick={(item) => void runMoreAction(row, item)}
           />
         </BusinessTableRowActions>
       )
@@ -327,6 +379,122 @@
       name: route.name ?? 'TmsElectronicContract',
       query: { ...route.query, contractId: row.id }
     })
+  }
+
+  const canEdit = (row: ElectronicContractRecord): boolean =>
+    row.status === 'pending_signed' &&
+    (row.approvalStatus === 'draft' || row.approvalStatus === 'rejected')
+
+  const getMoreActions = (row: ElectronicContractRecord): ButtonMoreItem[] => [
+    ...(canEdit(row)
+      ? [
+          {
+            key: 'submit',
+            label: '提交审批',
+            auth: 'TmsElectronicContract:Submit',
+            icon: 'ri:send-plane-line',
+            disabled: submittingId.value === row.id
+          }
+        ]
+      : []),
+    ...(row.status === 'pending_signed' && row.approvalStatus === 'approved'
+      ? [
+          {
+            key: 'sign',
+            label: '签署合同',
+            auth: 'TmsElectronicContract:Sign',
+            icon: 'ri:quill-pen-line'
+          }
+        ]
+      : []),
+    ...(row.status !== 'terminated'
+      ? [
+          {
+            key: 'terminate',
+            label: '终止合同',
+            auth: 'TmsElectronicContract:Terminate',
+            icon: 'ri:stop-circle-line',
+            disabled: terminatingId.value === row.id
+          }
+        ]
+      : [])
+  ]
+
+  const runMoreAction = async (
+    row: ElectronicContractRecord,
+    item: ButtonMoreItem
+  ): Promise<void> => {
+    if (item.key === 'submit') await submitApproval(row)
+    if (item.key === 'sign') await openSigning(row)
+    if (item.key === 'terminate') await terminate(row)
+  }
+
+  const toDocument = (row: ElectronicContractRecord): ContractDocument => ({
+    title: row.contractName,
+    documentNo: row.contractNo,
+    startsOn: row.startsOn,
+    endsOn: row.endsOn,
+    partyA: {
+      name: row.partyACompany,
+      representative: row.partyARepresentative,
+      signatureUrl: row.partyASignatureUrl,
+      sealUrl: row.partyASealUrl,
+      signedOn: row.partyASignedAt
+    },
+    partyB: {
+      name: row.partyBCompany,
+      representative: row.partyBRepresentative,
+      signatureUrl: row.partyBSignatureUrl,
+      sealUrl: row.partyBSealUrl,
+      signedOn: row.partyBSignedAt
+    },
+    contentHtml: row.contentHtml,
+    attachments: row.attachments,
+    settlementText: `${settlementCycleOptions.find((option) => option.value === row.settlementCycle)?.label ?? row.settlementCycle}${row.cycleStartDay ? `（每期 ${row.cycleStartDay} 日起）` : ''} · 账期 ${row.paymentTermDays} 天 · 税率 ${Number((row.taxRate * 100).toFixed(2))}%`
+  })
+
+  const preview = async (row: ElectronicContractRecord): Promise<void> => {
+    try {
+      const result = await fetchElectronicContractDetail(row.id)
+      if (!result.data) throw new Error('电子合同已不存在或无权查看')
+      await previewDialogRef.value?.handleOpen(toDocument(result.data))
+    } catch (error) {
+      notifyFriendlyError(error, '合同预览加载失败，请刷新列表后重试')
+    }
+  }
+
+  const submitApproval = async (row: ElectronicContractRecord): Promise<void> => {
+    if (submittingId.value) return
+    submittingId.value = row.id
+    try {
+      await submitElectronicContractForApproval(row.id)
+      await tableRef.value?.refreshUpdate()
+    } catch (error) {
+      notifyFriendlyError(error, '提交审批失败，请检查审批流程是否已配置并启用后重试')
+    } finally {
+      submittingId.value = null
+    }
+  }
+
+  const openSigning = async (row: ElectronicContractRecord): Promise<void> => {
+    try {
+      const result = await fetchElectronicContractDetail(row.id)
+      const record = result.data
+      if (!record) throw new Error('电子合同已不存在或无权查看')
+      await signingDialogRef.value?.handleOpen({
+        title: record.contractName,
+        documentNo: record.contractNo,
+        tenantId: record.tenantId,
+        partyAName: record.partyACompany,
+        partyBName: record.partyBCompany,
+        onSubmit: async (input) => {
+          await signElectronicContract(record.id, input)
+          await tableRef.value?.refreshUpdate()
+        }
+      })
+    } catch (error) {
+      notifyFriendlyError(error, '签署窗口加载失败，请刷新列表后重试')
+    }
   }
 
   watch(

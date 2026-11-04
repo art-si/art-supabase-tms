@@ -77,7 +77,7 @@
               </span>
               <div class="min-w-0">
                 <strong class="block font-semibold text-[var(--el-text-color-primary)]">
-                  {{ entry.id ? `预约 ${index + 1}` : `新预约 ${index + 1}` }}
+                  {{ entry.id ? entry.appointmentNo : `新预约 ${index + 1}` }}
                 </strong>
                 <small class="text-[var(--el-text-color-secondary)]">
                   最后更新：{{ entry.updateTime ? displayTime(entry.updateTime) : '尚未保存' }}
@@ -176,7 +176,11 @@
         v-if="!loadFailed && !form.entries.length"
         class="rounded-lg border border-dashed border-[var(--el-border-color)]"
         title="暂无预约记录"
-        description="选择上方“新增预约”安排司机、车辆和进场时间。"
+        :description="
+          kind === 'pickup' && waybill?.waybillStatus !== 'accepted'
+            ? '司机接单后、装货前可选择新增提货预约；未预约不影响装货。'
+            : '选择上方“新增预约”安排进场时间。'
+        "
         size="compact"
         :visual-size="72"
       />
@@ -204,14 +208,15 @@
     changeAppointmentStatus,
     deleteAppointment,
     fetchAppointmentCandidates,
+    fetchAppointmentDispatchSnapshot,
     fetchAppointmentWorkspace,
     recordAppointmentArrival,
     saveAppointment
   } from '@tms/api'
   import type {
     AppointmentCandidate,
+    AppointmentDispatchSnapshot,
     AppointmentKind,
-    AppointmentListRow,
     AppointmentRecord,
     AppointmentSavePayload
   } from '@tms/api'
@@ -244,7 +249,7 @@
   const props = defineProps<{ kind: AppointmentKind; permissions: AppointmentPermissions }>()
   const emit = defineEmits<{ (event: 'success'): void }>()
   const { hasAuth } = useAuth()
-  const drawerRef = ref<ArtDrawerExpose<AppointmentListRow>>()
+  const drawerRef = ref<ArtDrawerExpose<Api.Tms.Waybill.WaybillRecord>>()
   const childDialogRef = ref<{
     handleOpen: (options: {
       candidates: AppointmentCandidate[]
@@ -253,7 +258,8 @@
     }) => Promise<void>
   }>()
   const formRefs = ref<InstanceType<typeof ArtForm>[]>([])
-  const waybill = ref<AppointmentListRow | null>(null)
+  const waybill = ref<Api.Tms.Waybill.WaybillRecord | null>(null)
+  const dispatchSnapshot = ref<AppointmentDispatchSnapshot | null>(null)
   const candidates = ref<AppointmentCandidate[]>([])
   const form = reactive<{ entries: EditableEntry[] }>({ entries: [] })
   const saving = ref(false)
@@ -262,7 +268,11 @@
 
   const title = computed(() => (props.kind === 'pickup' ? '提货预约' : '送货预约'))
   const { deleteGuardRef, deleteRecord } = useRecordDeleteGuard('tms_waybill_appointment', title)
-  const canAdd = computed(() => hasAuth(props.permissions.add))
+  const canAdd = computed(
+    () =>
+      hasAuth(props.permissions.add) &&
+      (props.kind !== 'pickup' || waybill.value?.waybillStatus === 'accepted')
+  )
   const canEdit = computed(() => hasAuth(props.permissions.edit))
   const canDelete = computed(() => hasAuth(props.permissions.delete))
   const canConfirm = computed(() => hasAuth(props.permissions.confirm))
@@ -323,28 +333,34 @@
         label: '司机姓名',
         type: 'input',
         formItemProps: { rules: requiredRule },
-        props: { disabled, maxlength: 60, placeholder: '请输入司机姓名' }
+        props: { disabled: true, maxlength: 60 }
       },
       {
         key: key('driverPhone'),
         label: '联系电话',
         type: 'input',
         formItemProps: { rules: phoneRule },
-        props: { disabled, maxlength: 24, placeholder: '请输入联系电话' }
+        props: { disabled: true, maxlength: 24 }
       },
       {
         key: key('plateNo'),
         label: '车牌号',
         type: 'input',
         formItemProps: { rules: requiredRule },
-        props: { disabled, maxlength: 24, placeholder: '请输入车牌号' }
+        props: { disabled: true, maxlength: 24 }
+      },
+      {
+        key: key('vehicleType'),
+        label: '车型',
+        type: 'input',
+        props: { disabled: true }
       },
       {
         key: key('loadCapacityTon'),
         label: '载重（吨）',
         type: 'number',
         props: {
-          disabled,
+          disabled: true,
           min: 0.01,
           precision: 2,
           controls: false,
@@ -357,7 +373,7 @@
         label: '车长（米）',
         type: 'number',
         props: {
-          disabled,
+          disabled: true,
           min: 0.01,
           precision: 2,
           controls: false,
@@ -466,6 +482,10 @@
         fetchAppointmentWorkspace(props.kind, waybill.value.id)
       ])
       candidates.value = nextCandidates
+      dispatchSnapshot.value =
+        canAdd.value || (canEdit.value && records.length)
+          ? await fetchAppointmentDispatchSnapshot(props.kind, waybill.value.id)
+          : null
       form.entries = records.map(toEditable)
       if (!form.entries.length && canAdd.value) addEntry()
       await nextTick()
@@ -477,7 +497,7 @@
     }
   }
 
-  async function handleOpen(row: AppointmentListRow): Promise<void> {
+  async function handleOpen(row: Api.Tms.Waybill.WaybillRecord): Promise<void> {
     waybill.value = row
     await drawerRef.value?.handleOpen(row, {
       title: `${title.value} · ${row.waybillNo}`,
@@ -494,13 +514,15 @@
     form.entries.push({
       localKey: crypto.randomUUID(),
       id: '',
+      appointmentNo: '',
       anchorWaybillId: waybill.value.id,
       selectedWaybillIds: [waybill.value.id],
-      driverName: '',
-      driverPhone: '',
-      plateNo: '',
-      loadCapacityTon: null,
-      vehicleLengthM: null,
+      driverName: dispatchSnapshot.value?.driverName ?? '',
+      driverPhone: dispatchSnapshot.value?.driverPhone ?? '',
+      plateNo: dispatchSnapshot.value?.plateNo ?? '',
+      vehicleType: dispatchSnapshot.value?.vehicleType ?? '',
+      loadCapacityTon: dispatchSnapshot.value?.loadCapacityTon ?? null,
+      vehicleLengthM: dispatchSnapshot.value?.vehicleLengthM ?? null,
       scheduledAt: toLocal(
         props.kind === 'pickup'
           ? waybill.value.plannedDepartureTime || null

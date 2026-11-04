@@ -12,11 +12,11 @@
         <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div class="flex min-w-0 flex-wrap items-center gap-2">
             <strong class="text-base text-[var(--art-gray-900)]">{{ order.orderNo }}</strong>
-            <ArtDictDisplay
-              v-if="quoteStatus"
-              dict-code="tmsOrderQuoteStatus"
-              :value="quoteStatus"
-            />
+            <span class="text-sm text-[var(--art-gray-700)]">报价单号：{{ quoteNo || '保存后生成' }}</span>
+            <ArtDictDisplay v-if="quoteStatus === 'draft' || quoteStatus === 'submitted'" dict-code="tmsOrderQuoteStatus" :value="quoteStatus" />
+            <ElTag v-else-if="quoteStatus === 'pending_approval'" type="warning" effect="plain">审批中</ElTag>
+            <ElTag v-else-if="quoteStatus === 'approved'" type="success" effect="plain">已生效</ElTag>
+            <ElTag v-else-if="quoteStatus === 'rejected'" type="danger" effect="plain">已驳回</ElTag>
           </div>
           <span class="text-sm text-[var(--art-gray-700)]">
             {{ order.originStation || '始发站未填' }} →
@@ -81,10 +81,10 @@
               >
                 <ElOption
                   v-for="option in expenseOptions"
-                  :key="option.value"
-                  :label="option.label || option.name"
-                  :value="option.value"
-                  :disabled="form.supplementaryItems.some((item) => item.code === option.value)"
+                  :key="option.id"
+                  :label="`${option.itemName}（${option.itemCode}）`"
+                  :value="option.id"
+                  :disabled="form.supplementaryItems.some((item) => item.code === option.id)"
                 />
               </ElSelect>
               <ArtTable
@@ -166,7 +166,7 @@
         <ElButton
           v-auth="'TmsOrderList:Quote'"
           :loading="loading && submitMode === 'save'"
-          :disabled="loading || reloadLoading || loadError || !order"
+          :disabled="loading || reloadLoading || loadError || !order || quoteLocked"
           @click="handleFooterConfirm(api, 'save')"
         >
           保存报价
@@ -175,7 +175,7 @@
           v-auth="'TmsOrderList:Quote'"
           type="primary"
           :loading="loading && submitMode === 'submit'"
-          :disabled="loading || reloadLoading || loadError || !order"
+          :disabled="loading || reloadLoading || loadError || !order || quoteLocked"
           @click="handleFooterConfirm(api, 'submit')"
         >
           提交报价
@@ -204,7 +204,7 @@
   import ArtIconButton from '@/components/core/widget/art-icon-button/index.vue'
   import { formatWithDayjs } from '@/utils/time'
   import { useUserStore } from '@/store/modules/user'
-  import { fetchOrderQuote, saveOrderQuote } from '@tms/api'
+  import { fetchOrderQuote, fetchOrderQuoteExpenseItems, saveOrderQuote, type OrderQuoteExpenseItem } from '@tms/api'
 
   defineOptions({ name: 'TmsOrderQuoteDialog' })
 
@@ -215,7 +215,6 @@
 
   const emit = defineEmits<{ success: [] }>()
   const userStore = useUserStore()
-  const { getDictMap } = storeToRefs(userStore)
   const dialogRef = ref<ArtDialogExpose<OrderRecord>>()
   const formRef = ref<InstanceType<typeof ArtForm>>()
   const activeTab = ref('feeSection')
@@ -224,7 +223,10 @@
   const attachmentRef = ref<{ hasPendingUpload: () => boolean }>()
   const orderId = ref('')
   const order = ref<OrderRecord | null>(null)
-  const quoteStatus = ref<Api.Tms.Order.OrderQuoteRecord['status'] | ''>('')
+  const quoteStatus = ref<'draft' | 'submitted' | 'pending_approval' | 'approved' | 'rejected' | ''>('')
+  const quoteLocked = computed(() => quoteStatus.value === 'pending_approval' || quoteStatus.value === 'approved')
+  const quoteNo = ref('')
+  const expenseOptions = ref<OrderQuoteExpenseItem[]>([])
   const form = ref<QuotePayload>(createInitialForm())
   const selectedExpenseCode = ref('')
   const loadError = ref(false)
@@ -232,7 +234,6 @@
   const submitMode = ref<SubmitMode>('save')
   let loadRequestId = 0
 
-  const expenseOptions = computed(() => getDictMap.value.tmsOrderQuoteExpenseItem ?? [])
   const totalAmount = computed(() =>
     round(
       moneyValue(form.value.transportFee) +
@@ -344,8 +345,8 @@
   }
 
   function expenseLabel(code: string): string {
-    const option = expenseOptions.value.find((item) => item.value === code)
-    return option?.label || option?.name || code
+    const option = expenseOptions.value.find((item) => item.id === code)
+    return option?.itemName || code
   }
 
   function addExpenseItem(code: string): void {
@@ -370,14 +371,17 @@
     try {
       const [result] = await Promise.all([
         fetchOrderQuote(currentOrderId, { showErrorMessage: false }),
-        userStore.ensureDictLoaded('tmsOrderQuoteExpenseItem'),
         userStore.ensureDictLoaded('tmsOrderQuoteStatus')
       ])
       if (requestId !== loadRequestId) return
       const context = result.data
       if (!context) throw new Error('报价数据不可用')
+      const expenseResult = await fetchOrderQuoteExpenseItems(context.order.tenantId || '')
+      if (requestId !== loadRequestId) return
+      expenseOptions.value = expenseResult.data || []
       order.value = context.order
-      quoteStatus.value = context.quote?.status || ''
+      quoteStatus.value = (context.quote?.status as typeof quoteStatus.value) || ''
+      quoteNo.value = (context.quote as typeof context.quote & { quoteNo?: string })?.quoteNo || ''
       form.value = context.quote
         ? {
             transportFee: moneyValue(context.quote.transportFee),
@@ -487,11 +491,13 @@
     order.value = row
     form.value = createInitialForm()
     quoteStatus.value = ''
+    quoteNo.value = ''
+    expenseOptions.value = []
     selectedExpenseCode.value = ''
     loadError.value = false
     await dialogRef.value?.handleOpen(row, {
       title: `报价 · ${row.orderNo}`,
-      subtitle: '填写费用、付款安排和补充说明；提交仅在系统内记录报价状态。',
+      subtitle: '填写费用、付款安排和补充说明；提交后按审批配置处理。',
       onOpen: async (_row, api) => {
         api.setLoading(true)
         try {

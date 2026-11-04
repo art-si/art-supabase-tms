@@ -1139,6 +1139,46 @@ declare global {
           isRecordOwner?: boolean
         }
 
+        interface OrderExecutionEvidence {
+          id: string
+          waybillId: string
+          waybillNo: string
+          operationType: 'loading' | 'unloading'
+          operationStatus: string
+          completedAt: string | null
+          weightTon: number | null
+          photoUrls?: string[]
+          weighbridgeTicketUrls?: string[]
+          remark: string | null
+        }
+
+        interface OrderExecutionSignature {
+          waybillId: string
+          waybillNo: string
+          signedAt: string | null
+          signerName: string | null
+          receiptUrls?: string[]
+          signatureUrls?: string[]
+          signatureRemark: string | null
+        }
+
+        interface OrderCarrierReconciliation {
+          statementId: string
+          statementNo: string
+          waybillId: string
+          waybillNo: string
+          carrierName: string
+          status: string
+          lineAmount?: number | null
+        }
+
+        interface OrderExecutionSupplement {
+          loading: OrderExecutionEvidence[]
+          unloading: OrderExecutionEvidence[]
+          signatures: OrderExecutionSignature[]
+          carrierReconciliation: OrderCarrierReconciliation[]
+        }
+
         interface OrderConfig {
           loadType: 'ltl' | 'ftl'
           allowConsolidation?: boolean
@@ -1160,6 +1200,30 @@ declare global {
           trackingNumber: string
           remark: string
           attachmentUrls: string[]
+          payable?: {
+            driverFreight: number
+            carrierFreight: number
+            tripSubsidy: number
+            freight: number
+            operationFee: number
+            commissionFee: number
+            otherFee: number
+            driverSettlementMethod: string
+            carrierSettlementMethod: string
+          }
+          loading?: {
+            loadedAt?: string | null
+            loadedWeightTon?: number | null
+            loadTicketUrls?: string[]
+            loadPhotoUrls?: string[]
+            unloadedAt?: string | null
+            unloadedWeightTon?: number | null
+            unloadTicketUrls?: string[]
+            unloadPhotoUrls?: string[]
+            signedAt?: string | null
+            signerName?: string | null
+            remark?: string | null
+          }
         }
 
         type OrderSearchParams = Partial<

@@ -24,7 +24,7 @@
     </BusinessWorkspaceHeader>
 
     <ArtTableQuery
-      :key="tablePermissionKey"
+      :key="`${tablePermissionKey}:${viewMode}`"
       ref="tableQueryRef"
       v-model="table.searchQuery"
       :search-items="searchItems"
@@ -32,13 +32,23 @@
       :columns-factory="columnsFactory"
       :header-actions="headerActions"
       :header-actions-placement="embedded ? 'table' : 'workspace'"
-      :search-bar-props="{ span: 6, labelWidth: 86, showExpand: true }"
+      :search-bar-props="{ span: 6, labelWidth: 112, showExpand: true }"
       :table-props="{
-        emptyText: '暂无运输合同',
-        emptyDescription: '可新增合同，或调整状态、承运商、计费方式和关键字后重新查询。'
+        rowKey: viewMode === 'detail' ? 'detailRowKey' : 'id',
+        emptyText: viewMode === 'detail' ? '暂无合同明细' : '暂无运输合同',
+        emptyDescription:
+          viewMode === 'detail'
+            ? '当前条件下没有可展示的货物明细，请切回按单据查看合同。'
+            : '可新增合同，或调整状态、承运商、计费方式和关键字后重新查询。'
       }"
       :focusable="!embedded"
-    />
+    >
+      <template #header-left>
+        <div class="flex items-center gap-2" aria-label="合同查询方式">
+          <ElSegmented v-model="viewMode" :options="viewModeOptions" size="small" />
+        </div>
+      </template>
+    </ArtTableQuery>
 
     <ContractDialog ref="dialogRef" @success="handleSaveSuccess" />
     <ContractTerminateDialog ref="terminateDialogRef" @success="tableQueryRef?.refreshUpdate()" />
@@ -50,7 +60,7 @@
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
   import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
-  import { ElMessage, ElMessageBox, ElTag } from 'element-plus'
+  import { ElMessage, ElMessageBox, ElSegmented, ElTag } from 'element-plus'
   import { RouterLink } from 'vue-router'
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
   import type {
@@ -72,11 +82,14 @@
     deleteContract,
     deleteContractBatch,
     copyContract,
+    exportContractDetailRows,
     exportContractList,
     fetchCarrierOptions,
     fetchContractList,
+    fetchContractDetailRows,
     fetchCustomerOptions,
-    importContracts
+    importContracts,
+    type ContractDetailListRow
   } from '@tms/api'
   import ContractDialog from './modules/contract-dialog.vue'
   import ContractTerminateDialog from './modules/contract-terminate-dialog.vue'
@@ -129,13 +142,19 @@
   const router = useRouter()
   const route = useRoute()
   const deleteContext = useMasterDataDeleteProcessingContext()
-  const { getDictMap } = storeToRefs(useUserStore())
+  const userStore = useUserStore()
+  const { getDictMap } = storeToRefs(userStore)
   const tableQueryRef = ref<ArtTableQueryExpose>()
   const dialogRef = ref<ContractDialogExpose>()
   const terminateDialogRef = ref<InstanceType<typeof ContractTerminateDialog>>()
   const listFieldAccess = ref<ContractFieldAccessMap>({})
   const currentRows = ref<Contract[]>([])
   const copyingContractId = ref<string | null>(null)
+  const viewMode = ref<'document' | 'detail'>('document')
+  const viewModeOptions = [
+    { label: '按单据', value: 'document' },
+    { label: '按明细', value: 'detail' }
+  ]
 
   const table = reactive<TableGroup>({
     searchQuery: {
@@ -296,8 +315,28 @@
     })
   )
 
+  const visibleDetailExportColumns = computed<ArtTableQueryExcelColumn[]>(() => [
+    ...visibleExportColumns.value,
+    { key: 'detailIndex', title: '明细序号' },
+    { key: 'detailCargoCode', title: '货物编码' },
+    { key: 'detailCargoDescription', title: '货物名称' },
+    { key: 'detailContractQuantity', title: '合同数量' },
+    {
+      key: 'detailUnit',
+      title: '计量单位',
+      formatter: (value) =>
+        formatDictValue(value, createDictLabelMap(getDictMap.value.tmsCargoUnit ?? []))
+    },
+    ...(shouldDisplaySensitiveField('transportDetailsPricing')
+      ? [
+          { key: 'detailTransportUnitPrice', title: '明细单价' },
+          { key: 'detailFreight', title: '明细运费' }
+        ]
+      : [])
+  ])
+
   const tablePermissionKey = computed(() =>
-    (['contractAmount', 'partyContactPhone'] as const)
+    (['contractAmount', 'partyContactPhone', 'transportDetailsPricing'] as const)
       .map((field) => `${field}:${shouldDisplaySensitiveField(field) ? 'visible' : 'hidden'}`)
       .join('|')
   )
@@ -364,7 +403,7 @@
     }
   ])
 
-  const columnsFactory = (): ColumnOption<Contract>[] => [
+  const documentColumns = (): ColumnOption<Contract>[] => [
     { type: 'selection', width: 50, fixed: 'left', reserveSelection: true },
     {
       prop: 'contractNo',
@@ -486,28 +525,93 @@
     }
   ]
 
+  const columnsFactory = (): ColumnOption<Contract>[] => {
+    const columns = documentColumns()
+    if (viewMode.value === 'document') return columns
+    const operation = columns.pop()
+    const details: ColumnOption<Contract>[] = [
+      { prop: 'detailIndex', label: '明细序号', width: 95 },
+      {
+        prop: 'detailCargoCode',
+        label: '货物编码',
+        minWidth: 135,
+        formatter: (row) => (row as ContractDetailListRow).detailCargoCode || '—'
+      },
+      {
+        prop: 'detailCargoDescription',
+        label: '货物名称',
+        minWidth: 190,
+        showOverflowTooltip: true,
+        formatter: (row) => (row as ContractDetailListRow).detailCargoDescription || '—'
+      },
+      {
+        prop: 'detailContractQuantity',
+        label: '合同数量',
+        width: 120,
+        align: 'right',
+        formatter: (row) => (row as ContractDetailListRow).detailContractQuantity ?? '—'
+      },
+      {
+        prop: 'detailUnit',
+        label: '计量单位',
+        width: 115,
+        dict: { code: 'tmsCargoUnit', display: 'text' }
+      },
+      ...(shouldDisplaySensitiveField('transportDetailsPricing')
+        ? [
+            {
+              prop: 'detailTransportUnitPrice',
+              label: '明细单价',
+              width: 125,
+              align: 'right' as const,
+              formatter: (row: Contract) =>
+                formatSensitiveNumber((row as ContractDetailListRow).detailTransportUnitPrice)
+            },
+            {
+              prop: 'detailFreight',
+              label: '明细运费',
+              width: 125,
+              align: 'right' as const,
+              formatter: (row: Contract) =>
+                formatSensitiveNumber((row as ContractDetailListRow).detailFreight)
+            }
+          ]
+        : [])
+    ]
+    return [
+      ...columns.slice(1, 2),
+      ...details,
+      ...columns.slice(2),
+      ...(operation ? [operation] : [])
+    ]
+  }
+
   const headerActions = computed<ArtTableQueryHeaderAction[]>(() => [
     { permission: 'TmsContract:Add', type: 'add', onClick: () => openDialog() },
-    {
-      permission: 'TmsContract:Delete',
-      type: 'delete',
-      confirm: false,
-      onClick: async ({ selectedRows }) => {
-        const rows = selectedRows as Contract[]
-        const ids = rows.map((row) => String(row.id)).filter(Boolean)
-        await deleteRecords({
-          resources: rows.map((row) => ({
-            id: String(row.id),
-            label: row.contractName || row.contractNo || '运输合同'
-          })),
-          permission: 'TmsContract:Delete',
-          remove: () => deleteContractBatch(ids),
-          onDeleted: async () => {
-            await tableQueryRef.value?.refreshRemove()
-          }
-        })
-      }
-    },
+    ...(viewMode.value === 'document'
+      ? [
+          {
+            permission: 'TmsContract:Delete',
+            type: 'delete',
+            confirm: false,
+            onClick: async ({ selectedRows }) => {
+              const rows = selectedRows as Contract[]
+              const ids = rows.map((row) => String(row.id)).filter(Boolean)
+              await deleteRecords({
+                resources: rows.map((row) => ({
+                  id: String(row.id),
+                  label: row.contractName || row.contractNo || '运输合同'
+                })),
+                permission: 'TmsContract:Delete',
+                remove: () => deleteContractBatch(ids),
+                onDeleted: async () => {
+                  await tableQueryRef.value?.refreshRemove()
+                }
+              })
+            }
+          } as ArtTableQueryHeaderAction
+        ]
+      : []),
     ...(!embedded
       ? [
           {
@@ -530,21 +634,35 @@
       permission: 'TmsContract:Export',
       type: 'export',
       exportFilename: 'TMS合同资料',
-      exportSheetName: '运输合同',
-      exportColumns: () => visibleExportColumns.value,
-      exportApi: ({ selectedIds, searchParams, maxRows }) =>
-        exportContractList({
+      exportSheetName: viewMode.value === 'detail' ? '合同明细' : '运输合同',
+      exportColumns: () =>
+        viewMode.value === 'detail' ? visibleDetailExportColumns.value : visibleExportColumns.value,
+      exportApi: async ({ selectedIds, searchParams, maxRows }) => {
+        await Promise.all(
+          [
+            'tmsContractBusinessType',
+            'tmsContractCategory',
+            'tmsContractTransportMode',
+            'tmsContractBillingMethod',
+            'tmsCargoUnit',
+            'commonBoolean'
+          ].map((code) => userStore.ensureDictLoaded(code))
+        )
+        return (viewMode.value === 'detail' ? exportContractDetailRows : exportContractList)({
           ...(searchParams as SearchParams),
           customerId: customerId || (searchParams as SearchParams).customerId,
           ids: selectedIds.map(String),
           maxRows
         })
+      }
     }
   ])
 
   const fetchTableData = async (params: TableParams) => {
     const { from, to } = buildSupabasePageRange({ current: params.current, size: params.size })
-    const result = await fetchContractList({
+    const result = await (
+      viewMode.value === 'detail' ? fetchContractDetailRows : fetchContractList
+    )({
       ...params,
       customerId: customerId || params.customerId,
       from,
@@ -574,8 +692,8 @@
   }
 
   const formatDictValue = (value: unknown, labels: Map<string, string>): string => {
-    const key = String(value ?? '')
-    return labels.get(key) || key
+    const key = String(value ?? '').trim()
+    return key ? labels.get(key) || '待核对' : '—'
   }
 
   const renderStatus = (row: Contract) => {
@@ -584,8 +702,8 @@
   }
 
   const formatBillingMethod = (value: unknown): string => {
-    const key = String(value || '')
-    return billingLabelMap.value.get(key) || key
+    const key = String(value ?? '').trim()
+    return key ? billingLabelMap.value.get(key) || '待核对' : '—'
   }
 
   const formatDateTime = (value?: unknown): string => {

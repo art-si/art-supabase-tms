@@ -49,6 +49,13 @@ export async function fetchOrderContractSummary(id: string) {
   )
 }
 
+export async function fetchOrderExecutionSupplement(id: string) {
+  return await responseHandle<Api.Tms.Order.OrderExecutionSupplement>(
+    () => supabase.rpc('tms_get_order_execution_supplement_secure', { p_order_id: id }),
+    { breakReturn: true, showErrorMessage: false, errorMessage: '订单执行信息加载失败，请重试' }
+  )
+}
+
 export async function addOrder(params: OrderRecord) {
   return await responseHandle<OrderRecord>(
     () =>
@@ -224,6 +231,23 @@ function toOrderWritePayload(params: OrderRecord): Record<string, unknown> {
     if (canEditField(params.fieldAccess, field as Api.Tms.Order.OrderFieldKey)) return
     columns.forEach((column) => delete payload[column])
   })
+  const config = payload.order_config
+  if (config && typeof config === 'object' && !Array.isArray(config)) {
+    const nextConfig = { ...config } as Record<string, unknown>
+    if (!canEditField(params.fieldAccess, 'freightAmounts')) delete nextConfig.payable
+    if (!canEditField(params.fieldAccess, 'proofAttachments')) {
+      const loading = nextConfig.loading
+      if (loading && typeof loading === 'object' && !Array.isArray(loading)) {
+        nextConfig.loading = omit(loading, [
+          'load_ticket_urls',
+          'load_photo_urls',
+          'unload_ticket_urls',
+          'unload_photo_urls'
+        ])
+      }
+    }
+    payload.order_config = nextConfig
+  }
   if (!canEditField(params.fieldAccess, 'proofAttachments')) {
     const config = payload.order_config
     if (config && typeof config === 'object' && !Array.isArray(config)) {

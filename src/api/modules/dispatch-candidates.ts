@@ -24,6 +24,16 @@ export interface DispatchDriverCandidate {
   phone: string | null
   licenseType: string | null
   licenseExpireDate: string | null
+  driverType?: 'primary' | 'secondary'
+  driverOwnership?: 'self' | 'individual' | 'carrier' | 'partner' | 'other' | null
+  driverStatus?: string | null
+  portraitUrl?: string | null
+  identityAuthStatus?: string | null
+  licenseAuthStatus?: string | null
+  qualificationAuthStatus?: string | null
+  carrierName?: string | null
+  companyName?: string | null
+  plateNo?: string | null
   contactName?: string | null
   agreementId?: string | null
   agreementStartsOn?: string | null

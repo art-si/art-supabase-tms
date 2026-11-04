@@ -9,10 +9,10 @@
     row-key="id"
     label-key="contractNo"
     description-key="contractName"
-    search-placeholder="搜索合同编号或名称"
+    search-placeholder="搜索合同编号、纸质编号、名称或助记码"
     empty-text="暂无可用合同"
     empty-description="请确认发货客户已有审批通过且在有效期内的合同。"
-    dialog-width="lg"
+    dialog-width="xl"
     @confirm="confirm"
   >
     <template #trigger></template>
@@ -38,6 +38,16 @@
   const columns: DataSelectColumn[] = [
     { prop: 'contractNo', label: '合同编号', minWidth: 180 },
     { prop: 'contractName', label: '合同名称', minWidth: 220 },
+    { prop: 'paperContractNo', label: '纸质合同编号', minWidth: 160 },
+    { prop: 'mnemonicCode', label: '助记码', minWidth: 120 },
+    { prop: 'contractCategory', label: '合同类别', minWidth: 120, dict: { code: 'tmsContractCategory', display: 'text' } },
+    { prop: 'transportMode', label: '运输方式', minWidth: 120, dict: { code: 'tmsOrderTransportMode', display: 'text' } },
+    { prop: 'carrierName', label: '承运商', minWidth: 180 },
+    { prop: 'customerName', label: '客户/货主', minWidth: 180 },
+    { prop: 'contactName', label: '业务联系人', minWidth: 120 },
+    { prop: 'customerSignatory', label: '客户签约人', minWidth: 120 },
+    { prop: 'handler', label: '经办人', minWidth: 120 },
+    { prop: 'signTime', label: '签约日期', width: 130 },
     { prop: 'effectiveDate', label: '生效日期', width: 130 },
     { prop: 'expiryDate', label: '到期日期', width: 130 }
   ]

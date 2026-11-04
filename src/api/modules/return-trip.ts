@@ -12,6 +12,31 @@ export interface ReturnTripCandidate {
   canAddReturn: boolean
 }
 
+export interface ReturnOrderResult {
+  orderId: string
+  orderNo: string
+  waybillId: string
+  waybillNo: string
+}
+
+export async function createReturnOrder(
+  sourceOrderId: string,
+  sourceWaybillId: string | null,
+  order: Api.Tms.Order.OrderRecord
+): Promise<ReturnOrderResult> {
+  const result = await responseHandle<ReturnOrderResult>(
+    () =>
+      supabase.rpc('tms_create_return_order_secure', {
+        p_source_order_id: sourceOrderId,
+        p_source_waybill_id: sourceWaybillId,
+        p_payload: keysToSnakeDeep(order)
+      }),
+    { showMessage: true, breakReturn: true }
+  )
+  if (result.error || !result.data) throw result.error ?? new Error('返程运输单保存失败')
+  return result.data
+}
+
 export interface ReturnTripInput {
   returnCustomerId: string
   originStation: string

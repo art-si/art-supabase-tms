@@ -117,6 +117,7 @@
 </template>
 
 <script setup lang="ts">
+  import { formatAuditActorName } from '@/utils/business/audit-actor-display'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import ArtDescriptions from '@/components/core/base/art-descriptions/index.vue'
   import type { ArtDescriptionItem } from '@/components/core/base/art-descriptions/types'
@@ -271,7 +272,12 @@
   ])
   const auditItems: ArtDescriptionItem<Partial<CarrierPrice>>[] = [
     { key: 'remark', label: '备注', field: 'remark', span: 4 },
-    { key: 'createBy', label: '创建人', field: 'createBy' },
+    {
+      key: 'createBy',
+      label: '创建人',
+      field: 'createBy',
+      value: (row) => formatAuditActorName(row.createBy)
+    },
     {
       key: 'createTime',
       label: '创建时间',

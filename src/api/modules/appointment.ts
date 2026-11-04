@@ -7,12 +7,14 @@ export type AppointmentStatus = 'pending' | 'confirming' | 'confirmed' | 'comple
 
 export interface AppointmentRecord {
   id: string
+  appointmentNo: string
   kind: AppointmentKind
   anchorWaybillId: string
   selectedWaybillIds: string[]
   driverName: string
   driverPhone: string | null
   plateNo: string
+  vehicleType: string | null
   loadCapacityTon: number | null
   vehicleLengthM: number | null
   scheduledAt: string
@@ -56,6 +58,15 @@ export interface AppointmentSavePayload {
   vehicleLengthM: number | null
   scheduledAt: string
   remark: string
+}
+
+export interface AppointmentDispatchSnapshot {
+  driverName: string
+  driverPhone: string
+  plateNo: string
+  vehicleType: string
+  loadCapacityTon: number | null
+  vehicleLengthM: number | null
 }
 
 export interface AppointmentArrivalPayload {
@@ -155,6 +166,19 @@ export async function fetchAppointmentWorkspace(kind: AppointmentKind, waybillId
     readOptions
   )
   return result.data ?? []
+}
+
+export async function fetchAppointmentDispatchSnapshot(kind: AppointmentKind, waybillId: string) {
+  const result = await responseHandle<AppointmentDispatchSnapshot>(
+    () =>
+      supabase.rpc('tms_get_appointment_dispatch_snapshot_secure', {
+        p_kind: kind,
+        p_waybill_id: waybillId
+      }),
+    readOptions
+  )
+  if (result.error || !result.data) throw result.error ?? new Error('调度车辆资料读取失败')
+  return result.data
 }
 
 export async function saveAppointment(payload: AppointmentSavePayload) {

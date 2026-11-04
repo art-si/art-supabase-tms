@@ -82,7 +82,28 @@ export interface ElectronicContractRecord extends TmsRecordAudit {
   endsOn: string
   contentHtml: string
   attachments: string[]
+  settlementCycle: SettlementCycle
+  cycleStartDay: number | null
+  paymentTermDays: number
+  taxRate: number
+  approvalStatus: AgreementApprovalStatus
+  partyASignatureUrl: string | null
+  partyASealUrl: string | null
+  partyBSignatureUrl: string | null
+  partyBSealUrl: string | null
+  partyASignedAt: string | null
+  partyBSignedAt: string | null
   status: 'pending_signed' | 'signed' | 'terminated'
+}
+
+export type SettlementCycle = 'natural_month' | 'monthly' | 'quarterly'
+export type AgreementApprovalStatus = 'draft' | 'pending' | 'approved' | 'rejected'
+
+export interface AgreementSignatureInput {
+  partyASignatureUrl: string | null
+  partyASealUrl: string | null
+  partyBSignatureUrl: string | null
+  partyBSealUrl: string | null
 }
 
 export interface TransportAgreementRecord extends TmsRecordAudit {
@@ -96,6 +117,7 @@ export interface TransportAgreementRecord extends TmsRecordAudit {
   plateNo: string
   vehicleType: string | null
   vehicleLengthM: number | null
+  driverId: string | null
   startsOn: string | null
   endsOn: string | null
   status: 'pending_signed' | 'signed' | 'revision_requested'
@@ -104,11 +126,20 @@ export interface TransportAgreementRecord extends TmsRecordAudit {
   registrationImages: string[]
   driverLicenseImage: string | null
   roadPermitImage: string | null
+  driverLicenseImages: string[]
+  roadPermitImages: string[]
+  approvalStatus: AgreementApprovalStatus
+  partyASignatureUrl: string | null
+  partyASealUrl: string | null
+  partyBSignatureUrl: string | null
+  partyBSealUrl: string | null
+  partyASignedAt: string | null
+  partyBSignedAt: string | null
   partyASeal: string
   partyARepresentative: string
   partyASignedOn: string
   partyBSeal: string
-  partyBRepresentative: string
+  partyBRepresentative: string | null
   partyBSignedOn: string
 }
 
@@ -144,6 +175,10 @@ export type ElectronicContractInput = Pick<
   | 'endsOn'
   | 'contentHtml'
   | 'attachments'
+  | 'settlementCycle'
+  | 'cycleStartDay'
+  | 'paymentTermDays'
+  | 'taxRate'
 > & { tenantId?: string; customerId?: string | null }
 
 export type TransportAgreementInput = Pick<
@@ -154,18 +189,13 @@ export type TransportAgreementInput = Pick<
   | 'vehicleId'
   | 'startsOn'
   | 'endsOn'
-  | 'status'
   | 'contentHtml'
   | 'idCardImages'
   | 'registrationImages'
-  | 'driverLicenseImage'
-  | 'roadPermitImage'
-  | 'partyASeal'
-  | 'partyARepresentative'
-  | 'partyASignedOn'
-  | 'partyBSeal'
+  | 'driverLicenseImages'
+  | 'roadPermitImages'
+  | 'driverId'
   | 'partyBRepresentative'
-  | 'partyBSignedOn'
 > & { tenantId?: string; customerId?: string | null }
 
 interface ListPage {
@@ -516,6 +546,36 @@ export async function addElectronicContract(input: ElectronicContractInput) {
   )
 }
 
+export async function editElectronicContract(id: string, input: ElectronicContractInput) {
+  const payload = { ...input }
+  delete payload.tenantId
+  delete payload.customerId
+  return await responseHandle<ElectronicContractRecord>(
+    () =>
+      supabase
+        .from('tms_electronic_contract')
+        .update(keysToSnakeDeep(payload), { count: 'exact' })
+        .eq('id', id)
+        .select()
+        .single(),
+    { showMessage: true, breakReturn: true, requireAffected: true }
+  )
+}
+
+export async function submitElectronicContractForApproval(id: string) {
+  return await responseHandle<ElectronicContractRecord>(
+    () => supabase.rpc('tms_submit_electronic_contract_secure', { p_id: id }),
+    { showMessage: true, breakReturn: true }
+  )
+}
+
+export async function signElectronicContract(id: string, input: AgreementSignatureInput) {
+  return await responseHandle<ElectronicContractRecord>(
+    () => supabase.rpc('tms_sign_electronic_contract_secure', { p_id: id, p_signatures: keysToSnakeDeep(input) }),
+    { showMessage: true, breakReturn: true }
+  )
+}
+
 export async function copyElectronicContract(id: string) {
   return await responseHandle<string>(
     () => supabase.rpc('tms_copy_electronic_contract', { p_id: id }),
@@ -574,6 +634,53 @@ export async function addTransportAgreement(input: TransportAgreementInput) {
         .select()
         .single(),
     { showMessage: true, breakReturn: true }
+  )
+}
+
+export async function submitTransportAgreementForApproval(id: string) {
+  return await responseHandle<TransportAgreementRecord>(
+    () => supabase.rpc('tms_submit_transport_agreement_secure', { p_id: id }),
+    { showMessage: true, breakReturn: true }
+  )
+}
+
+export async function signTransportAgreement(id: string, input: AgreementSignatureInput) {
+  return await responseHandle<TransportAgreementRecord>(
+    () => supabase.rpc('tms_sign_transport_agreement_secure', { p_id: id, p_signatures: keysToSnakeDeep(input) }),
+    { showMessage: true, breakReturn: true }
+  )
+}
+
+export interface TransportAgreementDriverOption {
+  id: string
+  driverName: string
+}
+
+export interface TransportAgreementDriverEvidence {
+  driverName: string
+  idCardImages: string[]
+  registrationImages: string[]
+  driverLicenseImages: string[]
+  roadPermitImages: string[]
+}
+
+export async function fetchTransportAgreementDriverOptions(params: { carrierId: string; vehicleId?: string }) {
+  return await responseHandle<TransportAgreementDriverOption[]>(
+    () => supabase.rpc('tms_list_agreement_driver_options_secure', {
+      p_carrier_id: params.carrierId,
+      p_vehicle_id: params.vehicleId || null
+    }),
+    { showErrorMessage: true }
+  )
+}
+
+export async function fetchTransportAgreementDriverEvidence(driverId: string, vehicleId?: string) {
+  return await responseHandle<TransportAgreementDriverEvidence>(
+    () => supabase.rpc('tms_get_agreement_driver_evidence_secure', {
+      p_driver_id: driverId,
+      p_vehicle_id: vehicleId || null
+    }),
+    { showErrorMessage: false }
   )
 }
 

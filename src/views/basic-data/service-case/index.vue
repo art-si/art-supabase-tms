@@ -50,6 +50,7 @@
             <ArtUploadFile
               v-if="detail.attachments.length"
               :model-value="detail.attachments"
+              :file-names="attachmentNames"
               title="附件"
               :limit="10"
               multiple
@@ -108,6 +109,7 @@
                     v-if="reply.attachments.length"
                     class="mt-3"
                     :model-value="reply.attachments"
+                    :file-names="attachmentNames"
                     title="回复附件"
                     :limit="10"
                     multiple
@@ -183,6 +185,7 @@
   import type { MasterDataDeleteGuardOpenOptions } from '@/components/business/master-data-delete-guard/index.vue'
 
   import { storeToRefs } from 'pinia'
+  import { uniq } from 'lodash-es'
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
@@ -206,6 +209,8 @@
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { formatWithDayjs } from '@/utils/time'
   import { getDictionaryDisplayLabel } from '@/utils/form/option'
+  import { fetchAttachmentDisplayNames } from '@/api/attachments'
+  import { getFileExtension } from '@/utils/file/attachment'
   import {
     deleteTmsBasicRecords,
     addServiceCaseReply,
@@ -236,6 +241,7 @@
   const detailWaybill = ref<ServiceCaseWaybillOption>()
   const detailWaybillError = ref(false)
   const replies = ref<ServiceCaseReply[]>([])
+  const attachmentNames = ref<Record<string, string>>({})
   const repliesLoading = ref(false)
   const repliesError = ref('')
   const replyTo = ref<ServiceCaseReply | null>(null)
@@ -343,7 +349,21 @@
     try {
       const result = await fetchServiceCaseReplies(current.id, current.tenantId)
       if (result.error) throw result.error
-      if (revision === detailRevision) replies.value = result.data ?? []
+      const rows = result.data ?? []
+      const urls = uniq([...current.attachments, ...rows.flatMap((reply) => reply.attachments)])
+      const names = Object.fromEntries(
+        urls.map((url, index) => [url, `附件 ${index + 1}.${getFileExtension(url) || '文件'}`])
+      )
+      try {
+        Object.assign(names, await fetchAttachmentDisplayNames(urls, current.tenantId))
+      } catch (error) {
+        if (revision === detailRevision)
+          notifyFriendlyError(error, '附件原文件名暂不可用，已按序号显示', 'warning')
+      }
+      if (revision === detailRevision) {
+        attachmentNames.value = names
+        replies.value = rows
+      }
     } catch {
       if (revision === detailRevision) repliesError.value = '沟通记录加载失败，请重试。'
     } finally {
@@ -745,6 +765,7 @@
     detailWaybillError.value = false
     mentionOptions.value = { users: [], organizations: [], roles: [] }
     replies.value = []
+    attachmentNames.value = {}
     replyTo.value = null
     replyForm.value = emptyReplyForm()
     await detailDialogRef.value?.handleOpen(row, {

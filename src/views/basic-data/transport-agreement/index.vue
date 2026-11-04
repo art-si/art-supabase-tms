@@ -34,6 +34,8 @@
       :focusable="!embedded"
     />
     <TransportAgreementDialog ref="formDialogRef" :customer="customer" @success="refresh" />
+    <ContractDocumentPreview ref="previewRef" />
+    <ContractSigningDialog ref="signingRef" />
     <ArtDialog
       ref="detailDialogRef"
       size="xl"
@@ -59,6 +61,8 @@
               v-if="
                 !detail.idCardImages.length &&
                 !detail.registrationImages.length &&
+                !detail.driverLicenseImages.length &&
+                !detail.roadPermitImages.length &&
                 !detail.driverLicenseImage &&
                 !detail.roadPermitImage
               "
@@ -74,7 +78,7 @@
                   v-if="detail.idCardImages.length"
                   :model-value="detail.idCardImages"
                   title="身份证"
-                  :limit="3"
+                  :limit="5"
                   multiple
                   readonly
                 />
@@ -92,7 +96,7 @@
                   v-if="detail.registrationImages.length"
                   :model-value="detail.registrationImages"
                   title="行驶证"
-                  :limit="3"
+                  :limit="5"
                   multiple
                   readonly
                 />
@@ -107,10 +111,17 @@
               <div>
                 <div class="mb-2 text-sm font-medium">驾驶证</div>
                 <ArtUploadImage
-                  v-if="detail.driverLicenseImage"
-                  :model-value="detail.driverLicenseImage"
+                  v-if="detail.driverLicenseImages.length || detail.driverLicenseImage"
+                  :model-value="
+                    detail.driverLicenseImages.length
+                      ? detail.driverLicenseImages
+                      : detail.driverLicenseImage
+                        ? [detail.driverLicenseImage]
+                        : []
+                  "
                   title="驾驶证"
-                  :limit="1"
+                  :limit="5"
+                  multiple
                   readonly
                 />
                 <ArtEmptyState
@@ -124,10 +135,17 @@
               <div>
                 <div class="mb-2 text-sm font-medium">道路运输证</div>
                 <ArtUploadImage
-                  v-if="detail.roadPermitImage"
-                  :model-value="detail.roadPermitImage"
+                  v-if="detail.roadPermitImages.length || detail.roadPermitImage"
+                  :model-value="
+                    detail.roadPermitImages.length
+                      ? detail.roadPermitImages
+                      : detail.roadPermitImage
+                        ? [detail.roadPermitImage]
+                        : []
+                  "
                   title="道路运输证"
-                  :limit="1"
+                  :limit="5"
+                  multiple
                   readonly
                 />
                 <ArtEmptyState
@@ -152,6 +170,8 @@
 
 <script setup lang="tsx">
   import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
+  import { useAuth } from '@/hooks/core/useAuth'
+  import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
 
   import DOMPurify from 'dompurify'
@@ -162,6 +182,13 @@
   } from '@/utils/business/vehicle-type-display'
   import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
+  import ArtButtonMore, {
+    type ButtonMoreItem
+  } from '@/components/core/forms/art-button-more/index.vue'
+  import ContractDocumentPreview from '@/components/business/contract-document-preview/index.vue'
+  import type { ContractDocument } from '@/components/business/contract-document-preview/types'
+  import ContractSigningDialog from '@/components/business/contract-signing-dialog/index.vue'
+  import type { ContractSigningInput } from '@/components/business/contract-signing-dialog/types'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtDescriptions from '@/components/core/base/art-descriptions/index.vue'
@@ -184,6 +211,8 @@
     deleteTmsBasicRecords,
     fetchBasicRecordCarrierOptions,
     fetchTransportAgreementList,
+    signTransportAgreement,
+    submitTransportAgreementForApproval,
     type TransportAgreementRecord,
     type TransportAgreementSearch
   } from '@tms/api'
@@ -193,6 +222,7 @@
   const props = defineProps<{ embedded?: boolean; customer?: Api.Tms.BasicData.Customer }>()
   const route = useRoute()
   const userStore = useUserStore()
+  const { hasAuth } = useAuth()
 
   const tableRef = ref<ArtTableQueryExpose>()
   const { deleteGuardRef, deleteRecords } = useRecordDeleteGuard(
@@ -200,6 +230,9 @@
     '运输协议'
   )
   const formDialogRef = ref<InstanceType<typeof TransportAgreementDialog>>()
+  const previewRef = ref<InstanceType<typeof ContractDocumentPreview>>()
+  const signingRef = ref<InstanceType<typeof ContractSigningDialog>>()
+  const submittingId = ref('')
   const activeDetailTab = ref('transport')
   const detailDialogRef = ref<ArtDialogExpose<TransportAgreementRecord>>()
   const detail = ref<TransportAgreementRecord>()
@@ -245,11 +278,18 @@
     { key: 'agreementNo', label: '协议号', field: 'agreementNo', copyable: true },
     { key: 'shipperName', label: '托运方', field: 'shipperName' },
     { key: 'carrierName', label: '承运方', field: 'carrierName' },
+    { key: 'partyBRepresentative', label: '乙方代表人', field: 'partyBRepresentative' },
     { key: 'contactPhone', label: '联系电话', field: 'contactPhone' },
     { key: 'plateNo', label: '车牌号', field: 'plateNo' },
     { key: 'startsOn', label: '协议开始时间', field: 'startsOn' },
     { key: 'endsOn', label: '协议结束时间', field: 'endsOn' },
     { key: 'status', label: '协议状态', field: 'status', dictCode: 'tmsTransportAgreementStatus' },
+    {
+      key: 'approvalStatus',
+      label: '审批状态',
+      field: 'approvalStatus',
+      dictCode: 'tmsTransportAgreementApprovalStatus'
+    },
     {
       key: 'vehicleType',
       label: '车型',
@@ -316,6 +356,12 @@
       dict: { code: 'tmsTransportAgreementStatus', display: 'auto' }
     },
     {
+      prop: 'approvalStatus',
+      label: '审批状态',
+      width: 110,
+      dict: { code: 'tmsTransportAgreementApprovalStatus', display: 'auto' }
+    },
+    {
       prop: 'vehicleType',
       label: '车型',
       width: 110,
@@ -345,7 +391,7 @@
     {
       prop: 'operation',
       label: '操作',
-      width: 126,
+      width: 200,
       fixed: 'right',
       formatter: (row) => (
         <BusinessTableRowActions>
@@ -355,14 +401,160 @@
             onClick={() => void showDetail(row)}
           />
           <ArtButtonTable
-            type="edit"
-            permission="TmsTransportAgreement:Edit"
-            onClick={() => void formDialogRef.value?.handleOpen(row)}
+            type="view"
+            icon="ri:file-search-line"
+            label="预览协议"
+            permission="TmsTransportAgreement:Preview"
+            onClick={() => void preview(row)}
+          />
+          {canEdit(row) && (
+            <ArtButtonTable
+              type="edit"
+              permission="TmsTransportAgreement:Edit"
+              onClick={() => void formDialogRef.value?.handleOpen(row)}
+            />
+          )}
+          <ArtButtonMore
+            list={moreActions(row)}
+            onClick={(item) => void runMoreAction(row, item)}
           />
         </BusinessTableRowActions>
       )
     }
   ]
+  const canEdit = (row: TransportAgreementRecord): boolean =>
+    row.status === 'pending_signed' && ['draft', 'rejected'].includes(row.approvalStatus)
+
+  const canSubmit = (row: TransportAgreementRecord): boolean =>
+    row.status === 'pending_signed' && ['draft', 'rejected'].includes(row.approvalStatus)
+
+  const canSign = (row: TransportAgreementRecord): boolean =>
+    row.approvalStatus === 'approved' && row.status === 'pending_signed'
+
+  const moreActions = (row: TransportAgreementRecord): ButtonMoreItem[] => [
+    ...(canSubmit(row)
+      ? [
+          {
+            key: 'submit',
+            label: '提交审批',
+            icon: 'ri:send-plane-line',
+            auth: 'TmsTransportAgreement:Submit',
+            disabled: submittingId.value === row.id
+          }
+        ]
+      : []),
+    ...(canSign(row)
+      ? [
+          {
+            key: 'sign',
+            label: '签署协议',
+            icon: 'ri:quill-pen-line',
+            auth: 'TmsTransportAgreement:Sign'
+          }
+        ]
+      : [])
+  ]
+
+  const runMoreAction = async (
+    row: TransportAgreementRecord,
+    item: ButtonMoreItem
+  ): Promise<void> => {
+    if (item.key === 'submit') await submitApproval(row)
+    if (item.key === 'sign') await openSigning(row)
+  }
+
+  const submitApproval = async (row: TransportAgreementRecord): Promise<void> => {
+    if (!canSubmit(row) || !hasAuth('TmsTransportAgreement:Submit') || submittingId.value) return
+    submittingId.value = row.id
+    try {
+      await submitTransportAgreementForApproval(row.id)
+      await tableRef.value?.refreshUpdate()
+    } catch (error) {
+      notifyFriendlyError(error, '提交审批失败，请检查协议内容后重试')
+    } finally {
+      submittingId.value = ''
+    }
+  }
+
+  const openSigning = async (row: TransportAgreementRecord): Promise<void> => {
+    if (!canSign(row) || !hasAuth('TmsTransportAgreement:Sign')) return
+    await signingRef.value?.handleOpen({
+      title: '签署运输协议',
+      documentNo: row.agreementNo,
+      tenantId: row.tenantId,
+      partyAName: row.shipperName,
+      partyBName: row.carrierName,
+      onSubmit: async (input: ContractSigningInput) => {
+        await signTransportAgreement(row.id, input)
+        await tableRef.value?.refreshUpdate()
+      }
+    })
+  }
+
+  const preview = async (row: TransportAgreementRecord): Promise<void> => {
+    if (!hasAuth('TmsTransportAgreement:Preview')) return
+    const document: ContractDocument = {
+      title: '货物运输协议',
+      documentNo: row.agreementNo,
+      startsOn: row.startsOn,
+      endsOn: row.endsOn,
+      partyA: {
+        label: '托运方',
+        name: row.shipperName,
+        representative: row.partyARepresentative,
+        signatureUrl: row.partyASignatureUrl,
+        sealUrl: row.partyASealUrl,
+        signedOn: row.partyASignedOn
+      },
+      partyB: {
+        label: '承运方',
+        name: row.carrierName,
+        representative: row.partyBRepresentative,
+        signatureUrl: row.partyBSignatureUrl,
+        sealUrl: row.partyBSealUrl,
+        signedOn: row.partyBSignedOn
+      },
+      facts: [
+        { label: '联系电话', value: row.contactPhone || '—' },
+        { label: '车牌号码', value: row.plateNo || '—' },
+        {
+          label: '车型及车长',
+          value: [
+            formatVehicleTypeDisplay(
+              row.vehicleType,
+              userStore.getDictItemByValue('vehicleType', row.vehicleType || '')
+            ),
+            row.vehicleLengthM == null ? '' : `${row.vehicleLengthM} m`
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        }
+      ],
+      contentHtml: row.contentHtml,
+      attachments: [],
+      certificateGroups: [
+        { label: '身份证', urls: row.idCardImages },
+        {
+          label: '驾驶证',
+          urls: row.driverLicenseImages.length
+            ? row.driverLicenseImages
+            : row.driverLicenseImage
+              ? [row.driverLicenseImage]
+              : []
+        },
+        { label: '行驶证', urls: row.registrationImages },
+        {
+          label: '道路运输证',
+          urls: row.roadPermitImages.length
+            ? row.roadPermitImages
+            : row.roadPermitImage
+              ? [row.roadPermitImage]
+              : []
+        }
+      ]
+    }
+    await previewRef.value?.handleOpen(document)
+  }
   const headerActions = computed<ArtTableQueryHeaderAction[]>(() => [
     {
       permission: 'TmsTransportAgreement:Add',

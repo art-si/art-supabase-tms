@@ -16,7 +16,10 @@ export type OrderForm = Omit<OrderRecord, 'orderConfig'> & {
   orderConfig: Api.Tms.Order.OrderConfig
 }
 
-export function createInitialOrderConfig(): Api.Tms.Order.OrderConfig {
+export function createInitialOrderConfig(): Api.Tms.Order.OrderConfig & {
+  payable: NonNullable<Api.Tms.Order.OrderConfig['payable']>
+  loading: NonNullable<Api.Tms.Order.OrderConfig['loading']>
+} {
   return {
     loadType: 'ltl',
     allowConsolidation: false,
@@ -37,7 +40,31 @@ export function createInitialOrderConfig(): Api.Tms.Order.OrderConfig {
     trackingMethod: '',
     trackingNumber: '',
     remark: '',
-    attachmentUrls: []
+    attachmentUrls: [],
+    payable: {
+      driverFreight: 0,
+      carrierFreight: 0,
+      tripSubsidy: 0,
+      freight: 0,
+      operationFee: 0,
+      commissionFee: 0,
+      otherFee: 0,
+      driverSettlementMethod: 'cash',
+      carrierSettlementMethod: 'cash'
+    },
+    loading: {
+      loadedAt: null,
+      loadedWeightTon: null,
+      loadTicketUrls: [],
+      loadPhotoUrls: [],
+      unloadedAt: null,
+      unloadedWeightTon: null,
+      unloadTicketUrls: [],
+      unloadPhotoUrls: [],
+      signedAt: null,
+      signerName: '',
+      remark: ''
+    }
   }
 }
 

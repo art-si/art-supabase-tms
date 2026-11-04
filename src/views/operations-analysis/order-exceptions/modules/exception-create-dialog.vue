@@ -26,6 +26,8 @@
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
+  import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
+  import { useUserStore } from '@/store/modules/user'
   import {
     normalizeNonNullableText,
     normalizeNullableNumber,
@@ -45,6 +47,19 @@
   const dialogRef = ref<ArtDialogExpose<OrderContext>>()
   const formRef = ref<InstanceType<typeof ArtForm>>()
   const users = ref<ArtUserSelectOption[]>([])
+  const userStore = useUserStore()
+  const dictionaryExceptionTypes = useDictionaryOptions('tmsOrderExceptionType')
+  const exceptionTypeOptions = computed(() =>
+    dictionaryExceptionTypes.filter((item) =>
+      ['delay', 'damage', 'lost', 'detained'].includes(item.value)
+    )
+  )
+  const dictionaryExceptionStages = useDictionaryOptions('tmsOrderExceptionStage')
+  const exceptionStageOptions = computed(() =>
+    dictionaryExceptionStages.filter((item) =>
+      ['pickup', 'transit', 'delivery'].includes(item.value)
+    )
+  )
   const opening = ref(false)
   const loadError = ref('')
   const context = ref<OrderContext>()
@@ -80,26 +95,13 @@
       key: 'exceptionType',
       label: '异常类型',
       type: 'select',
-      props: {
-        options: [
-          { label: '延误', value: 'delay' },
-          { label: '破损', value: 'damage' },
-          { label: '丢货', value: 'lost' },
-          { label: '扣货', value: 'detained' }
-        ]
-      }
+      props: { options: exceptionTypeOptions.value }
     },
     {
       key: 'stage',
       label: '发生节点',
       type: 'select',
-      props: {
-        options: [
-          { label: '提货', value: 'pickup' },
-          { label: '在途', value: 'transit' },
-          { label: '签收', value: 'delivery' }
-        ]
-      }
+      props: { options: exceptionStageOptions.value }
     },
     {
       key: 'occurredAt',
@@ -157,6 +159,12 @@
     opening.value = true
     loadError.value = ''
     try {
+      await Promise.all([
+        userStore.ensureDictLoaded('tmsOrderExceptionType'),
+        userStore.ensureDictLoaded('tmsOrderExceptionStage')
+      ])
+      if (!exceptionTypeOptions.value.length || !exceptionStageOptions.value.length)
+        throw new Error('异常类型或发生节点字典未配置，请联系管理员维护后重试')
       const tenantId = order.tenantId || (await fetchOrderDetail(order.orderId)).data?.tenantId
       if (!tenantId) throw new Error('未能确认订单所属租户，请刷新订单后重试')
       const result = await fetchWorkflowUserOptions({ tenantId }, { showErrorMessage: false })

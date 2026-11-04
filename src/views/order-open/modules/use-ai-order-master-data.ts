@@ -47,7 +47,7 @@ export function useAiOrderMasterData() {
     pushStationTask(
       tasks,
       'transferStation',
-      '中转站',
+      '途经点',
       'transfer',
       draft.transferStationName,
       references
@@ -340,7 +340,7 @@ function normalizeCargoUnit(value: string | null | undefined): string {
 function stationTypeLabel(type: StationType): string {
   if (type === 'shipping') return '发货站'
   if (type === 'arrival') return '到货站'
-  return '中转站'
+  return '途经点'
 }
 
 function compactDescription(values: string[]): string {

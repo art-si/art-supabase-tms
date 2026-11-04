@@ -20,6 +20,24 @@ interface SecureContractListPayload {
   fieldAccess: ContractFieldAccessMap
 }
 
+export type ContractDetailListRow = Contract & {
+  detailRowKey: string
+  detailIndex: number
+  detailCargoId?: string | null
+  detailCargoCode?: string | null
+  detailCargoDescription?: string | null
+  detailContractQuantity?: number | null
+  detailUnit?: string | null
+  detailTransportUnitPrice?: SensitiveNumber
+  detailFreight?: SensitiveNumber
+}
+
+interface SecureContractDetailListPayload {
+  records: ContractDetailListRow[]
+  total: number
+  fieldAccess: ContractFieldAccessMap
+}
+
 interface ImportContractResult {
   count: number
   ids: string[]
@@ -154,6 +172,37 @@ export async function fetchContractList(params: ContractSearchParams, options?: 
   }
 }
 
+async function loadContractDetailRows(
+  params: ContractSearchParams & { ids?: string[]; maxRows?: number },
+  purpose: 'list' | 'export',
+  options?: ApiRequestOptions
+) {
+  const query = supabase.rpc(
+    'tms_list_contract_detail_rows_secure',
+    toContractListRpcParams(params, purpose)
+  )
+  const result = await responseHandle<SecureContractDetailListPayload>(
+    () => withRequestOptions(query, options),
+    { showErrorMessage: true }
+  )
+  return {
+    data: result.data?.records ?? [],
+    total: result.data?.total ?? 0,
+    error: result.error,
+    fieldAccess: result.data?.fieldAccess ?? {}
+  }
+}
+
+export function fetchContractDetailRows(params: ContractSearchParams, options?: ApiRequestOptions) {
+  return loadContractDetailRows(params, 'list', options)
+}
+
+export function exportContractDetailRows(
+  params: ContractSearchParams & { ids?: string[]; maxRows?: number }
+) {
+  return loadContractDetailRows(params, 'export')
+}
+
 export async function fetchAvailableContractDetailList(
   params: ContractDetailSelectorSearchParams,
   options?: ApiRequestOptions
@@ -176,6 +225,16 @@ export interface OrderContractCandidate {
   contractNo: string
   contractName: string
   customerId: string
+  paperContractNo: string | null
+  mnemonicCode: string | null
+  contractCategory: string | null
+  transportMode: string | null
+  carrierName: string | null
+  customerName: string | null
+  contactName: string | null
+  customerSignatory: string | null
+  handler: string | null
+  signTime: string | null
   effectiveDate: string | null
   expiryDate: string | null
 }
@@ -183,7 +242,7 @@ export interface OrderContractCandidate {
 export async function fetchOrderContractCandidates(customerId: string, keyword = '') {
   const result = await responseHandle<OrderContractCandidate[]>(
     () =>
-      supabase.rpc('tms_list_order_contract_candidates', {
+      supabase.rpc('tms_list_order_contract_candidates_v2', {
         p_customer_id: customerId,
         p_keyword: normalizeNullableText(keyword)
       }),

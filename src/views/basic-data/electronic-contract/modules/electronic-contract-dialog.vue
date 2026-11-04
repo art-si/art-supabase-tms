@@ -3,7 +3,11 @@
     <div
       class="mb-4 rounded-md bg-[var(--el-color-primary-light-9)] px-4 py-3 text-sm text-[var(--el-text-color-primary)]"
     >
-      合同号保存时自动生成，按月重置为 3 位流水；新合同默认待签署。
+      {{
+        editingRecord
+          ? `编辑合同 ${editingRecord.contractNo}，保存后仍处于当前审批状态。`
+          : '合同号保存时自动生成，按月重置为 3 位流水；新合同先保存为草稿。'
+      }}
     </div>
     <ArtForm
       ref="formRef"
@@ -37,14 +41,17 @@
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtTiptapEditor from '@/components/core/forms/art-tiptap-editor/index.vue'
   import { normalizeNullableText } from '@/utils/form/normalize'
-  import { useUserStore } from '@/store/modules/user'
+  import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
   import {
     addElectronicContract,
+    editElectronicContract,
     fetchCustomerOptions,
     fetchBasicRecordCarrierOptions,
-    type ElectronicContractInput
+    type ElectronicContractInput,
+    type ElectronicContractRecord
   } from '@tms/api'
   import { useBasicRecordTenant } from '../../modules/basic-record-tenant'
+  import { calculateSettlementDueDate } from './settlement-due-date'
 
   defineOptions({ name: 'TmsElectronicContractDialog' })
   const props = defineProps<{ customer?: Api.Tms.BasicData.Customer }>()
@@ -59,12 +66,16 @@
     reloadOptions: (key?: string) => Promise<unknown>
   }
 
-  const emit = defineEmits<{ success: [] }>()
-  const userStore = useUserStore()
+  const emit = defineEmits<{ success: [action: 'create' | 'edit'] }>()
   const { needsTenantChoice, tenantField, selectedTenantId } = useBasicRecordTenant()
   const activeTab = ref('contractSection')
   const dialogRef = ref<ArtDialogExpose>()
   const formRef = ref<FormExpose>()
+  const editingRecord = ref<ElectronicContractRecord | null>(null)
+  const hydrating = ref(false)
+  const settlementCycleOptions = useDictionaryOptions('tmsElectronicContractSettlementCycle')
+  const taxRateOptions = useDictionaryOptions<number>('tmsElectronicContractTaxRate', Number)
+  const dueDateExample = calculateSettlementDueDate('2026-09-09', 45)
   const initialForm = (): ContractForm => ({
     tenantId: props.customer?.tenantId ?? selectedTenantId.value,
     customerId: props.customer?.id ?? null,
@@ -79,6 +90,10 @@
     startsOn: '',
     endsOn: '',
     dateRange: [],
+    settlementCycle: 'natural_month',
+    cycleStartDay: null,
+    paymentTermDays: 30,
+    taxRate: 0.09,
     contentHtml: '',
     attachments: []
   })
@@ -88,6 +103,7 @@
   watch(
     () => form.value.tenantId,
     async () => {
+      if (hydrating.value) return
       form.value.partyBCarrierId = ''
       form.value.partyBCompany = ''
       form.value.partyBRepresentative = ''
@@ -97,6 +113,7 @@
   watch(
     () => form.value.partyBCarrierId,
     async (id) => {
+      if (hydrating.value) return
       const version = ++carrierLoadVersion.value
       form.value.partyBCompany = ''
       form.value.partyBRepresentative = ''
@@ -110,7 +127,7 @@
   )
 
   const formItems = computed<FormItem[]>(() => [
-    ...(props.customer ? [] : tenantField.value),
+    ...(props.customer || editingRecord.value ? [] : tenantField.value),
     { label: '合同信息', key: 'contractSection', type: 'tab', span: 24 },
     {
       label: '客户/货主',
@@ -146,6 +163,43 @@
         endPlaceholder: '终止日期',
         rangeSeparator: '至'
       }
+    },
+    { label: '结算与账期', key: 'settlementSection', type: 'divider', span: 24 },
+    {
+      label: '结算周期',
+      key: 'settlementCycle',
+      type: 'radioGroup',
+      span: 24,
+      options: settlementCycleOptions,
+      props: { optionType: 'button' },
+      help: '自然月为每月 1 日至月末；按月可指定每期起始日；按季度为自然季度。',
+      description: '结算周期内的运单应付款，按约定账期统一结算。'
+    },
+    {
+      label: '每期起始日',
+      key: 'cycleStartDay',
+      type: 'number',
+      span: 8,
+      hidden: () => form.value.settlementCycle !== 'monthly',
+      props: { min: 1, max: 31, step: 1, stepStrictly: true, controlsPosition: 'right' },
+      description: '如选 10 日，本期为 10 日至下月 9 日；短月按月末起始，下期开始前一日结束。'
+    },
+    {
+      label: '账期（天）',
+      key: 'paymentTermDays',
+      type: 'number',
+      span: 8,
+      props: { min: 1, max: 3600, step: 1, stepStrictly: true, controlsPosition: 'right' },
+      help: '从结算周期结束日的下个月 1 日起算，每个月按 30 天；整 30 天落在该月最后一天。',
+      description: `例如 8 月 10 日至 9 月 9 日，账期 45 天，应付日为 ${dueDateExample?.slice(5).replace('-', ' 月 ')} 日。`
+    },
+    {
+      label: '税率',
+      key: 'taxRate',
+      type: 'select',
+      span: 8,
+      options: taxRateOptions,
+      props: { placeholder: '请选择税率' }
     },
     { label: '合同内容', key: 'contentHtml', span: 24 },
     {
@@ -192,6 +246,24 @@
     dateRange: [
       { type: 'array', required: true, min: 2, message: '请选择合同有效期', trigger: 'change' }
     ],
+    settlementCycle: [{ required: true, message: '请选择结算周期', trigger: 'change' }],
+    cycleStartDay:
+      form.value.settlementCycle === 'monthly'
+        ? [
+            {
+              required: true,
+              type: 'number',
+              min: 1,
+              max: 31,
+              message: '每期起始日须为 1 至 31 日',
+              trigger: 'change'
+            }
+          ]
+        : [],
+    paymentTermDays: [
+      { required: true, type: 'number', min: 1, message: '账期须为正整数天', trigger: 'change' }
+    ],
+    taxRate: [{ required: true, type: 'number', message: '请选择税率', trigger: 'change' }],
     contentHtml: [{ required: true, message: '请输入合同内容', trigger: 'change' }],
     partyACompany: [{ required: true, message: '请输入甲方公司', trigger: 'blur' }],
     partyASubject: [{ required: true, message: '请输入甲方主体', trigger: 'blur' }],
@@ -213,6 +285,17 @@
     ) {
       return false
     }
+    if (!Number.isInteger(form.value.paymentTermDays) || form.value.paymentTermDays < 1) {
+      return false
+    }
+    if (
+      form.value.settlementCycle === 'monthly' &&
+      (!Number.isInteger(form.value.cycleStartDay) ||
+        !form.value.cycleStartDay ||
+        form.value.cycleStartDay > 31)
+    ) {
+      return false
+    }
     const payload: ElectronicContractInput = {
       tenantId: form.value.tenantId,
       customerId: form.value.customerId,
@@ -225,28 +308,65 @@
       partyBSubject: form.value.partyBSubject.trim(),
       startsOn: form.value.dateRange[0],
       endsOn: form.value.dateRange[1],
+      settlementCycle: form.value.settlementCycle,
+      cycleStartDay: form.value.settlementCycle === 'monthly' ? form.value.cycleStartDay : null,
+      paymentTermDays: form.value.paymentTermDays,
+      taxRate: form.value.taxRate,
       contentHtml: form.value.contentHtml,
       attachments: form.value.attachments
     }
     try {
-      await addElectronicContract(payload)
-      emit('success')
+      if (editingRecord.value) {
+        await editElectronicContract(editingRecord.value.id, payload)
+      } else {
+        await addElectronicContract(payload)
+      }
+      emit('success', editingRecord.value ? 'edit' : 'create')
       return true
     } catch (error) {
-      notifyFriendlyError(error, '电子合同创建失败，请检查签约信息后重试')
+      notifyFriendlyError(error, '电子合同保存失败，请检查签约信息与审批状态后重试')
       return false
     }
   }
 
-  const handleOpen = async (): Promise<void> => {
+  const handleOpen = async (record?: ElectronicContractRecord): Promise<void> => {
+    editingRecord.value = record ?? null
     activeTab.value = 'contractSection'
-    Object.assign(form.value, initialForm())
+    hydrating.value = true
+    Object.assign(
+      form.value,
+      initialForm(),
+      record
+        ? {
+            tenantId: record.tenantId,
+            customerId: record.customerId ?? null,
+            contractName: record.contractName,
+            partyACompany: record.partyACompany,
+            partyARepresentative: record.partyARepresentative ?? '',
+            partyASubject: record.partyASubject,
+            partyBCarrierId: record.partyBCarrierId,
+            partyBCompany: record.partyBCompany,
+            partyBRepresentative: record.partyBRepresentative ?? '',
+            partyBSubject: record.partyBSubject,
+            startsOn: record.startsOn,
+            endsOn: record.endsOn,
+            dateRange: [record.startsOn, record.endsOn],
+            settlementCycle: record.settlementCycle,
+            cycleStartDay: record.cycleStartDay,
+            paymentTermDays: record.paymentTermDays,
+            taxRate: record.taxRate,
+            contentHtml: record.contentHtml,
+            attachments: [...record.attachments]
+          }
+        : {}
+    )
+    await nextTick()
+    hydrating.value = false
     await dialogRef.value?.handleOpen(undefined, {
-      title: '创建电子合同',
-      subtitle: '按合同信息、内容与签署双方完成登记。',
+      title: record ? '编辑电子合同' : '创建电子合同',
+      subtitle: '按合同信息、结算约定、正文与签署双方完成登记。',
       contentMaxHeight: 'calc(100vh - 160px)',
       onOpen: async () => {
-        await userStore.ensureDictLoaded('tmsElectronicContractStatus')
         await nextTick()
         formRef.value?.clearValidate()
       },

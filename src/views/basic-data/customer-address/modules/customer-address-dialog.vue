@@ -23,6 +23,19 @@
         <div class="address-recognition__toolbar">
           <span role="status">{{ recognitionHint }}</span>
           <div class="address-recognition__tools">
+            <ArtUploadFile
+              title="图片识别"
+              accept=".png,.jpg,.jpeg,.webp"
+              :limit="1"
+              :file-size="10 * 1024 * 1024"
+              :resource-tenant-id="form.tenantId || defaultWriteTenantId || ''"
+              :show-file-list="false"
+              :show-resource-picker="false"
+              :show-tip="false"
+              :disabled="recognizing"
+              inline
+              @upload-success="recognizeUploadedImage"
+            />
             <ArtTooltip
               v-if="isSupported"
               :content="isListening ? '结束录音并识别' : '语音输入'"
@@ -88,6 +101,11 @@
   import type { FormRules } from 'element-plus'
   import { ElMessage } from 'element-plus'
   import { useSpeechRecognition } from '@vueuse/core'
+  import type { UploadFile } from 'element-plus'
+  import ArtUploadFile from '@/components/core/forms/art-upload-file/index.vue'
+  import { recognizeImageTextLocally } from '@/utils/ocr/local-image-ocr'
+  import { useAuth } from '@/hooks/core/useAuth'
+  import { omit } from 'lodash-es'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtAddressPicker from '@/components/core/forms/art-address-picker/index.vue'
@@ -101,20 +119,29 @@
   import { useTenantScopeFormPolicy } from '@/hooks/core/useTenantScopeFormPolicy'
   import { canEditField, canViewField } from '@/utils/field-permission'
   import { recognizeAddressText } from './recognize-address'
-  import { addressTypeOptions } from '../address-type'
+  import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
+  import { isSupportedAddressType } from '../address-type'
 
   defineOptions({ name: 'TmsCustomerAddressDialog' })
+
+  const dictionaryAddressTypeOptions = useDictionaryOptions('tmsAddressType')
+  const addressTypeOptions = computed(() =>
+    dictionaryAddressTypeOptions.filter((item) => isSupportedAddressType(item.value))
+  )
 
   type CustomerAddress = Api.Tms.BasicData.CustomerAddress
   type CustomerAddressForm = CustomerAddress & {
     addressPicker?: undefined
     regionPath: string[]
     businessHours: string[]
+    saveToAddressBook: boolean
   }
 
   interface CustomerContext {
     customerId?: string
     customerName?: string
+    selectOnly?: boolean
+    addressType?: Api.Tms.BasicData.CustomerAddressType
   }
 
   interface DialogFormExpose {
@@ -124,9 +151,11 @@
 
   const emit = defineEmits<{
     (event: 'success', type: 'add' | 'edit'): void
+    (event: 'selected', address: CustomerAddress): void
   }>()
 
   const { tenantOptions } = storeToRefs(useTenantScopeStore())
+  const { hasAuth } = useAuth()
   const { defaultWriteTenantId, shouldExposeTenantField } = useTenantScopeFormPolicy()
   const dialogRef = ref<ArtDialogExpose<CustomerAddress | undefined>>()
   const formRef = ref<DialogFormExpose>()
@@ -156,6 +185,7 @@
     businessHoursStart: null,
     businessHoursEnd: null,
     businessHours: [],
+    saveToAddressBook: false,
     contactName: '',
     contactPhone: '',
     region: '',
@@ -223,17 +253,28 @@
         trigger: 'blur'
       }
     ],
-    addressShortName: canEditAddressField('addressDetail')
-      ? [
-          { required: true, message: '请输入地址简称', trigger: 'blur' },
-          { max: 20, message: '地址简称最多 20 个字符', trigger: 'blur' }
-        ]
-      : [],
+    addressShortName:
+      canEditAddressField('addressDetail') &&
+      (!customerContext.selectOnly || form.value.saveToAddressBook)
+        ? [
+            { required: true, message: '请输入地址简称', trigger: 'blur' },
+            { max: 20, message: '地址简称最多 20 个字符', trigger: 'blur' }
+          ]
+        : [],
     postalCode: [{ pattern: /^\d{6}$/, message: '邮编应为 6 位数字', trigger: 'blur' }],
     remark: [{ max: 500, message: '备注不能超过 500 个字符', trigger: 'blur' }]
   }))
 
   const formItems = computed<FormItem[]>(() => [
+    {
+      label: '保存常用地址',
+      key: 'saveToAddressBook',
+      type: 'switch',
+      span: 24,
+      hidden: !customerContext.selectOnly || !hasAuth('TmsCustomerAddress:Add'),
+      description: '开启后，将识别结果同时保存到常用地址。',
+      props: { activeText: '保存并使用', inactiveText: '仅本次使用' }
+    },
     { label: '基础信息', key: 'baseSection', type: 'divider', span: 24 },
     ...(shouldExposeTenantField.value
       ? [
@@ -258,7 +299,7 @@
       key: 'addressType',
       type: 'select',
       props: {
-        options: addressTypeOptions,
+        options: addressTypeOptions.value,
         placeholder: '请选择地址类型'
       }
     },
@@ -388,6 +429,30 @@
   const handlePaste = (): void => {
     void nextTick().then(recognizeInput)
   }
+  const recognizeUploadedImage = async (
+    _resource: Api.DataCenter.Resources.ResourceListItem,
+    file: UploadFile
+  ): Promise<void> => {
+    if (!file.raw || recognizing.value) return
+    recognizing.value = true
+    recognitionHint.value = '正在识别图片文字…'
+    try {
+      const result = await recognizeImageTextLocally(file.raw)
+      if (!recognitionActive.value) return
+      recognitionText.value = result.text.slice(0, 500)
+      if (!recognitionText.value) {
+        recognitionHint.value = '图片中未识别到文字，请更换清晰图片或手动填写。'
+        return
+      }
+      recognizing.value = false
+      await recognizeInput()
+    } catch (error) {
+      notifyFriendlyError(error, '图片识别失败，请更换清晰图片或粘贴地址文本')
+      recognitionHint.value = '图片识别失败，可更换图片、粘贴文本或手动填写。'
+    } finally {
+      recognizing.value = false
+    }
+  }
   const toggleSpeech = (): void => {
     if (isListening.value) {
       stop()
@@ -409,7 +474,7 @@
 
   const buildSubmitPayload = (data: CustomerAddressForm): CustomerAddress => {
     const { regionPath, businessHours, ...rawRest } = data
-    const rest: Partial<CustomerAddressForm> = rawRest
+    const rest: Partial<CustomerAddressForm> = omit(rawRest, 'saveToAddressBook')
     delete rest.addressPicker
     delete rest.customer
     delete rest.createBy
@@ -482,7 +547,8 @@
   const resetForm = async (): Promise<void> => {
     replaceForm({
       ...createInitialForm(),
-      customerId: customerContext.customerId ?? null
+      customerId: customerContext.customerId ?? null,
+      addressType: customerContext.addressType || 'shipping'
     })
     recognitionText.value = ''
     recognitionHint.value = '识别结果只填入表单，保存前请核对。'
@@ -500,10 +566,15 @@
 
     try {
       const payload = buildSubmitPayload(structuredClone(toRaw(form.value)))
+      if (customerContext.selectOnly && !form.value.saveToAddressBook) {
+        emit('selected', payload)
+        return true
+      }
       const type = form.value.id ? 'edit' : 'add'
       if (type === 'edit') await editCustomerAddress(payload)
       else await addCustomerAddress(payload)
       emit('success', type)
+      if (customerContext.selectOnly) emit('selected', payload)
       return true
     } catch (error) {
       notifyFriendlyError(error, '客户地址保存失败，请检查地址和网络后重试')
@@ -516,7 +587,11 @@
     context: CustomerContext = {}
   ): Promise<void> => {
     recognitionActive.value = true
-    Object.assign(customerContext, context)
+    Object.assign(
+      customerContext,
+      { customerId: undefined, customerName: undefined, selectOnly: false, addressType: undefined },
+      context
+    )
     await resetForm()
     const isEdit = Boolean(row?.id)
     if (row) {
@@ -532,7 +607,8 @@
     }
 
     await dialogRef.value?.handleOpen(row, {
-      title: isEdit ? '编辑常用地址' : '新增常用地址',
+      title: context.selectOnly ? '地址识别' : isEdit ? '编辑常用地址' : '新增常用地址',
+      confirmText: context.selectOnly ? '使用此地址' : '保存地址',
       subtitle: customerContext.customerName
         ? `当前客户：${customerContext.customerName}`
         : '维护常用发货与收货地址',

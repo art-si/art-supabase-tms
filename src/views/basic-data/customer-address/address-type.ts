@@ -1,4 +1,3 @@
-export const addressTypeOptions = [
-  { label: '发货地址', value: 'shipping' },
-  { label: '收货地址', value: 'receiving' }
-] as const
+export const isSupportedAddressType = (
+  value: string
+): value is Api.Tms.BasicData.CustomerAddressType => value === 'shipping' || value === 'receiving'

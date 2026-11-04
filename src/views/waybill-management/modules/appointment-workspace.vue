@@ -65,7 +65,7 @@
   }
 
   interface DrawerExpose {
-    handleOpen: (row: AppointmentListRow) => Promise<void>
+    handleOpen: (row: Api.Tms.Waybill.WaybillRecord) => Promise<void>
   }
 
   type TableParams = AppointmentSearchParams & Pick<Api.Common.PaginationParams, 'current' | 'size'>
@@ -266,18 +266,30 @@
       )
     },
     {
+      prop: 'appointmentNo',
+      label: '预约单号',
+      width: 170,
+      formatter: (row) => row.appointments[0]?.appointmentNo || '待预约'
+    },
+    {
       prop: 'appointmentInfo',
       label: '预约信息',
-      width: 240,
+      width: 280,
       formatter: (row) => {
         const item = row.appointments[0]
         return item
           ? displayPair(
               `${item.driverName} · ${item.plateNo}`,
-              `${displayTime(item.scheduledAt)}${row.appointments.length > 1 ? ` · 共 ${row.appointments.length} 条` : ''}`
+              `${item.vehicleType || '车型待补'} · ${item.loadCapacityTon ?? '-'} 吨 · ${item.vehicleLengthM ?? '-'} 米${row.appointments.length > 1 ? ` · 共 ${row.appointments.length} 条` : ''}`
             )
           : '待安排司机、车辆和预约时间'
       }
+    },
+    {
+      prop: 'appointmentEntryTime',
+      label: '预约进场时间',
+      width: 155,
+      formatter: (row) => displayTime(row.appointments[0]?.scheduledAt)
     },
     {
       prop: 'arrivalInfo',

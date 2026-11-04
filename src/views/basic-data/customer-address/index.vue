@@ -52,7 +52,8 @@
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { formatWithDayjs } from '@/utils/time'
   import { canEditField, canViewField, type FieldAccessLevel } from '@/utils/field-permission'
-  import { addressTypeOptions } from './address-type'
+  import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
+  import { isSupportedAddressType } from './address-type'
   import {
     deleteCustomerAddress,
     deleteCustomerAddressBatch,
@@ -139,6 +140,10 @@
     }
   })
 
+  const dictionaryAddressTypeOptions = useDictionaryOptions('tmsAddressType')
+  const addressTypeOptions = computed(() =>
+    dictionaryAddressTypeOptions.filter((item) => isSupportedAddressType(item.value))
+  )
   const searchItems = computed<SearchFormItem[]>(() => [
     {
       label: '地址类型',
@@ -148,7 +153,7 @@
       props: {
         options: [
           { label: '全部', value: undefined },
-          ...addressTypeOptions.map((item) => ({
+          ...addressTypeOptions.value.map((item) => ({
             label: item.label,
             value: item.value
           }))
@@ -188,7 +193,7 @@
           effect="light"
           size="small"
         >
-          {addressTypeOptions.find((item) => item.value === row.addressType)?.label || '-'}
+          {addressTypeOptions.value.find((item) => item.value === row.addressType)?.label || '-'}
         </ElTag>
       )
     },

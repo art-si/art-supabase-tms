@@ -404,9 +404,10 @@
         const value = String(row.gender ?? '').trim()
         if (value === 'male') return '男'
         if (value === 'female') return '女'
-        return (
-          (genderOptions.value.find((option) => String(option.value) === value)?.label ?? value) ||
-          '-'
+        return getDictionaryDisplayLabel(
+          genderOptions.value.find((option) => String(option.value) === value),
+          value,
+          { emptyText: '-', unknownText: '待核对' }
         )
       }
     },

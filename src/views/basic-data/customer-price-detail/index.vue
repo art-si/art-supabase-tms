@@ -120,6 +120,7 @@
 </template>
 
 <script setup lang="ts">
+  import { formatAuditActorName } from '@/utils/business/audit-actor-display'
   import { formatCoordinateValue } from '@/utils/ui/coordinates'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import ArtDescriptions from '@/components/core/base/art-descriptions/index.vue'
@@ -328,7 +329,12 @@
   ])
   const auditItems: ArtDescriptionItem<Partial<CustomerPrice>>[] = [
     { key: 'remark', label: '备注', field: 'remark', span: 4 },
-    { key: 'createBy', label: '创建人', field: 'createBy' },
+    {
+      key: 'createBy',
+      label: '创建人',
+      field: 'createBy',
+      value: (row) => formatAuditActorName(row.createBy)
+    },
     {
       key: 'createTime',
       label: '创建时间',

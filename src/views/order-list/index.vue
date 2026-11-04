@@ -64,6 +64,7 @@
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import { ElMessage, ElTag } from 'element-plus'
   import BusinessRecordLink from '@/components/business/business-record-link/index.vue'
+  import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import { useAuth } from '@/hooks/core/useAuth'
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
   import type {
@@ -114,7 +115,13 @@
 
   const { confirmAction } = useArtFeedback()
 
-  type OrderRecord = Api.Tms.Order.OrderRecord
+  type OrderRecord = Api.Tms.Order.OrderRecord & {
+    executionKind?: 'single' | 'merge' | 'split' | 'return_trip' | null
+    dispatchMode?: 'carrier' | 'self_operated' | 'individual_driver' | null
+    driverOwnership?: string | null
+    carrierName?: string | null
+    companyName?: string | null
+  }
   type SearchParams = Api.Tms.Order.OrderSearchParams
   type TableParams = SearchParams & Pick<Api.Common.PaginationParams, 'current' | 'size'>
 
@@ -169,6 +176,20 @@
 
   const orderExcelColumns = computed<ArtTableQueryExcelColumn[]>(() => [
     { key: 'orderNo', title: '订单号' },
+    { key: 'waybillNo', title: '调度运单号' },
+    {
+      key: 'originStation',
+      title: '线路',
+      formatter: (_value, row) => `${row.originStation || '—'} → ${row.destinationStation || '—'}`
+    },
+    { key: 'executionKind', title: '调度方式' },
+    { key: 'dispatchMode', title: '调度对象' },
+    { key: 'dispatchBy', title: '调度操作人' },
+    { key: 'dispatchDriverName', title: '司机' },
+    { key: 'driverOwnership', title: '司机归属' },
+    { key: 'dispatchPlateNo', title: '车牌号' },
+    { key: 'carrierName', title: '所属承运商' },
+    { key: 'companyName', title: '所属公司' },
     { key: 'shippingContactName', title: '发货人' },
     ...(canViewOrderField('shipperContact')
       ? [{ key: 'shippingContactPhone', title: '发货人电话' }]
@@ -184,7 +205,7 @@
     { key: 'destinationStation', title: '到货站' },
     {
       key: 'transferStation',
-      title: '中转站',
+      title: '途经点',
       formatter: (value, row) => formatTransferStationRoute(row.transferStationNames, value)
     },
     { key: 'orderStatus', title: '订单状态' },
@@ -282,7 +303,7 @@
         props: { filterable: true, clearable: true, placeholder: '请选择' }
       },
       {
-        label: '中转站',
+        label: '途经点',
         key: 'transferStationId',
         type: 'select',
         api: fetchStationOptions,
@@ -404,6 +425,40 @@
         )
       },
       { prop: 'shippingContactName', label: '发货人', minWidth: 110 },
+      { prop: 'waybillNo', label: '调度运单号', minWidth: 155, showOverflowTooltip: true },
+      {
+        prop: 'originStation',
+        label: '线路',
+        minWidth: 180,
+        showOverflowTooltip: true,
+        formatter: (row) => `${row.originStation || '—'} → ${row.destinationStation || '—'}`
+      },
+      {
+        prop: 'executionKind',
+        label: '调度方式',
+        minWidth: 120,
+        formatter: (row) =>
+          row.executionKind === 'return_trip' || row.hasReturnTrip
+            ? '返程配货'
+            : { single: '正向货配载', merge: '合单', split: '拆单' }[row.executionKind || 'single']
+      },
+      {
+        prop: 'dispatchMode',
+        label: '调度对象',
+        width: 110,
+        formatter: (row) =>
+          row.dispatchMode ? (
+            <ArtDictDisplay dictCode="tmsDispatchOperatorMode" value={row.dispatchMode} />
+          ) : (
+            '—'
+          )
+      },
+      { prop: 'dispatchBy', label: '调度操作人', minWidth: 120, showOverflowTooltip: true },
+      { prop: 'dispatchDriverName', label: '司机', minWidth: 110, showOverflowTooltip: true },
+      { prop: 'driverOwnership', label: '司机归属', minWidth: 110, showOverflowTooltip: true },
+      { prop: 'dispatchPlateNo', label: '车牌号', minWidth: 120, showOverflowTooltip: true },
+      { prop: 'carrierName', label: '所属承运商', minWidth: 150, showOverflowTooltip: true },
+      { prop: 'companyName', label: '所属公司', minWidth: 150, showOverflowTooltip: true },
       ...(canViewOrderField('shipperContact')
         ? [{ prop: 'shippingContactPhone', label: '发货人电话', width: 140 }]
         : []),
@@ -421,7 +476,7 @@
       { prop: 'destinationStation', label: '到货站', minWidth: 120, showOverflowTooltip: true },
       {
         prop: 'transferStation',
-        label: '中转站',
+        label: '途经点',
         minWidth: 160,
         formatter: (row) =>
           formatTransferStationRoute(row.transferStationNames, row.transferStation)
@@ -607,7 +662,7 @@
         label: '新增返程配货',
         icon: 'ri:arrow-go-back-line',
         auth: 'TmsOrderList:AddReturnTrip',
-        disabled: !row.id || ['cancelled', 'completed'].includes(String(row.orderStatus || ''))
+        disabled: !row.id || String(row.orderStatus || '') === 'cancelled'
       },
       {
         key: 'waybillExpense',
@@ -625,7 +680,7 @@
       },
       {
         key: 'freight',
-        label: '修改运费',
+        label: '异常运费',
         icon: 'ri:money-cny-circle-line',
         auth: 'TmsOrderList:EditFreight',
         disabled: !canEditFreight(row)
@@ -682,10 +737,9 @@
 
   function canEditFreight(row: OrderRecord): boolean {
     return (
-      (canEditField(row.fieldAccess, 'freightAmounts') &&
-        ['created', 'pending_load'].includes(String(row.orderStatus || ''))) ||
-      (canEditField(row.fieldAccess, 'freightAmounts') &&
-        String(row.dispatchStatus || '') === 'pending')
+      Boolean(row.id) &&
+      String(row.orderStatus || '') !== 'cancelled' &&
+      canEditField(row.fieldAccess, 'freightAmounts')
     )
   }
 

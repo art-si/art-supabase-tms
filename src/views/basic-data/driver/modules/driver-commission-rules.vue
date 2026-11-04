@@ -129,6 +129,7 @@
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { useAuth } from '@/hooks/core/useAuth'
+  import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
   import { formatCompactNumberValue, formatDateTimeValue } from '@/utils/ui/format'
   import {
     fetchDriverCommissionRevisions,
@@ -205,17 +206,6 @@
     remark: ''
   })
   const form = ref<DriverCommissionRule>(emptyForm())
-  const methodOptions = [
-    { value: 'fixed_per_trip', label: '按趟固定金额' },
-    { value: 'per_km', label: '按里程（元/公里）' },
-    { value: 'per_ton_km', label: '按吨公里' },
-    { value: 'per_volume', label: '按方量' },
-    { value: 'freight_percent', label: '按运费比例（%）' }
-  ]
-  const directionOptions = [
-    { value: 'forward', label: '正向货' },
-    { value: 'return', label: '返程配货' }
-  ]
   const rateUnits: Record<DriverCommissionRule['method'], string> = {
     fixed_per_trip: '元/趟',
     per_km: '元/公里',
@@ -223,6 +213,14 @@
     per_volume: '元/方',
     freight_percent: '%'
   }
+  const dictionaryMethodOptions = useDictionaryOptions('tmsDriverCommissionMethod')
+  const methodOptions = computed(() =>
+    dictionaryMethodOptions.filter((item) => Object.hasOwn(rateUnits, item.value))
+  )
+  const dictionaryDirectionOptions = useDictionaryOptions('tmsDriverCommissionDirection')
+  const directionOptions = computed(() =>
+    dictionaryDirectionOptions.filter((item) => item.value === 'forward' || item.value === 'return')
+  )
   const formItems = computed<FormItem[]>(() => [
     { key: 'scopeSection', label: '方案与适用范围', type: 'tab' },
     { label: '方案名称', key: 'ruleName', type: 'input', span: 24, props: { maxlength: 100 } },
@@ -269,9 +267,14 @@
       type: 'input',
       props: { maxlength: 100, placeholder: '留空表示不限线路' }
     },
-    { label: '货运方向', key: 'direction', type: 'select', props: { options: directionOptions } },
+    {
+      label: '货运方向',
+      key: 'direction',
+      type: 'select',
+      props: { options: directionOptions.value }
+    },
     { key: 'rateSection', label: '计费与生效', type: 'tab' },
-    { label: '提成方式', key: 'method', type: 'select', props: { options: methodOptions } },
+    { label: '提成方式', key: 'method', type: 'select', props: { options: methodOptions.value } },
     {
       label: `提成单价（${rateUnits[form.value.method]}）`,
       key: 'rate',
@@ -377,7 +380,7 @@
       label: '提成方式',
       minWidth: 130,
       formatter: (row) =>
-        methodOptions.find((item) => item.value === row.method)?.label ?? row.method
+        methodOptions.value.find((item) => item.value === row.method)?.label ?? row.method
     },
     {
       prop: 'rate',

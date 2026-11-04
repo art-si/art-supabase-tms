@@ -381,6 +381,10 @@ before-cost-actor-scope.json 保存原约束、函数与策略；事务预演后
 
 合同最终浏览器回归 `tests/e2e/tms-contract-customer-tab.spec.ts` 4/4 通过，覆盖嵌入列表及生命周期、仅有 Copy 无 Add 权限、终止原因与已终止状态、ArtForm 承运商弹窗的五项列信息。线路三途经点排序/返程、站点地址及司机黑名单、货物批选、服务单评论与提及专项已在各自实现阶段完成浏览器验证；关键数据库场景同时有上述回滚 SQL 验证。
 
+### 2026-11-03 合同明细分页与真实业务回读
+
+运输合同的“按单据/按明细”切换现在调用两个独立的安全查询。明细查询 `tms_list_contract_detail_rows_secure` 在数据库展开 `transport_details` 后再计算总数和分页，并沿用合同读取权限、租户范围与 `tms_contract_to_secure_json` 金额脱敏；导出使用 `Export` 权限与明细行范围。`tests/integration/tms-contract-detail-row-scope.sql` 覆盖普通租户、伪造租户头、平台全量/选定租户、无查看/导出权限、匿名访问、两页明细与金额隐藏/遮罩。部署前备份保存在 `app_private.qa_tms_contract_detail_pre_20261103`，事务预演与部署后回归通过，原有 11 份合同整行校验值未变。浏览器夹具 `tests/e2e/tms-contract-detail-mode.spec.ts` 通过；真实页面从 11 份合同切换为 7 条货物明细，再切回 11 份合同，并在 1280px 视口检查筛选区及横向表格。
+
 独立分发边界：本次验证使用当前宿主源码。TMS/MDM 的平台解析优先使用 `ART_SUPABASE_PLATFORM_ROOT`、本工作区 `../..`，最后才回退到已安装的平台包。两模块当前固定的旧平台归档尚不包含新增的 `src/components/business/customer-child-records/index.vue`、`src/api/customer-children.ts`、`src/utils/form/pick-defined-payload.ts`；仅携带旧归档的独立检出不能据此宣称构建通过。单独发布模块前需发布包含这些共享路径的平台归档，并同步更新两模块 `package.json` 和 `pnpm-lock.yaml` 的固定引用；本轮没有发布包或改写远程归档引用。
 
 ### 持续目标：真实数据与最终视觉复验（进行中）

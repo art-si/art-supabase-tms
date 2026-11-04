@@ -1,585 +1,415 @@
 <template>
   <ArtDrawer
     ref="drawerRef"
-    :size="860"
+    size="min(96vw, 1040px)"
     header-icon="ri:arrow-go-back-line"
     :on-confirm="submit"
-    confirm-text="保存返程配货"
+    :confirm-text="step === 2 ? '创建返程运输单' : '下一步'"
     :confirm-loading="saving"
-    :confirm-disabled="cannotSubmit"
-    @close="invalidatePreview"
   >
-    <div class="space-y-4">
+    <div class="space-y-4 pb-4">
       <div
-        class="rounded-xl border border-[var(--el-border-color-light)] bg-[var(--el-fill-color-light)] p-4"
+        class="rounded-lg border border-[var(--el-border-color-light)] bg-[var(--el-fill-color-light)] p-4 text-sm"
       >
-        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-          <span class="text-[var(--el-text-color-secondary)]">正向订单</span>
-          <strong class="text-[var(--el-text-color-primary)]">{{ order?.orderNo }}</strong>
-          <span class="text-[var(--el-text-color-secondary)]">
-            {{ order?.originStation }} → {{ order?.destinationStation }}
-          </span>
-        </div>
-        <p class="mb-0 mt-2 text-xs leading-5 text-[var(--el-text-color-secondary)]">
-          同一趟出车沿用主运输任务号。返程收入与预计费用作为子单记录，共用路桥费仅在主任务登记一次。
-        </p>
+        <strong>{{ source?.orderNo }}</strong>
+        <span class="ml-3 text-[var(--el-text-color-secondary)]"
+          >{{ source?.originStation }} → {{ source?.destinationStation }}</span
+        >
+        <p class="mb-0 mt-2 text-[var(--el-text-color-secondary)]"
+          >返程生成独立订单和待接单运单。司机、车辆默认沿用所选正向调度单。</p
+        >
       </div>
-
-      <ElTabs v-model="activeTab">
-        <ElTabPane name="route" label="路线与任务">
-          <ArtSectionCard
-            title="关联主运输任务"
-            subtitle="选择已分配正向货量的本趟主任务；每趟任务只可添加一条返程货单。"
-            :loading="optionsLoading"
-            :error="optionsError ? '请检查网络或权限后重试。' : null"
-            error-title="运输任务或客户加载失败"
-            preserve-content-structure
-            @retry="loadOptions"
+      <nav class="flex flex-wrap gap-2" aria-label="返程开单步骤">
+        <button
+          v-for="(label, index) in steps"
+          :key="label"
+          type="button"
+          class="rounded-lg border px-4 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--el-color-primary)]"
+          :class="
+            step === index
+              ? 'border-[var(--el-color-primary)] bg-[var(--el-color-primary-light-9)] text-[var(--el-color-primary)]'
+              : 'border-[var(--el-border-color-light)]'
+          "
+          :aria-current="step === index ? 'step' : undefined"
+          @click="step = index"
+          >{{ index + 1 }} · {{ label }}</button
+        >
+      </nav>
+      <ArtSectionCard
+        v-if="loadError"
+        title="基础资料加载失败"
+        :error="loadError"
+        @retry="loadOptions"
+      />
+      <template v-else>
+        <ArtSectionCard
+          v-show="step === 0"
+          title="收发信息"
+          subtitle="返程始发地与原单目的地一致；请核对本次联系人及地址。"
+          preserve-content-structure
+        >
+          <ArtForm
+            ref="contactFormRef"
+            v-model="form"
+            :items="contactItems"
+            :span="12"
+            :gutter="16"
+            label-position="top"
+          />
+        </ArtSectionCard>
+        <ArtSectionCard
+          v-show="step === 1"
+          title="配置信息"
+          subtitle="沿用运输单车型、计费与交接设置。"
+          preserve-content-structure
+        >
+          <ArtForm v-model="sourceChoice" :items="sourceItems" :span="12" label-position="top" />
+          <OrderConfig
+            v-model="form.orderConfig"
+            :can-edit-attachments="true"
+            :resource-tenant-id="source?.tenantId || ''"
+          />
+        </ArtSectionCard>
+        <ArtSectionCard
+          v-show="step === 2"
+          title="货物信息"
+          subtitle="返程货物和运费独立归属新订单。"
+          preserve-content-structure
+        >
+          <div class="mb-4 flex flex-wrap items-center gap-2">
+            <ElButton plain @click="cargoSelectorRef?.open()">选择货物</ElButton>
+            <ElButton plain @click="addCargo">添加货物</ElButton>
+            <ElButton
+              plain
+              :disabled="!form.shippingCustomerId"
+              @click="contractSelectorRef?.open(form.shippingCustomerId || '')"
+              >选择客户合同</ElButton
+            >
+            <span v-if="form.contractId" class="text-sm text-[var(--el-text-color-secondary)]">{{
+              contractLabel
+            }}</span>
+          </div>
+          <div
+            v-for="(item, index) in form.cargoItems"
+            :key="index"
+            class="mb-3 rounded-lg border border-[var(--el-border-color-light)] p-3"
           >
-            <ArtEmptyState
-              v-if="!candidates.length"
-              title="暂无可关联的运输任务"
-              description="请先完成该订单的调度。"
-              size="compact"
-            />
-            <div v-else>
-              <ElAlert
-                v-if="!eligibleCandidates.length"
-                title="当前没有可添加返程的主任务"
-                description="未配载任务请先完成正向派车配载；已有关联返程或已结束的任务不能重复添加。"
-                type="info"
-                :closable="false"
-                show-icon
-                class="mb-3"
-              />
-              <div class="grid gap-2 sm:grid-cols-2">
-                <button
-                  v-for="candidate in candidates"
-                  :key="candidate.id"
-                  type="button"
-                  class="rounded-lg border p-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--el-color-primary)]"
-                  :class="
-                    selectedWaybillId === candidate.id
-                      ? 'border-[var(--el-color-primary)] bg-[var(--el-color-primary-light-9)]'
-                      : candidate.canAddReturn
-                        ? 'border-[var(--el-border-color-light)] hover:border-[var(--el-color-primary-light-5)]'
-                        : 'cursor-not-allowed border-[var(--el-border-color-lighter)] bg-[var(--el-fill-color-light)]'
-                  "
-                  :disabled="!candidate.canAddReturn"
-                  @click="selectedWaybillId = candidate.id"
-                >
-                  <span class="block font-medium text-[var(--el-text-color-primary)]">
-                    {{ candidate.waybillNo }}
-                  </span>
-                  <span class="mt-1 block text-xs text-[var(--el-text-color-secondary)]">
-                    <span v-if="candidateUnavailableReason(candidate)">
-                      {{ candidateUnavailableReason(candidate) }}
-                    </span>
-                    <ArtDictDisplay v-else dict-code="tmsWaybillStatus" :value="candidate.status" />
-                  </span>
-                </button>
-              </div>
-            </div>
-          </ArtSectionCard>
-
-          <ArtSectionCard
-            title="返程路线"
-            subtitle="选择返程结算客户，从正向目的地接货，填写返程目的地、计划时间和单独里程。"
-            preserve-content-structure
-          >
-            <ElAlert
-              v-if="!optionsLoading && !optionsError && !customerOptions.length"
-              title="当前租户暂无可用客户，请先在客户档案中新增或启用客户。"
-              type="warning"
-              :closable="false"
-              show-icon
-              class="mb-4"
-            />
+            <div class="mb-2 flex items-center justify-between"
+              ><strong>货物 {{ index + 1 }}</strong
+              ><ElButton link type="danger" @click="removeCargo(index)">移除</ElButton></div
+            >
             <ArtForm
-              ref="formRef"
-              v-model="form"
-              :items="routeFormItems"
-              :rules="rules"
-              :span="12"
-              :gutter="16"
+              v-model="form.cargoItems[index]"
+              :items="cargoItems"
+              :span="8"
+              :gutter="12"
               label-position="top"
             />
-          </ArtSectionCard>
-        </ElTabPane>
-        <ElTabPane name="finance" label="收入与费用">
-          <ArtSectionCard
-            title="返程收入与预计费用"
-            subtitle="信息费、平台技术服务费及返程专属费用仅归集本子单；共享成本按比例分摊或全部留在主单。"
-            preserve-content-structure
-          >
-            <ArtForm v-model="form" :items="moneyItems" :span="8" label-position="top" />
-            <ArtForm
-              v-model="allocationForm"
-              :items="allocationItems"
-              :span="12"
-              label-position="top"
-            />
-            <ElAlert
-              v-if="sharedTollError"
-              class="mt-4"
-              title="共用路桥费读取失败，暂不能准确预估分摊成本。"
-              type="warning"
-              :closable="false"
-              show-icon
-            >
-              <template #default>
-                <ElButton link type="primary" @click="loadSharedToll(selectedWaybillId)"
-                  >重试读取</ElButton
-                >
-              </template>
-            </ElAlert>
-            <div
-              class="mt-5 grid gap-3 rounded-lg bg-[var(--el-fill-color-light)] p-4 sm:grid-cols-2 lg:grid-cols-4"
-            >
-              <div>
-                <span class="text-xs text-[var(--el-text-color-secondary)]">返程运费收入</span>
-                <strong class="mt-1 block text-lg">¥{{ money(form.freightIncome) }}</strong>
-              </div>
-              <div>
-                <span class="text-xs text-[var(--el-text-color-secondary)]">返程专属预计费用</span>
-                <strong class="mt-1 block text-lg">¥{{ money(directExpense) }}</strong>
-              </div>
-              <div>
-                <span class="text-xs text-[var(--el-text-color-secondary)]">返程司机提成预估</span>
-                <strong class="mt-1 block text-lg">
-                  {{ previewMoney(preview?.amount) }}
-                </strong>
-              </div>
-              <div>
-                <span class="text-xs text-[var(--el-text-color-secondary)]">返程预计毛利</span>
-                <strong class="mt-1 block text-lg text-[var(--el-color-primary)]">
-                  {{ previewMoney(preview?.projectedGrossProfit) }}
-                </strong>
-              </div>
-            </div>
-            <p class="mb-0 mt-2 text-xs text-[var(--el-text-color-secondary)]">
-              已审核主单共用路桥费 ¥{{ money(sharedToll) }}，返程分摊
-              {{ previewMoney(preview?.allocatedToll) }}；预计毛利已扣司机提成，预计毛利率
-              {{ previewPercent(preview?.projectedGrossMargin) }}。
-            </p>
-            <ElAlert
-              v-if="previewError"
-              class="mt-3"
-              title="返程收益预览失败，保存时仍会按最新规则重新计算。"
-              type="warning"
-              :closable="false"
-              show-icon
-            >
-              <template #default>
-                <ElButton link type="primary" @click="loadPreview">重试预览</ElButton>
-              </template>
-            </ElAlert>
-            <p
-              v-else-if="previewLoading"
-              class="mb-0 mt-2 text-xs text-[var(--el-text-color-secondary)]"
-            >
-              正在按当前返程资料预估司机提成和毛利…
-            </p>
-            <p
-              v-else-if="preview && preview.matched === false"
-              class="mb-0 mt-2 text-xs text-[var(--el-text-color-secondary)]"
-            >
-              当前没有匹配的司机提成规则，本次预估按 0 元计入；保存时会重新匹配。
-            </p>
-            <p class="mb-0 mt-2 text-xs leading-5 text-[var(--el-text-color-secondary)]">
-              以上为业务预计值，司机提成已计入预计毛利；不是已审核成本或财务过账。保存时会按最新规则重新计算。
-            </p>
-          </ArtSectionCard>
-
-          <ArtSectionCard title="备注" preserve-content-structure>
-            <ArtForm v-model="form" :items="remarkItems" :span="24" label-position="top" />
-          </ArtSectionCard>
-        </ElTabPane>
-      </ElTabs>
+          </div>
+          <ArtForm v-model="form" :items="feeItems" :span="8" :gutter="12" label-position="top" />
+        </ArtSectionCard>
+      </template>
     </div>
+    <CargoSelector ref="cargoSelectorRef" @confirm="selectCargo" />
+    <ContractSelector ref="contractSelectorRef" @select="selectContract" />
   </ArtDrawer>
 </template>
 
 <script setup lang="ts">
-  import { useDebounceFn } from '@vueuse/core'
-  import type { FormRules } from 'element-plus'
   import { ElMessage } from 'element-plus'
   import ArtDrawer from '@/components/core/drawers/art-drawer/index.vue'
   import type { ArtDrawerExpose } from '@/components/core/drawers/art-drawer/types'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
-  import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
-  import { focusFirstInvalidFormField } from '@/utils/form/validation'
-  import { normalizeNullableText } from '@/utils/form/normalize'
   import { fetchCustomerOptions } from '@tms/api/modules/customer'
   import {
-    createReturnTrip,
-    fetchReturnSharedToll,
+    createReturnOrder,
     fetchReturnTripCandidates,
-    previewReturnTrip,
-    type ReturnTripCandidate,
-    type ReturnTripInput,
-    type ReturnTripPreview,
-    type ReturnTripPreviewInput
+    type ReturnTripCandidate
   } from '@tms/api/modules/return-trip'
+  import {
+    createInitialCargoItem,
+    createInitialForm,
+    normalizeOrderPayload,
+    type OrderForm
+  } from '../../../order-open/modules/order-open-model'
+  import OrderConfig from '../../../order-open/modules/order-config.vue'
+  import CargoSelector from '../../../modules/cargo-multiple-select.vue'
+  import ContractSelector from '../../../order-open/modules/order-contract-selector.vue'
+  import type { OrderContractCandidate } from '@tms/api'
 
   type OrderRecord = Api.Tms.Order.OrderRecord
-  type MoneyKey =
-    'freightIncome' | 'informationFee' | 'technicalServiceFee' | 'directTollFee' | 'directMiscFee'
-
+  type CargoMaster = Api.Tms.BasicData.Cargo
+  type ReturnForm = OrderForm & { cargoItems: Api.Tms.Order.CargoItem[] }
+  const createReturnForm = (): ReturnForm => ({
+    ...createInitialForm(),
+    cargoItems: [createInitialCargoItem()]
+  })
   const emit = defineEmits<{ success: [] }>()
-  const activeTab = ref('route')
   const drawerRef = ref<ArtDrawerExpose>()
-  const formRef = ref<InstanceType<typeof ArtForm>>()
-  const order = ref<OrderRecord>()
+  const contactFormRef = ref<InstanceType<typeof ArtForm>>()
+  const cargoSelectorRef = ref<{ open: () => Promise<void> }>()
+  const contractSelectorRef = ref<{ open: (customerId: string) => Promise<void> }>()
+  const source = ref<OrderRecord>()
+  const form = ref<ReturnForm>(createReturnForm())
+  const sourceChoice = reactive({ waybillId: '' })
   const candidates = ref<ReturnTripCandidate[]>([])
-  const selectedWaybillId = ref('')
-  const allocationMode = ref<'master' | 'allocate'>('master')
+  const customers = ref<Api.Tms.BasicData.CustomerOption[]>([])
+  const contractLabel = ref('')
+  const step = ref(0)
+  const steps = ['收发信息', '配置信息', '货物信息']
   const saving = ref(false)
-  const optionsLoading = ref(false)
-  const optionsError = ref(false)
-  const sharedTollLoading = ref(false)
-  const sharedTollError = ref(false)
-  const sharedToll = ref(0)
-  const preview = ref<ReturnTripPreview>()
-  const previewLoading = ref(false)
-  const previewError = ref(false)
-  let previewRequestId = 0
-  const drawerOpen = ref(false)
-  const customerOptions = ref<Api.Tms.BasicData.CustomerOption[]>([])
-  const eligibleCandidates = computed(() =>
-    candidates.value.filter((candidate) => candidate.canAddReturn)
+  const loadError = ref('')
+  const customerOptions = computed(() =>
+    customers.value.map((row) => ({ label: row.customerName, value: row.id }))
   )
-  const cannotSubmit = computed(
-    () =>
-      !selectedWaybillId.value ||
-      optionsLoading.value ||
-      optionsError.value ||
-      sharedTollLoading.value ||
-      sharedTollError.value
-  )
-  const form = ref<ReturnTripInput>({
-    returnCustomerId: '',
-    originStation: '',
-    destinationStation: '',
-    plannedDepartureAt: null,
-    distanceKm: null,
-    cargoWeightTons: null,
-    cargoVolumeM3: null,
-    freightIncome: 0,
-    informationFee: 0,
-    technicalServiceFee: 0,
-    directTollFee: 0,
-    directMiscFee: 0,
-    sharedCostAllocationPct: 0,
-    remark: null
-  })
-  const moneyFields: Array<{ key: MoneyKey; label: string }> = [
-    { key: 'freightIncome', label: '返程运费（元）' },
-    { key: 'informationFee', label: '信息费（元）' },
-    { key: 'technicalServiceFee', label: '平台技术服务费（元）' },
-    { key: 'directTollFee', label: '返程专属路桥费（元）' },
-    { key: 'directMiscFee', label: '返程其他费用（元）' }
-  ]
-  const moneyItems: FormItem[] = moneyFields.map((field) => ({
-    key: field.key,
-    label: field.label,
-    type: 'number',
-    props: { class: 'w-full!', min: 0, max: 9999999999.99, precision: 2, controls: false }
-  }))
-  const allocationForm = reactive({
-    get allocationMode() {
-      return allocationMode.value
-    },
-    set allocationMode(value: 'master' | 'allocate') {
-      allocationMode.value = value
-    },
-    get sharedCostAllocationPct() {
-      return form.value.sharedCostAllocationPct
-    },
-    set sharedCostAllocationPct(value: number) {
-      form.value.sharedCostAllocationPct = value
-    }
-  })
-  const allocationItems = computed<FormItem[]>(() => [
+  const sourceItems = computed<FormItem[]>(() => [
     {
-      key: 'allocationMode',
-      label: '共用成本归集方式',
-      type: 'radioGroup',
-      span: 24,
-      options: [
-        { label: '全部归集主单', value: 'master' },
-        { label: '按比例分摊', value: 'allocate' }
-      ]
-    },
-    {
-      key: 'sharedCostAllocationPct',
-      label: '分摊至返程（%）',
-      type: 'number',
-      hidden: allocationMode.value !== 'allocate',
-      props: { min: 0, max: 100, precision: 2 }
-    }
-  ])
-  const remarkItems: FormItem[] = [
-    {
-      key: 'remark',
-      label: '返程配货说明',
-      type: 'textarea',
-      props: { rows: 3, maxlength: 500, showWordLimit: true, placeholder: '补充返程配货说明' }
-    }
-  ]
-  const routeFormItems = computed<FormItem[]>(() => [
-    {
-      label: '返程结算客户',
-      key: 'returnCustomerId',
+      key: 'waybillId',
+      label: '沿用司机与车辆',
       type: 'select',
       span: 24,
       props: {
-        options: customerOptions.value.map((customer) => ({
-          label: customer.customerName,
-          value: customer.id
-        })),
-        filterable: true,
-        placeholder: '请选择承担返程运费的客户',
-        class: '!w-full'
+        clearable: true,
+        options: candidates.value.map((row) => ({ label: row.waybillNo, value: row.id })),
+        placeholder: '无正向调度单时可留空'
       }
-    },
-    {
-      label: '始发地',
-      key: 'originStation',
-      type: 'input',
-      props: { readonly: true }
-    },
-    {
-      label: '目的地',
-      key: 'destinationStation',
-      type: 'input',
-      props: { maxlength: 100, placeholder: '请输入返程目的地' }
-    },
-    {
-      label: '计划发车时间',
-      key: 'plannedDepartureAt',
-      type: 'date',
-      props: {
-        type: 'datetime',
-        valueFormat: 'YYYY-MM-DDTHH:mm:ssZ',
-        placeholder: '请选择时间',
-        class: '!w-full'
-      }
-    },
-    {
-      label: '返程里程（公里）',
-      key: 'distanceKm',
-      type: 'number',
-      props: { min: 0, precision: 2, controls: false, class: '!w-full' }
-    },
-    {
-      label: '返程货物重量（吨）',
-      key: 'cargoWeightTons',
-      type: 'number',
-      props: { min: 0, precision: 3, controls: false, class: '!w-full' }
-    },
-    {
-      label: '返程货物体积（立方米）',
-      key: 'cargoVolumeM3',
-      type: 'number',
-      props: { min: 0, precision: 3, controls: false, class: '!w-full' }
     }
   ])
-  const rules: FormRules<ReturnTripInput> = {
-    returnCustomerId: [{ required: true, message: '请选择返程结算客户', trigger: 'change' }],
-    originStation: [{ required: true, message: '请填写返程始发地', trigger: 'blur' }],
-    destinationStation: [{ required: true, message: '请填写返程目的地', trigger: 'blur' }]
-  }
-  const directExpense = computed(
-    () =>
-      form.value.informationFee +
-      form.value.technicalServiceFee +
-      form.value.directTollFee +
-      form.value.directMiscFee
-  )
-  const previewInput = computed<ReturnTripPreviewInput>(() => ({
-    returnCustomerId: form.value.returnCustomerId,
-    originStation: form.value.originStation,
-    destinationStation: form.value.destinationStation,
-    plannedDepartureAt: form.value.plannedDepartureAt,
-    distanceKm: form.value.distanceKm,
-    cargoWeightTons: form.value.cargoWeightTons,
-    cargoVolumeM3: form.value.cargoVolumeM3,
-    freightIncome: form.value.freightIncome,
-    informationFee: form.value.informationFee,
-    technicalServiceFee: form.value.technicalServiceFee,
-    directTollFee: form.value.directTollFee,
-    directMiscFee: form.value.directMiscFee,
-    sharedCostAllocationPct:
-      allocationMode.value === 'allocate' ? form.value.sharedCostAllocationPct : 0
-  }))
-  const canPreview = computed(
-    () =>
-      drawerOpen.value &&
-      !!selectedWaybillId.value &&
-      !!form.value.returnCustomerId &&
-      !!form.value.originStation &&
-      !!form.value.destinationStation
-  )
-
-  function invalidatePreview(): void {
-    drawerOpen.value = false
-    previewRequestId++
-    preview.value = undefined
-    previewLoading.value = false
-    previewError.value = false
-  }
-
-  async function loadPreview(): Promise<void> {
-    if (!canPreview.value) return
-    const requestId = ++previewRequestId
-    const waybillId = selectedWaybillId.value
-    preview.value = undefined
-    previewLoading.value = true
-    previewError.value = false
-    try {
-      const result = await previewReturnTrip(waybillId, previewInput.value)
-      if (drawerOpen.value && requestId === previewRequestId) preview.value = result
-    } catch {
-      if (drawerOpen.value && requestId === previewRequestId) previewError.value = true
-    } finally {
-      if (drawerOpen.value && requestId === previewRequestId) previewLoading.value = false
+  const contactItems = computed<FormItem[]>(() => [
+    { key: 'originStation', label: '始发地', type: 'input', props: { disabled: true } },
+    {
+      key: 'destinationStation',
+      label: '目的地',
+      type: 'input',
+      formItemProps: { rules: [{ required: true, message: '请填写返程目的地' }] }
+    },
+    {
+      key: 'shippingCustomerId',
+      label: '返程发货客户',
+      type: 'select',
+      formItemProps: { rules: [{ required: true, message: '请选择发货客户' }] },
+      props: { options: customerOptions.value, filterable: true }
+    },
+    {
+      key: 'receivingCustomerId',
+      label: '返程收货客户',
+      type: 'select',
+      props: { options: customerOptions.value, filterable: true, clearable: true }
+    },
+    {
+      key: 'shippingContactName',
+      label: '发货联系人',
+      type: 'input',
+      formItemProps: { rules: [{ required: true, message: '请填写发货联系人' }] }
+    },
+    {
+      key: 'shippingContactPhone',
+      label: '发货电话',
+      type: 'input',
+      formItemProps: { rules: [{ required: true, message: '请填写发货电话' }] }
+    },
+    {
+      key: 'shippingAddressDetail',
+      label: '发货地址',
+      type: 'input',
+      span: 24,
+      formItemProps: { rules: [{ required: true, message: '请填写发货地址' }] }
+    },
+    {
+      key: 'receivingContactName',
+      label: '收货联系人',
+      type: 'input',
+      formItemProps: { rules: [{ required: true, message: '请填写收货联系人' }] }
+    },
+    {
+      key: 'receivingContactPhone',
+      label: '收货电话',
+      type: 'input',
+      formItemProps: { rules: [{ required: true, message: '请填写收货电话' }] }
+    },
+    {
+      key: 'receivingAddressDetail',
+      label: '收货地址',
+      type: 'input',
+      span: 24,
+      formItemProps: { rules: [{ required: true, message: '请填写收货地址' }] }
+    },
+    {
+      key: 'departureAt',
+      label: '计划发车',
+      type: 'date',
+      props: { type: 'datetime', valueFormat: 'YYYY-MM-DDTHH:mm:ssZ', class: 'w-full!' }
+    },
+    {
+      key: 'arrivalAt',
+      label: '计划到达',
+      type: 'date',
+      props: { type: 'datetime', valueFormat: 'YYYY-MM-DDTHH:mm:ssZ', class: 'w-full!' }
     }
-  }
-  const debouncedPreview = useDebounceFn(loadPreview, 300)
-  watch([selectedWaybillId, previewInput], () => {
-    previewRequestId++
-    preview.value = undefined
-    previewError.value = false
-    previewLoading.value = canPreview.value
-    if (canPreview.value) void debouncedPreview()
-  })
-
-  function candidateUnavailableReason(candidate: ReturnTripCandidate): string | null {
-    if (candidate.hasReturnLeg) return '已有关联返程货单'
-    if (['signed', 'cancelled', 'completed'].includes(candidate.status)) return '任务已结束'
-    if (!candidate.hasForwardAllocation) return '请先完成正向派车配载'
-    return candidate.canAddReturn ? null : '当前任务不可添加返程'
-  }
-
-  async function loadSharedToll(waybillId: string): Promise<void> {
-    sharedToll.value = 0
-    if (!waybillId) return
-    sharedTollLoading.value = true
-    sharedTollError.value = false
-    try {
-      const amount = await fetchReturnSharedToll(waybillId)
-      if (selectedWaybillId.value === waybillId) sharedToll.value = amount
-    } catch {
-      if (selectedWaybillId.value === waybillId) sharedTollError.value = true
-    } finally {
-      if (selectedWaybillId.value === waybillId) sharedTollLoading.value = false
+  ])
+  const cargoItems: FormItem[] = [
+    {
+      key: 'cargoName',
+      label: '货物名称',
+      type: 'input',
+      formItemProps: { rules: [{ required: true, message: '请填写货物名称' }] }
+    },
+    {
+      key: 'quantity',
+      label: '数量',
+      type: 'number',
+      props: { min: 0, precision: 0, controls: false, class: 'w-full!' }
+    },
+    { key: 'unit', label: '单位', type: 'input' },
+    {
+      key: 'weightKg',
+      label: '重量（千克）',
+      type: 'number',
+      props: { min: 0, precision: 2, controls: false, class: 'w-full!' }
+    },
+    {
+      key: 'volumeM3',
+      label: '体积（立方米）',
+      type: 'number',
+      props: { min: 0, precision: 3, controls: false, class: 'w-full!' }
+    },
+    {
+      key: 'freight',
+      label: '运费（元）',
+      type: 'number',
+      props: { min: 0, precision: 2, controls: false, class: 'w-full!' }
     }
-  }
-
-  watch(selectedWaybillId, (waybillId) => void loadSharedToll(waybillId))
-  watch(cannotSubmit, (confirmDisabled) => drawerRef.value?.setOptions({ confirmDisabled }))
-
-  function money(value: number): string {
-    return Number(value || 0).toFixed(2)
-  }
-
-  function previewMoney(value: number | string | null | undefined): string {
-    if (value === '***') return '***'
-    if (preview.value && value === undefined) return '无权限查看'
-    return typeof value === 'number' ? `¥${money(value)}` : '待预估'
-  }
-
-  function previewPercent(value: number | string | null | undefined): string {
-    if (value === '***') return '***'
-    if (preview.value && value === undefined) return '无权限查看'
-    return typeof value === 'number' ? `${money(value)}%` : '待预估'
-  }
-
+  ]
+  const feeItems: FormItem[] = [
+    {
+      key: 'transportFee',
+      label: '运输费（元）',
+      type: 'number',
+      props: { min: 0, precision: 2, controls: false, class: 'w-full!' }
+    },
+    {
+      key: 'paymentMethod',
+      label: '付款方式',
+      type: 'select',
+      props: {
+        options: [
+          { label: '到付', value: 'collect' },
+          { label: '现付', value: 'cash' },
+          { label: '月结', value: 'monthly' }
+        ]
+      }
+    },
+    {
+      key: 'orderRemark',
+      label: '备注',
+      type: 'textarea',
+      span: 24,
+      props: { rows: 2, maxlength: 500 }
+    }
+  ]
   async function handleOpen(row: OrderRecord): Promise<void> {
-    activeTab.value = 'route'
     if (!row.id) return
-    invalidatePreview()
-    drawerOpen.value = true
-    order.value = row
-    Object.assign(form.value, {
-      returnCustomerId: '',
+    source.value = row
+    step.value = 0
+    contractLabel.value = ''
+    sourceChoice.waybillId = ''
+    form.value = {
+      ...createInitialForm(),
       originStation: row.destinationStation || '',
       destinationStation: row.originStation || '',
-      plannedDepartureAt: null,
-      distanceKm: null,
-      cargoWeightTons: null,
-      cargoVolumeM3: null,
-      freightIncome: 0,
-      informationFee: 0,
-      technicalServiceFee: 0,
-      directTollFee: 0,
-      directMiscFee: 0,
-      sharedCostAllocationPct: 0,
-      remark: null
-    })
-    allocationMode.value = 'master'
-    optionsLoading.value = true
-    optionsError.value = false
-    sharedTollLoading.value = false
-    sharedTollError.value = false
+      originStationId: row.destinationStationId || null,
+      destinationStationId: row.originStationId || null,
+      shippingContactName: row.receivingContactName || '',
+      shippingContactPhone: row.receivingContactPhone || '',
+      shippingAddressDetail: row.receivingAddressDetail || '',
+      receivingContactName: row.shippingContactName || '',
+      receivingContactPhone: row.shippingContactPhone || '',
+      receivingAddressDetail: row.shippingAddressDetail || '',
+      shippingCustomerId: row.receivingCustomerId || null,
+      receivingCustomerId: row.shippingCustomerId || null,
+      cargoItems: [createInitialCargoItem()]
+    }
     await drawerRef.value?.handleOpen(null, {
-      title: '新增返程配货',
-      subtitle: '一趟出车 · 正向货与返程货共用主运输任务'
+      title: '新增返程运输单',
+      subtitle: '收发信息 · 配置信息 · 货物信息'
     })
     await loadOptions()
   }
-
   async function loadOptions(): Promise<void> {
-    if (!order.value?.id) return
-    optionsLoading.value = true
-    optionsError.value = false
-    candidates.value = []
-    customerOptions.value = []
-    selectedWaybillId.value = ''
+    if (!source.value?.id) return
+    loadError.value = ''
+    drawerRef.value?.setLoading(true)
     try {
-      candidates.value = await fetchReturnTripCandidates(String(order.value.id))
-      const targetTenantId = candidates.value[0]?.tenantId
-      if (!targetTenantId) {
-        customerOptions.value = []
-      } else {
-        const customers = await fetchCustomerOptions({ tenantId: targetTenantId })
-        if (customers.error) throw customers.error
-        customerOptions.value = customers.data ?? []
-      }
+      const [nextCandidates, customerResult] = await Promise.all([
+        fetchReturnTripCandidates(source.value.id),
+        fetchCustomerOptions({ tenantId: source.value.tenantId || '' })
+      ])
+      if (customerResult.error) throw customerResult.error
+      candidates.value = nextCandidates.filter((row) => row.status !== 'cancelled')
+      customers.value = customerResult.data ?? []
+      sourceChoice.waybillId = candidates.value[0]?.id || ''
     } catch {
-      optionsError.value = true
-      return
+      loadError.value = '请检查网络或权限后重试。'
     } finally {
-      optionsLoading.value = false
+      drawerRef.value?.setLoading(false)
     }
-    selectedWaybillId.value = eligibleCandidates.value[0]?.id ?? ''
   }
-
+  function addCargo(): void {
+    form.value.cargoItems = [...(form.value.cargoItems ?? []), createInitialCargoItem()]
+  }
+  function removeCargo(index: number): void {
+    form.value.cargoItems = (form.value.cargoItems ?? []).filter((_, i) => i !== index)
+  }
+  function selectCargo(rows: CargoMaster[]): void {
+    const existing = (form.value.cargoItems ?? []).filter((item) => item.cargoName)
+    form.value.cargoItems = [
+      ...existing,
+      ...rows.map((row) => ({
+        ...createInitialCargoItem(),
+        cargoId: row.id,
+        cargoName: row.cargoName,
+        cargoCode: row.cargoCode || '',
+        unit: row.unit || '',
+        weightKg: row.weightKg || null,
+        volumeM3: row.volumeM3 || null
+      }))
+    ]
+  }
+  function selectContract(row: OrderContractCandidate): void {
+    form.value.contractId = row.id
+    contractLabel.value = `${row.contractNo} · ${row.contractName}`
+  }
   async function submit(): Promise<boolean> {
-    if (!selectedWaybillId.value) {
-      activeTab.value = 'route'
-      ElMessage.warning('请先选择可关联的主运输任务')
+    if (saving.value || loadError.value || !source.value?.id) return false
+    if (step.value === 0) {
+      if (!(await validateArtFormForSubmit(contactFormRef.value))) return false
+      step.value = 1
       return false
     }
+    if (step.value === 1) {
+      step.value = 2
+      return false
+    }
+    if (
+      !(form.value.cargoItems ?? []).some(
+        (item) => item.cargoName?.trim() && Number(item.quantity) > 0
+      )
+    ) {
+      ElMessage.warning('请至少填写一项有名称和数量的返程货物')
+      return false
+    }
+    saving.value = true
     try {
-      if (!(await validateArtFormForSubmit(formRef.value))) {
-        activeTab.value = 'route'
-        await nextTick()
-        const root = formRef.value?.$el
-        if (root instanceof HTMLElement) focusFirstInvalidFormField(shallowRef(root))
-        return false
-      }
-      saving.value = true
-      await createReturnTrip(selectedWaybillId.value, {
-        ...form.value,
-        sharedCostAllocationPct:
-          allocationMode.value === 'allocate' ? form.value.sharedCostAllocationPct : 0,
-        remark: normalizeNullableText(form.value.remark)
+      const payload = normalizeOrderPayload({
+        form: form.value,
+        stationNames: {
+          origin: form.value.originStation,
+          destination: form.value.destinationStation
+        }
       })
+      await createReturnOrder(source.value.id, sourceChoice.waybillId || null, payload)
       emit('success')
       return true
     } catch {
@@ -588,6 +418,5 @@
       saving.value = false
     }
   }
-
   defineExpose({ handleOpen })
 </script>

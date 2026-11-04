@@ -57,7 +57,7 @@
     const baseRows = [
       createRow('originStation', '发货站', analysis.order.originStationName),
       createRow('destinationStation', '到货站', analysis.order.destinationStationName),
-      createRow('transferStation', '中转站', analysis.order.transferStationName),
+      createRow('transferStation', '途经点', analysis.order.transferStationName),
       createRow('shippingCustomer', '发货客户', analysis.order.shippingCustomerName),
       createRow('shippingAddress', '发货地址', analysis.order.shippingAddressDetail),
       createRow('receivingCustomer', '收货客户', analysis.order.receivingCustomerName),

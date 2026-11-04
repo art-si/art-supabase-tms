@@ -123,7 +123,10 @@
   import { canEditField, canViewField, getFieldAccess } from '@/utils/field-permission'
   import { usesCarrierParty } from './contract-business-type'
   import ContractTransportDetails from './contract-transport-details.vue'
-  import { carrierSelections } from '../../carrier/modules/carrier-selection'
+  import {
+    carrierSelections,
+    carrierSelectionLabels
+  } from '../../carrier/modules/carrier-selection'
 
   defineOptions({ name: 'TmsContractDialog' })
 
@@ -194,10 +197,7 @@
       if (form.data.billingMethod === 'by_weight') return ['kg', 'ton'].includes(item.value)
       if (form.data.billingMethod === 'by_volume')
         return ['cubic_meter', 'liter'].includes(item.value)
-      return (
-        form.data.billingMethod === 'by_vehicle' &&
-        !['kg', 'ton', 'cubic_meter', 'liter'].includes(item.value)
-      )
+      return form.data.billingMethod === 'by_vehicle' && ['car', 'U28'].includes(item.value)
     })
   )
   const carrierColumns: DataSelectColumn[] = [
@@ -209,10 +209,10 @@
       minWidth: 140,
       formatter: (record) => {
         const row = record as CarrierOption
-        return (
-          carrierSelections(row.carrierTypes, row.carrierType)
-            .map((value) => userStore.getDictLabelByValue('tmsCarrierType', value, value))
-            .join('、') || '-'
+        return carrierSelectionLabels(
+          carrierSelections(row.carrierTypes, row.carrierType),
+          getDictMap.value.tmsCarrierType ?? [],
+          '原类型待核对'
         )
       }
     },
@@ -222,12 +222,10 @@
       minWidth: 120,
       formatter: (record) => {
         const row = record as CarrierOption
-        return (
-          carrierSelections(row.dispatchChannels, row.dispatchChannel)
-            .map((value) =>
-              userStore.getDictLabelByValue('tmsCarrierDispatchChannel', value, value)
-            )
-            .join('、') || '-'
+        return carrierSelectionLabels(
+          carrierSelections(row.dispatchChannels, row.dispatchChannel),
+          getDictMap.value.tmsCarrierDispatchChannel ?? [],
+          '原渠道待核对'
         )
       }
     },

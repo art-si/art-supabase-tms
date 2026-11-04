@@ -108,7 +108,7 @@
             class="mt-4 border-t border-[var(--el-border-color-light)] pt-4"
           >
             <span class="text-xs font-semibold text-[var(--el-text-color-secondary)]"
-              >中转顺序</span
+              >途经顺序</span
             >
             <div class="mt-2 flex flex-wrap gap-2">
               <div
@@ -137,9 +137,13 @@
                   @click="moveTransferStation(index, 1)"
                   >下移</ElButton
                 >
+                <ArtIconButton icon="ri:close-line" :label="`移除途经点 ${index + 1}`" @click="removeTransferStation(index)" />
               </div>
             </div>
           </div>
+          <ElButton class="mt-3" plain :disabled="transferPointCount >= 3" @click="addTransferStation">
+            <ArtSvgIcon icon="ri:add-line" />添加途经点（{{ transferPointCount }}/3）
+          </ElButton>
         </ArtSectionCard>
 
         <ArtSectionCard
@@ -165,14 +169,14 @@
                     <ArtSvgIcon icon="ri:route-line" />
                     选择线路
                   </ElButton>
-                  <ElButton
+                  <ArtButtonMore
                     v-if="canEditContactEndpoint('shipping')"
-                    size="small"
-                    @click="openCustomerSelector('shipping')"
+                    :list="addressActions"
+                    trigger="click"
+                    @click="handleAddressAction('shipping', $event.key)"
                   >
-                    <ArtSvgIcon icon="ri:map-pin-2-line" />
-                    选择地址
-                  </ElButton>
+                    <template #trigger><ArtIconButton icon="ri:map-pin-2-line" label="发货地址操作" /></template>
+                  </ArtButtonMore>
                 </div>
               </div>
               <ArtForm
@@ -241,14 +245,14 @@
                 <ArtSectionTitle :show-line="false" class="order-open__contact-title">
                   收货人信息
                 </ArtSectionTitle>
-                <ElButton
+                <ArtButtonMore
                   v-if="canEditContactEndpoint('receiving')"
-                  size="small"
-                  @click="openCustomerSelector('receiving')"
+                  :list="addressActions"
+                  trigger="click"
+                  @click="handleAddressAction('receiving', $event.key)"
                 >
-                  <ArtSvgIcon icon="ri:map-pin-2-line" />
-                  选择地址</ElButton
-                >
+                  <template #trigger><ArtIconButton icon="ri:map-pin-2-line" label="收货地址操作" /></template>
+                </ArtButtonMore>
               </div>
               <ArtForm
                 ref="receivingFormRef"
@@ -273,36 +277,6 @@
                 hide-region-selector
                 show-coordinate-hint
               />
-            </div>
-          </div>
-          <div
-            class="my-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--el-border-color-light)] bg-[var(--el-fill-color-lighter)] px-4 py-3"
-          >
-            <div class="min-w-0">
-              <strong class="text-sm text-[var(--el-text-color-primary)]">关联客户合同</strong>
-              <p class="mt-1 text-xs text-[var(--el-text-color-secondary)]">
-                {{
-                  contractSummary
-                    ? `${contractSummary.contractNo} · ${contractSummary.contractName}`
-                    : form.data.contractId
-                      ? '已关联合同，摘要暂不可用；可重新选择或移除'
-                      : '可选一份与发货客户一致的有效合同'
-                }}
-              </p>
-            </div>
-            <div class="flex items-center gap-2">
-              <ElButton v-if="form.data.contractId" size="small" @click="clearOrderContract"
-                >移除关联</ElButton
-              >
-              <ElButton
-                size="small"
-                type="primary"
-                plain
-                :disabled="!form.data.shippingCustomerId"
-                @click="openOrderContractSelector"
-              >
-                {{ form.data.contractId ? '更换合同' : '选择合同' }}
-              </ElButton>
             </div>
           </div>
           <div class="order-open__journey">
@@ -357,6 +331,36 @@
               </div>
             </div></template
           >
+          <div
+            class="my-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--el-border-color-light)] bg-[var(--el-fill-color-lighter)] px-4 py-3"
+          >
+            <div class="min-w-0">
+              <strong class="text-sm text-[var(--el-text-color-primary)]">关联客户合同</strong>
+              <p class="mt-1 text-xs text-[var(--el-text-color-secondary)]">
+                {{
+                  contractSummary
+                    ? `${contractSummary.contractNo} · ${contractSummary.contractName}`
+                    : form.data.contractId
+                      ? '已关联合同，摘要暂不可用；可重新选择或移除'
+                      : '可选一份与发货客户一致的有效合同'
+                }}
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <ElButton v-if="form.data.contractId" size="small" @click="clearOrderContract"
+                >移除关联</ElButton
+              >
+              <ElButton
+                size="small"
+                type="primary"
+                plain
+                :disabled="!form.data.shippingCustomerId"
+                @click="openOrderContractSelector"
+              >
+                {{ form.data.contractId ? '更换合同' : '选择合同' }}
+              </ElButton>
+            </div>
+          </div>
           <ArtTable
             :data="form.cargoItems"
             :columns="form.cargoColumns"
@@ -379,9 +383,11 @@
         v-show="fillMode === 'full' || step === 2"
         class="order-open__section"
         preserve-content-structure
-        title="结算信息"
-        subtitle="集中维护本单应收费用、款项分配与结算方式。"
+        title="应收应付与装卸货"
+        subtitle="核对本单费用、结算约定与装卸签收记录。"
       >
+        <ElTabs v-model="settlementTab">
+          <ElTabPane label="应收信息" name="receivable">
         <div class="order-open__settlement-grid">
           <section v-if="canViewOrderField('freightAmounts')" class="order-open__settlement-panel">
             <header class="order-open__panel-heading">
@@ -471,6 +477,24 @@
             </dl>
           </section>
         </div>
+          </ElTabPane>
+          <ElTabPane label="应付信息" name="payable">
+            <OrderSupplement ref="payableFormRef" v-model="form.data.orderConfig" section="payable"
+              :can-view-amounts="canViewOrderField('settlementAmounts')"
+              :can-edit-amounts="canEditOrderField('settlementAmounts')"
+              :can-view-proof="canViewOrderField('proofAttachments')"
+              :can-edit-proof="canEditOrderField('proofAttachments')"
+              :resource-tenant-id="form.data.tenantId || defaultWriteTenantId || ''" />
+          </ElTabPane>
+          <ElTabPane label="装卸货信息" name="loading">
+            <OrderSupplement ref="loadingFormRef" v-model="form.data.orderConfig" section="loading"
+              :can-view-amounts="canViewOrderField('settlementAmounts')"
+              :can-edit-amounts="canEditOrderField('settlementAmounts')"
+              :can-view-proof="canViewOrderField('proofAttachments')"
+              :can-edit-proof="canEditOrderField('proofAttachments')"
+              :resource-tenant-id="form.data.tenantId || defaultWriteTenantId || ''" />
+          </ElTabPane>
+        </ElTabs>
       </ArtSectionCard>
 
       <ArtSectionCard
@@ -645,6 +669,7 @@
         </div>
       </ArtStickyActionBar>
 
+      <CustomerAddressDialog ref="addressRecognitionRef" @selected="handleRecognizedAddress" />
       <component
         :is="customerSelectorComponent"
         v-if="customerSelectorComponent"
@@ -782,6 +807,9 @@
     type OrderForm
   } from './modules/order-open-model'
   import OrderConfig from './modules/order-config.vue'
+  import OrderSupplement from './modules/order-supplement.vue'
+  import ArtButtonMore from '@/components/core/forms/art-button-more/index.vue'
+  import CustomerAddressDialog from '../basic-data/customer-address/modules/customer-address-dialog.vue'
 
   defineOptions({ name: 'TmsOrderOpen' })
 
@@ -952,6 +980,17 @@
   const configRef = ref<ConfigExpose>()
   const fillMode = ref<'guided' | 'full'>('guided')
   const step = ref(0)
+  const settlementTab = ref('receivable')
+  const payableFormRef = ref<InstanceType<typeof OrderSupplement>>()
+  const loadingFormRef = ref<InstanceType<typeof OrderSupplement>>()
+  const addressRecognitionRef = ref<InstanceType<typeof CustomerAddressDialog>>()
+  const recognitionEndpoint = ref<SelectorMode>('shipping')
+  const addressActions = [
+    { key: 'recognize', label: '地址识别', icon: 'ri:magic-line' },
+    { key: 'select', label: '选择地址', icon: 'ri:map-pin-2-line' }
+  ]
+  const emptyTransferVisible = ref(false)
+  const transferPointCount = computed(() => form.data.transferStationIds?.length ?? 0)
   const stepLabels = ['收发信息', '配置信息', '货物信息']
   const distanceLoading = ref(false)
   const distanceStatus = ref('请先在发货、收货地址地图选点')
@@ -1077,9 +1116,10 @@
         }
       },
       {
-        label: '中转站',
+        label: '途经点',
         key: 'transferStationIds',
         type: 'select',
+        hidden: transferPointCount.value === 0 && !emptyTransferVisible.value,
         api: fetchStationOptions,
         resultField: 'data',
         labelField: 'stationName',
@@ -1089,11 +1129,12 @@
         afterFetch: (result) => syncStationOptions('transfer', result),
         props: {
           multiple: true,
+          multipleLimit: 3,
           filterable: true,
           clearable: true,
           collapseTags: true,
           collapseTagsTooltip: true,
-          placeholder: '选择途经站，可在下方调整顺序',
+          placeholder: '选择1～3个途经点，下方可调整顺序',
           onChange: (value: string[]) => handleTransferStationsChange(value)
         }
       },
@@ -1767,10 +1808,20 @@
   }
 
   function handleTransferStationsChange(stationIds: string[]): void {
-    const ids = stationIds ?? []
+    const ids = (stationIds ?? []).slice(0, 3)
     form.data.transferStationIds = ids
     form.data.transferStationId = ids[0] ?? null
     updateStationSnapshot('transfer')
+  }
+
+  function addTransferStation(): void {
+    if (transferPointCount.value >= 3) return
+    emptyTransferVisible.value = true
+    void nextTick(() => stationFormRef.value?.reloadOptions('transferStationIds'))
+  }
+
+  function removeTransferStation(index: number): void {
+    handleTransferStationsChange((form.data.transferStationIds ?? []).filter((_id, position) => position !== index))
   }
 
   function moveTransferStation(index: number, step: -1 | 1): void {
@@ -1999,6 +2050,32 @@
       const transportFee = calculateContractTransportFee(form.data.cargoItems ?? [])
       if (transportFee !== null) form.data.transportFee = transportFee
     }
+  }
+
+  async function handleAddressAction(mode: SelectorMode, action: string | number): Promise<void> {
+    if (action === 'select') return openCustomerSelector(mode)
+    recognitionEndpoint.value = mode
+    await addressRecognitionRef.value?.handleOpen(undefined, {
+      customerId: mode === 'shipping' ? form.data.shippingCustomerId || undefined : form.data.receivingCustomerId || undefined,
+      customerName: mode === 'shipping' ? form.data.shippingCustomerName : form.data.receivingCustomerName,
+      selectOnly: true,
+      addressType: mode === 'shipping' ? 'shipping' : 'receiving'
+    })
+  }
+
+  function handleRecognizedAddress(address: CustomerAddress): void {
+    const mode = recognitionEndpoint.value
+    if (!canEditContactEndpoint(mode)) return
+    const patch: Partial<OrderForm> = mode === 'shipping' ? {
+      shippingAddressId: null, shippingContactName: address.contactName,
+      shippingContactPhone: address.contactPhone, shippingRegionPath: parseOrderRegionPath(address.region),
+      shippingAddressDetail: address.addressDetail, shippingLongitude: address.longitude, shippingLatitude: address.latitude
+    } : {
+      receivingAddressId: null, receivingContactName: address.contactName,
+      receivingContactPhone: address.contactPhone, receivingRegionPath: parseOrderRegionPath(address.region),
+      receivingAddressDetail: address.addressDetail, receivingLongitude: address.longitude, receivingLatitude: address.latitude
+    }
+    Object.assign(form.data, patch)
   }
 
   async function openCustomerSelector(mode: SelectorMode): Promise<void> {
@@ -2496,6 +2573,8 @@
 
   async function validateCargoStep(): Promise<boolean> {
     const valid = await validateFormRefs([settlementFormRef], pageRef)
+    if (valid && !(await payableFormRef.value?.validate())) { settlementTab.value = 'payable'; return false }
+    if (valid && !(await loadingFormRef.value?.validate())) { settlementTab.value = 'loading'; return false }
     if (!valid) return false
     const hasCargoName = (form.data.cargoItems ?? []).some((item) => textValue(item.cargoName))
     if (!hasCargoName) {
