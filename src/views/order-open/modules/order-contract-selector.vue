@@ -28,6 +28,7 @@
     DataSelectRecord
   } from '@/components/core/forms/art-data-select/types'
   import { fetchOrderContractCandidates, type OrderContractCandidate } from '@tms/api'
+  import { formatWithDayjs } from '@/utils/time'
 
   defineOptions({ name: 'TmsOrderContractSelector' })
   const emit = defineEmits<{ select: [contract: OrderContractCandidate] }>()
@@ -40,14 +41,29 @@
     { prop: 'contractName', label: '合同名称', minWidth: 220 },
     { prop: 'paperContractNo', label: '纸质合同编号', minWidth: 160 },
     { prop: 'mnemonicCode', label: '助记码', minWidth: 120 },
-    { prop: 'contractCategory', label: '合同类别', minWidth: 120, dict: { code: 'tmsContractCategory', display: 'text' } },
-    { prop: 'transportMode', label: '运输方式', minWidth: 120, dict: { code: 'tmsOrderTransportMode', display: 'text' } },
+    {
+      prop: 'contractCategory',
+      label: '合同类别',
+      minWidth: 120,
+      dict: { code: 'tmsContractCategory', display: 'text' }
+    },
+    {
+      prop: 'transportMode',
+      label: '运输方式',
+      minWidth: 120,
+      dict: { code: 'tmsContractTransportMode', display: 'text' }
+    },
     { prop: 'carrierName', label: '承运商', minWidth: 180 },
     { prop: 'customerName', label: '客户/货主', minWidth: 180 },
     { prop: 'contactName', label: '业务联系人', minWidth: 120 },
     { prop: 'customerSignatory', label: '客户签约人', minWidth: 120 },
     { prop: 'handler', label: '经办人', minWidth: 120 },
-    { prop: 'signTime', label: '签约日期', width: 130 },
+    {
+      prop: 'signTime',
+      label: '签约日期',
+      width: 130,
+      formatter: (row) => formatWithDayjs(row.signTime, 'YYYY-MM-DD') || '—'
+    },
     { prop: 'effectiveDate', label: '生效日期', width: 130 },
     { prop: 'expiryDate', label: '到期日期', width: 130 }
   ]

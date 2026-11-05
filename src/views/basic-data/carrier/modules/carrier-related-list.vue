@@ -39,6 +39,7 @@
   import { getVehicleTypeFallbackLabel } from '@/utils/business/vehicle-type-display'
   import type { ColumnOption } from '@/types'
   import { useAuth } from '@/hooks/core/useAuth'
+  import { useUserStore } from '@/store/modules/user'
   import {
     fetchCarrierPriceList,
     fetchCarrierStatements,
@@ -73,6 +74,7 @@
   }
   const props = defineProps<{ kind: RelatedKind; carrierId?: string }>()
   const { hasAuth } = useAuth()
+  const userStore = useUserStore()
   const permissionByKind: Record<RelatedKind, string> = {
     drivers: 'TmsCarrier:View',
     vehicles: 'TmsCarrier:View',
@@ -81,10 +83,18 @@
     statements: 'FinanceCarrierSettlement:View'
   }
   const canView = computed(() => hasAuth(permissionByKind[props.kind]))
+  const dictionaryCodesByKind: Record<RelatedKind, readonly string[]> = {
+    drivers: ['tmsDriverLicenseType', 'commonBoolean'],
+    vehicles: ['vehicleType', 'vehicleOperationStatus'],
+    waybills: ['tmsWaybillStatus'],
+    prices: [],
+    statements: ['tmsSettlementStatus']
+  }
   const records = ref<RelatedRow[]>([])
   const total = ref(0)
   const loading = ref(false)
   const loadError = ref('')
+  let loadSequence = 0
   const emptyText = computed(() => (loadError.value ? '加载失败' : '暂无关联记录'))
   const columns = computed<ColumnOption<RelatedRow>[]>(() => {
     switch (props.kind) {
@@ -96,7 +106,13 @@
             prop: 'licenseType',
             label: '准驾车型',
             minWidth: 120,
-            dict: { code: 'tmsDriverLicenseType', display: 'text' }
+            formatter: (row) =>
+              h(ArtDictDisplay, {
+                dictCode: 'tmsDriverLicenseType',
+                value: row.licenseType,
+                display: 'text',
+                unknownText: '待核对'
+              })
           },
           {
             prop: 'enabled',
@@ -129,7 +145,13 @@
             prop: 'operationStatus',
             label: '运营状态',
             minWidth: 120,
-            dict: { code: 'vehicleOperationStatus', display: 'text' }
+            formatter: (row) =>
+              h(ArtDictDisplay, {
+                dictCode: 'vehicleOperationStatus',
+                value: row.operationStatus,
+                display: 'text',
+                unknownText: '待核对'
+              })
           }
         ]
       case 'waybills':
@@ -141,7 +163,13 @@
             prop: 'status',
             label: '状态',
             minWidth: 110,
-            dict: { code: 'tmsWaybillStatus', display: 'tag' }
+            formatter: (row) =>
+              h(ArtDictDisplay, {
+                dictCode: 'tmsWaybillStatus',
+                value: row.status,
+                display: 'tag',
+                unknownText: '待核对'
+              })
           }
         ]
       case 'prices':
@@ -160,7 +188,13 @@
             prop: 'status',
             label: '状态',
             minWidth: 110,
-            dict: { code: 'tmsSettlementStatus', display: 'tag' }
+            formatter: (row) =>
+              h(ArtDictDisplay, {
+                dictCode: 'tmsSettlementStatus',
+                value: row.status,
+                display: 'tag',
+                unknownText: '待核对'
+              })
           },
           { prop: 'settledAmount', label: '结算金额', minWidth: 130 }
         ]
@@ -169,37 +203,45 @@
   })
 
   const load = async (): Promise<void> => {
+    const sequence = ++loadSequence
     if (!props.carrierId || !canView.value) {
       records.value = []
       total.value = 0
+      loading.value = false
+      loadError.value = ''
       return
     }
     const carrierId = props.carrierId
+    const kind = props.kind
+    const isCurrent = () =>
+      sequence === loadSequence && carrierId === props.carrierId && kind === props.kind
     loading.value = true
     loadError.value = ''
     try {
+      await Promise.all(dictionaryCodesByKind[kind].map((code) => userStore.ensureDictLoaded(code)))
+      if (!isCurrent()) return
       const result =
-        props.kind === 'drivers'
+        kind === 'drivers'
           ? await fetchDriverListByCarrierId(carrierId)
-          : props.kind === 'vehicles'
+          : kind === 'vehicles'
             ? await fetchTmsVehicleReferences({ carrierId, from: 0, to: 199 })
-            : props.kind === 'waybills'
+            : kind === 'waybills'
               ? await fetchCarrierWaybills(carrierId)
-              : props.kind === 'prices'
+              : kind === 'prices'
                 ? await fetchCarrierPriceList({ carrierId, from: 0, to: 199 })
                 : await fetchCarrierStatements(carrierId)
-      if (carrierId !== props.carrierId) return
+      if (!isCurrent()) return
       if (result.error) throw result.error
       records.value = (result.data ?? []).map((row) => ({ ...row }))
       total.value =
         'total' in result ? Number(result.total ?? records.value.length) : records.value.length
     } catch {
-      if (carrierId !== props.carrierId) return
+      if (!isCurrent()) return
       records.value = []
       total.value = 0
       loadError.value = '关联记录加载失败，请检查权限或网络后重试。'
     } finally {
-      loading.value = false
+      if (isCurrent()) loading.value = false
     }
   }
   watch(

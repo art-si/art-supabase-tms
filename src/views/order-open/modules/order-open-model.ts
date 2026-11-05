@@ -208,6 +208,48 @@ export function parseOrderRegionPath(region?: string | null): string[] {
     .filter(Boolean)
 }
 
+export function createCustomerSelectorContactPatch(
+  mode: 'shipping' | 'receiving',
+  customer: Api.Tms.Order.CustomerSelectorItem,
+  address?: CustomerAddress | null
+): Partial<OrderForm> {
+  const contactName = address?.contactName || customer.contactName || customer.customerName
+  const effectiveAccess = address?.fieldAccess ?? customer.fieldAccess
+  const canReadPhone = isReadableFieldAccess(getFieldAccess(effectiveAccess, 'contactPhone'))
+  const canReadAddress = isReadableFieldAccess(getFieldAccess(effectiveAccess, 'addressDetail'))
+  const contactPhone = canReadPhone ? address?.contactPhone || customer.contactPhone || '' : ''
+  const regionPath = canReadAddress ? parseOrderRegionPath(address?.region || customer.region) : []
+  const addressDetail = canReadAddress
+    ? textValue(address?.addressDetail || customer.addressDetail)
+    : ''
+  const longitude = canReadAddress ? (address?.longitude ?? customer.longitude ?? null) : null
+  const latitude = canReadAddress ? (address?.latitude ?? customer.latitude ?? null) : null
+
+  return mode === 'shipping'
+    ? {
+        shippingCustomerId: customer.id,
+        shippingCustomerName: customer.customerName,
+        shippingAddressId: address?.id ?? null,
+        shippingContactName: contactName,
+        shippingContactPhone: contactPhone,
+        shippingAddressDetail: addressDetail,
+        shippingRegionPath: regionPath,
+        shippingLongitude: longitude,
+        shippingLatitude: latitude
+      }
+    : {
+        receivingCustomerId: customer.id,
+        receivingCustomerName: customer.customerName,
+        receivingAddressId: address?.id ?? null,
+        receivingContactName: contactName,
+        receivingContactPhone: contactPhone,
+        receivingAddressDetail: addressDetail,
+        receivingRegionPath: regionPath,
+        receivingLongitude: longitude,
+        receivingLatitude: latitude
+      }
+}
+
 export function stripOrderRegionPrefix(address: string, path: string[]): string {
   const prefix = path.join('')
   const normalized = textValue(address)

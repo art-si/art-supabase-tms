@@ -17,7 +17,7 @@
   import ArtAsyncState from '@/components/core/feedback/art-async-state/index.vue'
   import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
   import { fetchWorkflowUserOptions } from '@/api/workflow'
-  import { fetchOrderDetail } from '@tms/api/modules/order'
+  import { useTenantScopeFormPolicy } from '@/hooks/core/useTenantScopeFormPolicy'
   import type { ArtUserSelectOption } from '@/components/core/forms/art-user-select/types'
   import dayjs from 'dayjs'
   import { ElMessage, type FormRules } from 'element-plus'
@@ -48,6 +48,7 @@
   const formRef = ref<InstanceType<typeof ArtForm>>()
   const users = ref<ArtUserSelectOption[]>([])
   const userStore = useUserStore()
+  const { defaultWriteTenantId } = useTenantScopeFormPolicy()
   const dictionaryExceptionTypes = useDictionaryOptions('tmsOrderExceptionType')
   const exceptionTypeOptions = computed(() =>
     dictionaryExceptionTypes.filter((item) =>
@@ -165,8 +166,8 @@
       ])
       if (!exceptionTypeOptions.value.length || !exceptionStageOptions.value.length)
         throw new Error('异常类型或发生节点字典未配置，请联系管理员维护后重试')
-      const tenantId = order.tenantId || (await fetchOrderDetail(order.orderId)).data?.tenantId
-      if (!tenantId) throw new Error('未能确认订单所属租户，请刷新订单后重试')
+      const tenantId = order.tenantId || defaultWriteTenantId.value
+      if (!tenantId) throw new Error('当前租户信息缺失，请刷新页面后重试')
       const result = await fetchWorkflowUserOptions({ tenantId }, { showErrorMessage: false })
       if (result.error)
         throw new Error('跟进人读取失败，请稍后重新打开登记窗口', { cause: result.error })

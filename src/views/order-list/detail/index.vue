@@ -10,6 +10,7 @@
     @retry="loadDetail"
   >
     <ArtPageHeader
+      v-if="!embedded"
       :title="detail.data?.orderNo || '订单详情'"
       :subtitle="
         [detail.data?.originStation, detail.data?.destinationStation].filter(Boolean).join(' → ') ||
@@ -43,124 +44,148 @@
       </div>
     </section>
 
-    <ArtSectionCard
-      v-if="detail.relatedWaybills.length"
-      class="order-detail__section order-detail__waybills"
-      preserve-content-structure
-    >
-      <template #header
-        ><div class="order-detail__waybill-heading">
-          <ArtSectionTitle title="关联运单" />
-          <span>共 {{ detail.relatedWaybills.length }} 张执行运单</span>
-        </div></template
-      >
-      <div class="order-detail__waybill-list">
-        <button
-          v-for="waybill in detail.relatedWaybills"
-          :key="waybill.id"
-          type="button"
-          class="order-detail__waybill-card"
-          @click="openWaybillDetail(waybill.id)"
+    <ElTabs v-model="activeTab" class="order-detail__tabs" aria-label="运单详情分类">
+      <ElTabPane label="运单收发信息" name="contacts">
+        <ArtSectionCard
+          v-if="detail.relatedWaybills.length"
+          class="order-detail__section order-detail__waybills"
+          preserve-content-structure
         >
-          <span class="order-detail__waybill-icon"
-            ><ArtSvgIcon icon="ri:truck-line" aria-hidden="true"
-          /></span>
-          <span class="order-detail__waybill-copy">
-            <strong>{{ waybill.waybillNo }}</strong>
-            <small>{{
-              [waybill.driverName, waybill.plateNo].filter(Boolean).join(' · ') || '待分配承运资源'
-            }}</small>
-          </span>
-          <ArtDictDisplay dict-code="tmsWaybillStatus" :value="waybill.status" display="tag" />
-          <ArtSvgIcon icon="ri:arrow-right-s-line" aria-hidden="true" />
-        </button>
-      </div>
-    </ArtSectionCard>
-
-    <ArtSectionCard class="order-detail__section" preserve-content-structure title="基础信息">
-      <ArtDescriptions :data="descriptionData" :items="basicItems" :columns="4" />
-
-      <div class="order-detail__contact-card">
-        <div class="order-detail__contact-panel">
-          <div class="order-detail__contact-heading">
-            <span class="order-detail__contact-mark order-detail__contact-mark--send">寄</span>
-            <strong>发货人信息</strong>
+          <template #header
+            ><div class="order-detail__waybill-heading">
+              <ArtSectionTitle title="关联运单" />
+              <span>共 {{ detail.relatedWaybills.length }} 张执行运单</span>
+            </div></template
+          >
+          <div class="order-detail__waybill-list">
+            <button
+              v-for="waybill in detail.relatedWaybills"
+              :key="waybill.id"
+              type="button"
+              class="order-detail__waybill-card"
+              @click="openWaybillDetail(waybill.id)"
+            >
+              <span class="order-detail__waybill-icon"
+                ><ArtSvgIcon icon="ri:truck-line" aria-hidden="true"
+              /></span>
+              <span class="order-detail__waybill-copy">
+                <strong>{{ waybill.waybillNo }}</strong>
+                <small>{{
+                  [waybill.driverName, waybill.plateNo].filter(Boolean).join(' · ') ||
+                  '待分配承运资源'
+                }}</small>
+              </span>
+              <ArtDictDisplay dict-code="tmsWaybillStatus" :value="waybill.status" display="tag" />
+              <ArtSvgIcon icon="ri:arrow-right-s-line" aria-hidden="true" />
+            </button>
           </div>
-          <ArtDescriptions
-            :data="descriptionData"
-            :items="shippingItems"
-            :columns="1"
-            :border="false"
-          />
-        </div>
-        <div class="order-detail__contact-panel">
-          <div class="order-detail__contact-heading">
-            <span class="order-detail__contact-mark order-detail__contact-mark--receive">收</span>
-            <strong>收货人信息</strong>
+        </ArtSectionCard>
+
+        <ArtSectionCard class="order-detail__section" preserve-content-structure title="基础信息">
+          <ArtDescriptions :data="descriptionData" :items="basicItems" :columns="4" />
+
+          <div class="order-detail__contact-card">
+            <div class="order-detail__contact-panel">
+              <div class="order-detail__contact-heading">
+                <span class="order-detail__contact-mark order-detail__contact-mark--send">寄</span>
+                <strong>发货人信息</strong>
+              </div>
+              <ArtDescriptions
+                :data="descriptionData"
+                :items="shippingItems"
+                :columns="1"
+                :border="false"
+              />
+            </div>
+            <div class="order-detail__contact-panel">
+              <div class="order-detail__contact-heading">
+                <span class="order-detail__contact-mark order-detail__contact-mark--receive"
+                  >收</span
+                >
+                <strong>收货人信息</strong>
+              </div>
+              <ArtDescriptions
+                :data="descriptionData"
+                :items="receivingItems"
+                :columns="1"
+                :border="false"
+              />
+            </div>
           </div>
-          <ArtDescriptions
-            :data="descriptionData"
-            :items="receivingItems"
-            :columns="1"
-            :border="false"
+        </ArtSectionCard>
+      </ElTabPane>
+      <ElTabPane label="配置信息" name="configuration">
+        <ArtSectionCard
+          v-if="detail.data?.orderConfig?.loadType"
+          class="order-detail__section"
+          preserve-content-structure
+          title="配置信息"
+        >
+          <ArtDescriptions :data="configurationData" :items="configurationItems" :columns="4" />
+          <div
+            v-if="canViewOrderField('proofAttachments') && configurationData.attachmentUrls?.length"
+            class="order-detail__configuration-files"
+          >
+            <strong>业务附件</strong>
+            <ArtUploadFile :model-value="configurationData.attachmentUrls" readonly multiple />
+          </div>
+        </ArtSectionCard>
+        <OrderExecutionSupplement
+          :order-id="detail.data?.id"
+          section="loading"
+          :show-amounts="canViewOrderField('settlementAmounts')"
+          :show-proof="canViewOrderField('proofAttachments')"
+          class="order-detail__section"
+        />
+      </ElTabPane>
+      <ElTabPane label="货物信息" name="cargo">
+        <ArtSectionCard class="order-detail__section" preserve-content-structure title="货物信息">
+          <ArtTable
+            :data="detail.cargoItems"
+            :columns="detail.cargoColumns"
+            :pagination="false"
+            row-key="cargoName"
           />
-        </div>
-      </div>
-    </ArtSectionCard>
+          <div class="order-detail__summary">
+            <div>
+              <span>总数量</span>
+              <strong>{{ formatCompactNumberValue(detail.data?.cargoQuantityTotal, 0) }}</strong>
+            </div>
+            <div>
+              <span>总重量</span>
+              <strong>{{ formatCompactNumberValue(detail.data?.cargoWeightTotal) }} kg</strong>
+            </div>
+            <div>
+              <span>总体积</span>
+              <strong>{{ formatCompactNumberValue(detail.data?.cargoVolumeTotal, 3) }} 方</strong>
+            </div>
+          </div>
+        </ArtSectionCard>
+      </ElTabPane>
+      <ElTabPane label="应收信息" name="receivable">
+        <div class="order-detail__finance-grid">
+          <ArtSectionCard
+            v-if="canViewOrderField('freightAmounts')"
+            class="order-detail__section"
+            preserve-content-structure
+            title="费用信息"
+          >
+            <ArtDescriptions :data="descriptionData" :items="feeItems" :columns="2" />
+          </ArtSectionCard>
 
-    <ArtSectionCard
-      v-if="detail.data?.orderConfig?.loadType"
-      class="order-detail__section"
-      preserve-content-structure
-      title="配置信息"
-    >
-      <ArtDescriptions :data="configurationData" :items="configurationItems" :columns="4" />
-      <div
-        v-if="canViewOrderField('proofAttachments') && configurationData.attachmentUrls?.length"
-        class="order-detail__configuration-files"
-      >
-        <strong>业务附件</strong>
-        <ArtUploadFile :model-value="configurationData.attachmentUrls" readonly multiple />
-      </div>
-    </ArtSectionCard>
-
-    <ArtSectionCard class="order-detail__section" preserve-content-structure title="货物信息">
-      <ArtTable
-        :data="detail.cargoItems"
-        :columns="detail.cargoColumns"
-        :pagination="false"
-        row-key="cargoName"
-      />
-      <div class="order-detail__summary">
-        <div>
-          <span>总数量</span>
-          <strong>{{ formatCompactNumberValue(detail.data?.cargoQuantityTotal, 0) }}</strong>
+          <ArtSectionCard class="order-detail__section" preserve-content-structure title="付款方式">
+            <ArtDescriptions :data="descriptionData" :items="paymentItems" :columns="2" />
+          </ArtSectionCard>
         </div>
-        <div>
-          <span>总重量</span>
-          <strong>{{ formatCompactNumberValue(detail.data?.cargoWeightTotal) }} kg</strong>
-        </div>
-        <div>
-          <span>总体积</span>
-          <strong>{{ formatCompactNumberValue(detail.data?.cargoVolumeTotal, 3) }} 方</strong>
-        </div>
-      </div>
-    </ArtSectionCard>
-
-    <div class="order-detail__finance-grid">
-      <ArtSectionCard
-        v-if="canViewOrderField('freightAmounts')"
-        class="order-detail__section"
-        preserve-content-structure
-        title="费用信息"
-      >
-        <ArtDescriptions :data="descriptionData" :items="feeItems" :columns="2" />
-      </ArtSectionCard>
-
-      <ArtSectionCard class="order-detail__section" preserve-content-structure title="付款方式">
-        <ArtDescriptions :data="descriptionData" :items="paymentItems" :columns="2" />
-      </ArtSectionCard>
-    </div>
+        <OrderExecutionSupplement
+          :order-id="detail.data?.id"
+          section="payable"
+          :show-amounts="canViewOrderField('settlementAmounts')"
+          :show-proof="canViewOrderField('proofAttachments')"
+          class="order-detail__section"
+        />
+      </ElTabPane>
+    </ElTabs>
 
     <div class="order-detail__support-grid">
       <ArtSectionCard class="order-detail__section" preserve-content-structure title="其他信息">
@@ -181,6 +206,7 @@
 
 <script setup lang="tsx">
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
+  import OrderExecutionSupplement from '../../components/order-execution-supplement/index.vue'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import ArtDescriptions from '@/components/core/base/art-descriptions/index.vue'
   import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
@@ -198,6 +224,9 @@
   import OrderStatusSteps from '../modules/order-status-steps.vue'
 
   defineOptions({ name: 'TmsOrderDetail' })
+
+  const props = defineProps<{ orderId?: string; embedded?: boolean }>()
+  const activeTab = ref('contacts')
 
   type OrderRecord = Api.Tms.Order.OrderRecord
   type CargoItem = Api.Tms.Order.CargoItem
@@ -584,8 +613,18 @@
     void loadDetail()
   })
 
+  watch(
+    () => props.orderId,
+    () => {
+      if (props.orderId) {
+        activeTab.value = 'contacts'
+        void loadDetail()
+      }
+    }
+  )
+
   async function loadDetail(): Promise<void> {
-    const id = String(route.params.id || '')
+    const id = String(props.orderId || route.params.id || '')
     if (!id) {
       detail.error = new Error('缺少订单标识')
       return

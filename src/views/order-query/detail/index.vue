@@ -23,10 +23,47 @@
           display="tag"
         />
       </template>
+      <template #meta>
+        <div
+          v-if="order"
+          class="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-[var(--art-gray-700)]"
+        >
+          <span>司机：{{ trackedDriver?.driverName || order.dispatchDriverName || '待分配' }}</span>
+          <span class="art-icon-label">
+            司机归属：
+            <ArtDictDisplay
+              v-if="order.driverOwnership"
+              dict-code="tmsDriverOwnership"
+              :value="order.driverOwnership"
+              display="text"
+            />
+            <template v-else>—</template>
+          </span>
+          <span>车牌号：{{ trackedVehicle?.plateNo || order.dispatchPlateNo || '待分配' }}</span>
+          <span>调度方式：{{ dispatchKindLabel }}</span>
+          <BusinessRecordLink
+            :label="trackedWaybill?.waybillNo || order.waybillNo || '待生成调度运单'"
+            :to="
+              trackedWaybill?.waybillId && hasAuth('TmsLoadedWaybillList:View')
+                ? `/tms/waybill-management/detail/${trackedWaybill.waybillId}`
+                : undefined
+            "
+            compact
+          />
+          <span
+            >客户全称：{{
+              order.shippingCustomer?.customerName || order.shippingCustomerName || '—'
+            }}</span
+          >
+        </div>
+      </template>
     </ArtPageHeader>
 
     <template v-if="order">
       <ElTabs v-model="activeTab" class="mt-4 min-w-0">
+        <ElTabPane label="运单详情" name="order-detail" lazy>
+          <OrderDetail v-if="order.id" :order-id="order.id" embedded class="mt-3" />
+        </ElTabPane>
         <ElTabPane label="总览" name="overview" lazy>
           <div class="grid min-w-0 gap-4 pt-3">
             <div class="grid min-w-0 gap-4 lg:grid-cols-2">
@@ -160,9 +197,7 @@
                   <template v-else-if="quote">
                     <div class="flex flex-wrap items-center gap-3">
                       <strong>订单报价</strong>
-                      <ElTag size="small" :type="quote.status === 'submitted' ? 'success' : 'info'">
-                        {{ quote.status === 'submitted' ? '已提交' : '草稿' }}
-                      </ElTag>
+                      <ArtDictDisplay dict-code="tmsOrderQuoteStatus" :value="quote.status" />
                       <strong class="text-base">{{
                         formatSensitiveNumberWithAffix(quote.totalAmount, { prefix: '¥' })
                       }}</strong>
@@ -270,6 +305,36 @@
             </ArtSectionCard>
           </div>
         </ElTabPane>
+        <ElTabPane
+          v-if="canViewField(order.fieldAccess, 'freightAmounts')"
+          label="异常费用"
+          name="abnormal-freight"
+          lazy
+        >
+          <div class="grid min-w-0 gap-4 pt-3">
+            <ArtSectionCard
+              title="异常费用"
+              subtitle="审批通过后按责任归属计入应收、应付或自有成本"
+              :loading="abnormalLoading"
+              :error="abnormalError"
+              :empty="abnormalRequested && !abnormalDocuments.length"
+              empty-title="暂无异常费用"
+              empty-description="当前订单没有已登记的异常运费单。"
+              @retry="loadAbnormalFreight"
+            >
+              <div class="mb-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-[var(--art-gray-700)]">
+                <span>已批准自有承担：<strong>{{ formatSensitiveNumberWithAffix(order.ownAbnormalCost ?? 0, { prefix: '¥' }) }}</strong></span>
+                <span>已批准承运商扣应付：<strong>{{ formatSensitiveNumberWithAffix(order.carrierDeductionFee ?? 0, { prefix: '¥' }) }}</strong></span>
+              </div>
+              <ArtTable
+                :data="abnormalDocuments"
+                :columns="abnormalColumns"
+                :pagination="false"
+                row-key="id"
+              />
+            </ArtSectionCard>
+          </div>
+        </ElTabPane>
       </ElTabs>
     </template>
 
@@ -304,6 +369,11 @@
     type TransportMainlineRelation
   } from '@/api/transport-mainline'
   import { fetchOrderContractSummary, fetchOrderDetail, fetchOrderQuote } from '@tms/api'
+  import {
+    fetchAbnormalFreightDocuments,
+    type AbnormalFreightDocument
+  } from '@tms/api/modules/abnormal-freight'
+  const OrderDetail = defineAsyncComponent(() => import('../../order-list/detail/index.vue'))
 
   defineOptions({ name: 'TmsOrderQueryDetail' })
 
@@ -336,6 +406,11 @@
   const contractRequested = ref(false)
   const financeRequested = ref(false)
   const quoteRequested = ref(false)
+  const abnormalDocuments = ref<AbnormalFreightDocument[]>([])
+  const abnormalLoading = ref(false)
+  const abnormalError = ref<string | null>(null)
+  const abnormalRequested = ref(false)
+  let abnormalGeneration = 0
   let orderGeneration = 0
   let contractGeneration = 0
   let financeGeneration = 0
@@ -352,6 +427,47 @@
         '订单运输主线'
       : '订单运输主线'
   )
+  const dispatchKindLabel = computed(() => {
+    if (order.value?.returnSourceOrderId) return '返程配货'
+    const kind = trackedWaybill.value?.executionKind
+    return kind === 'merge'
+      ? '合单'
+      : kind === 'split'
+        ? '拆单'
+        : kind === 'single'
+          ? '正向货配载'
+          : '待调度'
+  })
+  const trackedWaybill = computed(() => trackedRelations.value.find((item) => item.waybillId))
+  const abnormalColumns: ColumnOption<AbnormalFreightDocument>[] = [
+    { prop: 'documentNo', label: '异常运费单号', minWidth: 180 },
+    { prop: 'waybillNoSnapshot', label: '调度运单号', minWidth: 170 },
+    {
+      prop: 'ownership',
+      label: '费用归属',
+      minWidth: 130,
+      dict: { code: 'tmsAbnormalFreightOwnership', display: 'text' }
+    },
+    {
+      prop: 'totalAmount',
+      label: '金额（元）',
+      width: 130,
+      align: 'right',
+      formatter: (row) => formatSensitiveNumberWithAffix(row.totalAmount, { prefix: '¥' })
+    },
+    {
+      prop: 'status',
+      label: '审批状态',
+      width: 120,
+      dict: { code: 'tmsAbnormalFreightStatus', display: 'auto' }
+    },
+    {
+      prop: 'createTime',
+      label: '登记时间',
+      width: 170,
+      formatter: (row) => formatWithDayjs(row.createTime) || '—'
+    }
+  ]
   const trackedVehicle = computed(
     () =>
       trackedRelations.value.find(
@@ -728,6 +844,7 @@
     contractGeneration += 1
     financeGeneration += 1
     quoteGeneration += 1
+    abnormalGeneration += 1
     relationsGeneration += 1
     const id = String(route.params.id || '')
     order.value = undefined
@@ -741,6 +858,10 @@
     contractRequested.value = false
     financeRequested.value = false
     quoteRequested.value = false
+    abnormalRequested.value = false
+    abnormalDocuments.value = []
+    abnormalLoading.value = false
+    abnormalError.value = null
     contractError.value = null
     financeError.value = null
     quoteError.value = null
@@ -790,6 +911,31 @@
     if ((tab === 'delivery' || tab === 'exceptions') && !financeRequested.value) {
       financeRequested.value = true
       void loadFinance()
+    }
+    if (tab === 'abnormal-freight' && !abnormalRequested.value) {
+      abnormalRequested.value = true
+      void loadAbnormalFreight()
+    }
+  }
+
+  async function loadAbnormalFreight(): Promise<void> {
+    const id = order.value?.id
+    if (!id || !canViewField(order.value?.fieldAccess, 'freightAmounts')) return
+    const generation = orderGeneration
+    const requestId = ++abnormalGeneration
+    abnormalLoading.value = true
+    abnormalError.value = null
+    try {
+      const result = await fetchAbnormalFreightDocuments(id)
+      if (!isCurrentOrder(id, generation) || requestId !== abnormalGeneration) return
+      abnormalDocuments.value = result.data ?? []
+    } catch {
+      if (!isCurrentOrder(id, generation) || requestId !== abnormalGeneration) return
+      abnormalDocuments.value = []
+      abnormalError.value = '异常费用加载失败，请重试。'
+    } finally {
+      if (isCurrentOrder(id, generation) && requestId === abnormalGeneration)
+        abnormalLoading.value = false
     }
   }
 

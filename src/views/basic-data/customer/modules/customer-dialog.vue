@@ -1,5 +1,5 @@
 <template>
-  <ArtDialog ref="dialogRef" size="xl">
+  <ArtDialog ref="dialogRef" class="tms-customer-dialog" size="xl">
     <ArtEntitySummary
       icon="ri:building-line"
       eyebrow="客户主档"
@@ -649,3 +649,61 @@
     handleClose: () => dialogRef.value?.handleClose()
   })
 </script>
+
+<style lang="scss">
+  .tms-customer-dialog.is-fullscreen {
+    .art-dialog__content > .art-form,
+    .art-dialog__content > .art-form > .el-form,
+    .art-form__tabs {
+      display: flex;
+      flex: 1 1 auto;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .art-form__tabs > .el-tabs__header {
+      flex: none;
+    }
+
+    .art-form__tabs > .el-tabs__content {
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+
+    [data-art-form-tab]:not([data-art-form-tab='baseSection']) {
+      height: 100%;
+
+      > .el-row,
+      > .el-row > .el-col,
+      .el-form-item {
+        height: 100%;
+        min-height: 0;
+      }
+
+      .el-form-item {
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 0;
+      }
+
+      .el-form-item__content,
+      .art-form-item__content {
+        display: flex;
+        flex: 1 1 auto;
+        width: 100%;
+        min-height: 0;
+      }
+
+      .art-form-item__content {
+        align-self: stretch;
+        height: 100%;
+      }
+
+      .art-form-item__content > * {
+        flex: 1 1 auto;
+        height: 100%;
+        min-height: 0;
+      }
+    }
+  }
+</style>

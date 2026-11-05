@@ -898,11 +898,11 @@
         payload.id = response.data?.id
         form.data.id = response.data?.id
       }
-      emit('success', type)
       if (submitMode.value === 'submit') {
         try {
           await submitContractForApproval(payload)
         } catch (error) {
+          emit('success', type)
           notifyFriendlyError(
             error,
             '合同已保存为草稿，但审批未发起。请检查运输合同审批流程是否已发布并启用后重试。'
@@ -925,6 +925,7 @@
           return false
         }
       }
+      emit('success', type)
       return true
     } catch (error) {
       notifyFriendlyError(error, '合同保存或提审失败，请检查状态和网络后重试')
@@ -966,7 +967,13 @@
         try {
           await Promise.all([
             userStore.ensureDictLoaded('tmsCarrierType'),
-            userStore.ensureDictLoaded('tmsCarrierDispatchChannel')
+            userStore.ensureDictLoaded('tmsCarrierDispatchChannel'),
+            userStore.ensureDictLoaded('tmsContractBillingMethod'),
+            userStore.ensureDictLoaded('tmsCargoUnit'),
+            userStore.ensureDictLoaded('tmsContractCategory'),
+            userStore.ensureDictLoaded('tmsContractBusinessType'),
+            userStore.ensureDictLoaded('tmsContractTransportMode'),
+            userStore.ensureDictLoaded('commonBoolean')
           ])
           if (row?.id) {
             const [, detailResponse] = await Promise.all([

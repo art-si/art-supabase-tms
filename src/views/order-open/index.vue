@@ -137,11 +137,20 @@
                   @click="moveTransferStation(index, 1)"
                   >下移</ElButton
                 >
-                <ArtIconButton icon="ri:close-line" :label="`移除途经点 ${index + 1}`" @click="removeTransferStation(index)" />
+                <ArtIconButton
+                  icon="ri:close-line"
+                  :label="`移除途经点 ${index + 1}`"
+                  @click="removeTransferStation(index)"
+                />
               </div>
             </div>
           </div>
-          <ElButton class="mt-3" plain :disabled="transferPointCount >= 3" @click="addTransferStation">
+          <ElButton
+            class="mt-3"
+            plain
+            :disabled="transferPointCount >= 3"
+            @click="addTransferStation"
+          >
             <ArtSvgIcon icon="ri:add-line" />添加途经点（{{ transferPointCount }}/3）
           </ElButton>
         </ArtSectionCard>
@@ -175,7 +184,9 @@
                     trigger="click"
                     @click="handleAddressAction('shipping', $event.key)"
                   >
-                    <template #trigger><ArtIconButton icon="ri:map-pin-2-line" label="发货地址操作" /></template>
+                    <template #trigger
+                      ><ArtIconButton icon="ri:map-pin-2-line" label="发货地址操作"
+                    /></template>
                   </ArtButtonMore>
                 </div>
               </div>
@@ -251,7 +262,9 @@
                   trigger="click"
                   @click="handleAddressAction('receiving', $event.key)"
                 >
-                  <template #trigger><ArtIconButton icon="ri:map-pin-2-line" label="收货地址操作" /></template>
+                  <template #trigger
+                    ><ArtIconButton icon="ri:map-pin-2-line" label="收货地址操作"
+                  /></template>
                 </ArtButtonMore>
               </div>
               <ArtForm
@@ -388,111 +401,138 @@
       >
         <ElTabs v-model="settlementTab">
           <ElTabPane label="应收信息" name="receivable">
-        <div class="order-open__settlement-grid">
-          <section v-if="canViewOrderField('freightAmounts')" class="order-open__settlement-panel">
-            <header class="order-open__panel-heading">
-              <span class="order-open__panel-icon is-receivable" aria-hidden="true">
-                <ArtSvgIcon icon="ri:money-cny-circle-line" />
-              </span>
-              <div>
-                <strong>应收运费</strong>
-                <small>录入本单运输及附加服务费用</small>
-              </div>
-            </header>
-            <ArtForm
-              ref="feeFormRef"
-              v-model="form.data"
-              :items="form.feeItems"
-              :span="12"
-              :gutter="14"
-              label-width="76px"
-              root-class="order-open__form order-open__form--settlement"
-            />
-            <footer class="order-open__panel-total">
-              <span>应收运费合计</span>
-              <strong>￥{{ form.totalFeeText }}</strong>
-            </footer>
-          </section>
+            <div class="order-open__settlement-grid">
+              <section
+                v-if="canViewOrderField('freightAmounts')"
+                class="order-open__settlement-panel"
+              >
+                <header class="order-open__panel-heading">
+                  <span class="order-open__panel-icon is-receivable" aria-hidden="true">
+                    <ArtSvgIcon icon="ri:money-cny-circle-line" />
+                  </span>
+                  <div>
+                    <strong>应收运费</strong>
+                    <small>录入本单运输及附加服务费用</small>
+                  </div>
+                </header>
+                <ArtForm
+                  ref="feeFormRef"
+                  v-model="form.data"
+                  :items="form.feeItems"
+                  :span="12"
+                  :gutter="14"
+                  label-width="76px"
+                  root-class="order-open__form order-open__form--settlement"
+                />
+                <footer class="order-open__panel-total">
+                  <span>应收运费合计</span>
+                  <strong>￥{{ form.totalFeeText }}</strong>
+                </footer>
+              </section>
 
-          <section
-            v-if="canViewOrderField('settlementAmounts')"
-            class="order-open__settlement-panel"
-          >
-            <header class="order-open__panel-heading">
-              <span class="order-open__panel-icon is-allocation" aria-hidden="true">
-                <ArtSvgIcon icon="ri:wallet-3-line" />
-              </span>
-              <div>
-                <strong>款项分配</strong>
-                <small>拆分现付、到付、月结与代收款项</small>
-              </div>
-            </header>
-            <ArtForm
-              ref="paymentFormRef"
-              v-model="form.data"
-              :items="form.paymentItems"
-              :span="12"
-              :gutter="14"
-              label-width="76px"
-              root-class="order-open__form order-open__form--settlement"
-            />
-            <footer class="order-open__panel-total">
-              <span>款项分配合计</span>
-              <strong>￥{{ form.paymentTotalText }}</strong>
-            </footer>
-          </section>
+              <section
+                v-if="canViewOrderField('settlementAmounts')"
+                class="order-open__settlement-panel"
+              >
+                <header class="order-open__panel-heading">
+                  <span class="order-open__panel-icon is-allocation" aria-hidden="true">
+                    <ArtSvgIcon icon="ri:wallet-3-line" />
+                  </span>
+                  <div>
+                    <strong>款项分配</strong>
+                    <small>拆分现付、到付、月结与代收款项</small>
+                  </div>
+                </header>
+                <ArtForm
+                  ref="paymentFormRef"
+                  v-model="form.data"
+                  :items="form.paymentItems"
+                  :span="12"
+                  :gutter="14"
+                  label-width="76px"
+                  root-class="order-open__form order-open__form--settlement"
+                />
+                <footer class="order-open__panel-total">
+                  <span>款项分配合计</span>
+                  <strong>￥{{ form.paymentTotalText }}</strong>
+                </footer>
+              </section>
 
-          <section class="order-open__settlement-panel order-open__settlement-panel--summary">
-            <header class="order-open__panel-heading">
-              <span class="order-open__panel-icon is-summary" aria-hidden="true">
-                <ArtSvgIcon icon="ri:file-list-3-line" />
-              </span>
-              <div>
-                <strong>结算方式</strong>
-                <small>确认付款口径与货物声明价值</small>
-              </div>
-            </header>
-            <ArtForm
-              ref="settlementFormRef"
-              v-model="form.data"
-              :items="form.settlementItems"
-              :rules="form.rules"
-              :span="24"
-              label-width="76px"
-              root-class="order-open__form order-open__form--settlement-summary"
-            />
-            <dl class="order-open__settlement-overview">
-              <div>
-                <dt>当前付款方式</dt>
-                <dd>{{ form.paymentMethodLabel || '待选择' }}</dd>
-              </div>
-              <div v-if="canViewOrderField('freightAmounts')">
-                <dt>本单应收</dt>
-                <dd>￥{{ form.totalFeeText }}</dd>
-              </div>
-              <div v-if="canViewOrderField('settlementAmounts')">
-                <dt>已分配款项</dt>
-                <dd>￥{{ form.paymentTotalText }}</dd>
-              </div>
-            </dl>
-          </section>
-        </div>
+              <section class="order-open__settlement-panel order-open__settlement-panel--summary">
+                <header class="order-open__panel-heading">
+                  <span class="order-open__panel-icon is-summary" aria-hidden="true">
+                    <ArtSvgIcon icon="ri:file-list-3-line" />
+                  </span>
+                  <div>
+                    <strong>结算方式</strong>
+                    <small>确认付款口径与货物声明价值</small>
+                  </div>
+                </header>
+                <ArtForm
+                  ref="settlementFormRef"
+                  v-model="form.data"
+                  :items="form.settlementItems"
+                  :rules="form.rules"
+                  :span="24"
+                  label-width="76px"
+                  root-class="order-open__form order-open__form--settlement-summary"
+                />
+                <dl class="order-open__settlement-overview">
+                  <div>
+                    <dt>当前付款方式</dt>
+                    <dd>{{ form.paymentMethodLabel || '待选择' }}</dd>
+                  </div>
+                  <div v-if="canViewOrderField('freightAmounts')">
+                    <dt>本单应收</dt>
+                    <dd>￥{{ form.totalFeeText }}</dd>
+                  </div>
+                  <div v-if="canViewOrderField('settlementAmounts')">
+                    <dt>已分配款项</dt>
+                    <dd>￥{{ form.paymentTotalText }}</dd>
+                  </div>
+                </dl>
+              </section>
+            </div>
           </ElTabPane>
-          <ElTabPane label="应付信息" name="payable">
-            <OrderSupplement ref="payableFormRef" v-model="form.data.orderConfig" section="payable"
+          <ElTabPane v-if="canViewOrderField('settlementAmounts')" label="应付信息" name="payable">
+            <OrderSupplement
+              ref="payableFormRef"
+              v-model="form.data.orderConfig"
+              section="payable"
               :can-view-amounts="canViewOrderField('settlementAmounts')"
               :can-edit-amounts="canEditOrderField('settlementAmounts')"
               :can-view-proof="canViewOrderField('proofAttachments')"
               :can-edit-proof="canEditOrderField('proofAttachments')"
-              :resource-tenant-id="form.data.tenantId || defaultWriteTenantId || ''" />
+              :resource-tenant-id="form.data.tenantId || defaultWriteTenantId || ''"
+            />
+            <OrderExecutionSupplement
+              v-if="form.data.id"
+              :order-id="form.data.id"
+              section="payable"
+              :show-amounts="canViewOrderField('settlementAmounts')"
+              :show-proof="canViewOrderField('proofAttachments')"
+              class="mt-4"
+            />
           </ElTabPane>
-          <ElTabPane label="装卸货信息" name="loading">
-            <OrderSupplement ref="loadingFormRef" v-model="form.data.orderConfig" section="loading"
+          <ElTabPane v-if="canViewOrderField('proofAttachments')" label="装卸货信息" name="loading">
+            <OrderSupplement
+              ref="loadingFormRef"
+              v-model="form.data.orderConfig"
+              section="loading"
               :can-view-amounts="canViewOrderField('settlementAmounts')"
               :can-edit-amounts="canEditOrderField('settlementAmounts')"
               :can-view-proof="canViewOrderField('proofAttachments')"
               :can-edit-proof="canEditOrderField('proofAttachments')"
-              :resource-tenant-id="form.data.tenantId || defaultWriteTenantId || ''" />
+              :resource-tenant-id="form.data.tenantId || defaultWriteTenantId || ''"
+            />
+            <OrderExecutionSupplement
+              v-if="form.data.id"
+              :order-id="form.data.id"
+              section="loading"
+              :show-amounts="canViewOrderField('settlementAmounts')"
+              :show-proof="canViewOrderField('proofAttachments')"
+              class="mt-4"
+            />
           </ElTabPane>
         </ElTabs>
       </ArtSectionCard>
@@ -743,7 +783,10 @@
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
   import ArtAddressPicker from '@/components/core/forms/art-address-picker/index.vue'
   import { fetchRegionOptions } from '@/api/region-options'
-  import { useAmapDrivingEstimate } from '@/hooks/core/useAmapDrivingEstimate'
+  import {
+    useAmapDrivingEstimate,
+    type AmapRouteCoordinate
+  } from '@/hooks/core/useAmapDrivingEstimate'
   import ArtTable from '@/components/core/tables/art-table/index.vue'
   import { useAmapGeocoder } from '@/hooks/core/useAmapGeocoder'
   import { useAuth } from '@/hooks/core/useAuth'
@@ -755,12 +798,7 @@
   import { useLazyComponent } from '@/hooks/core/useLazyComponent'
   import type { ColumnOption } from '@/types'
   import { formatNameCodeOption } from '@/utils/form'
-  import {
-    isReadableFieldAccess,
-    canEditField,
-    canViewField,
-    getFieldAccess
-  } from '@/utils/field-permission'
+  import { isReadableFieldAccess, canEditField, canViewField } from '@/utils/field-permission'
   import {
     addOrder,
     editOrder,
@@ -797,6 +835,7 @@
     createInitialOrderConfig,
     createCustomerPriceBusinessPatch,
     createFavoriteRouteContactPatch,
+    createCustomerSelectorContactPatch,
     calculateOrderCargoSummary,
     getDictLabel,
     moneyValue,
@@ -808,6 +847,7 @@
   } from './modules/order-open-model'
   import OrderConfig from './modules/order-config.vue'
   import OrderSupplement from './modules/order-supplement.vue'
+  import OrderExecutionSupplement from '../components/order-execution-supplement/index.vue'
   import ArtButtonMore from '@/components/core/forms/art-button-more/index.vue'
   import CustomerAddressDialog from '../basic-data/customer-address/modules/customer-address-dialog.vue'
 
@@ -1032,6 +1072,15 @@
     ])
   )
   const orderNumberRule = computed(() => numberRules.value['tms.order'])
+  const waypointCoordinates = computed<AmapRouteCoordinate[]>(() => {
+    const points: AmapRouteCoordinate[] = []
+    for (const id of form.data.transferStationIds ?? []) {
+      const station = findStationOption('transfer', id)
+      const point = normalizeCoordinatePair(station?.longitude, station?.latitude)
+      if (point) points.push(point)
+    }
+    return points
+  })
   const canEstimateDistance = computed(
     () =>
       normalizeCoordinatePair(form.data.shippingLongitude, form.data.shippingLatitude) !== null &&
@@ -1664,7 +1713,9 @@
       form.data.shippingLongitude,
       form.data.shippingLatitude,
       form.data.receivingLongitude,
-      form.data.receivingLatitude
+      form.data.receivingLatitude,
+      form.data.transferStationIds?.join('|'),
+      waypointCoordinates.value.map((point) => `${point.longitude},${point.latitude}`).join('|')
     ],
     () => {
       if (canEstimateDistance.value) void calculateDistance()
@@ -1689,15 +1740,43 @@
     const requestId = ++distanceRequestId
     distanceLoading.value = true
     distanceStatus.value = '正在估算驾车距离…'
+    let waypointLocationFailed = false
     try {
-      const result = await estimateDrivingRoute(shipping, receiving)
+      const stationIds = [...(form.data.transferStationIds ?? [])]
+      const points = await Promise.all(
+        stationIds.map(async (id) => {
+          const station = findStationOption('transfer', id)
+          if (!station) return null
+          const coordinate = normalizeCoordinatePair(station.longitude, station.latitude)
+          if (coordinate) return coordinate
+          return geocodeAddress(
+            [station.region, station.addressDetail || station.stationName].filter(Boolean).join(' ')
+          )
+        })
+      )
+      if (requestId !== distanceRequestId) return
+      if (points.some((point) => !point)) {
+        waypointLocationFailed = true
+        throw new Error('途经点定位失败')
+      }
+      const result = await estimateDrivingRoute(
+        shipping,
+        receiving,
+        points.filter((point): point is AmapRouteCoordinate => point !== null)
+      )
       if (requestId !== distanceRequestId) return
       form.data.distanceKm = result.distanceKm
-      distanceStatus.value = '高德地图估算距离'
+      distanceStatus.value = stationIds.length
+        ? waypointCoordinates.value.length === stationIds.length
+          ? '高德地图途经点路线估算距离'
+          : '高德地图按站点名称定位途经点，公里数请核对'
+        : '高德地图估算距离'
     } catch {
       if (requestId !== distanceRequestId) return
       form.data.distanceKm = null
-      distanceStatus.value = '暂未获取到路线，可重新计算'
+      distanceStatus.value = waypointLocationFailed
+        ? '途经点定位失败，请检查站点名称或补充站点坐标'
+        : '暂未获取到路线，可重新计算'
     } finally {
       if (requestId === distanceRequestId) distanceLoading.value = false
     }
@@ -1719,6 +1798,8 @@
     replaceForm({
       ...createInitialForm(),
       ...cloneDeep(data),
+      shippingCustomerName: data.shippingCustomerName ?? '',
+      receivingCustomerName: data.receivingCustomerName ?? '',
       transferStationIds: data.transferStationIds?.length
         ? [...data.transferStationIds]
         : data.transferStationId
@@ -1779,6 +1860,8 @@
     const options = data as StationOption[]
     form.stationCaches[mode] = options
     updateStationSnapshot(mode)
+    if (mode === 'transfer' && form.data.transferStationIds?.length && canEstimateDistance.value)
+      void calculateDistance()
     return result
   }
 
@@ -1821,7 +1904,9 @@
   }
 
   function removeTransferStation(index: number): void {
-    handleTransferStationsChange((form.data.transferStationIds ?? []).filter((_id, position) => position !== index))
+    handleTransferStationsChange(
+      (form.data.transferStationIds ?? []).filter((_id, position) => position !== index)
+    )
   }
 
   function moveTransferStation(index: number, step: -1 | 1): void {
@@ -2056,8 +2141,12 @@
     if (action === 'select') return openCustomerSelector(mode)
     recognitionEndpoint.value = mode
     await addressRecognitionRef.value?.handleOpen(undefined, {
-      customerId: mode === 'shipping' ? form.data.shippingCustomerId || undefined : form.data.receivingCustomerId || undefined,
-      customerName: mode === 'shipping' ? form.data.shippingCustomerName : form.data.receivingCustomerName,
+      customerId:
+        mode === 'shipping'
+          ? form.data.shippingCustomerId || undefined
+          : form.data.receivingCustomerId || undefined,
+      customerName:
+        mode === 'shipping' ? form.data.shippingCustomerName : form.data.receivingCustomerName,
       selectOnly: true,
       addressType: mode === 'shipping' ? 'shipping' : 'receiving'
     })
@@ -2066,15 +2155,26 @@
   function handleRecognizedAddress(address: CustomerAddress): void {
     const mode = recognitionEndpoint.value
     if (!canEditContactEndpoint(mode)) return
-    const patch: Partial<OrderForm> = mode === 'shipping' ? {
-      shippingAddressId: null, shippingContactName: address.contactName,
-      shippingContactPhone: address.contactPhone, shippingRegionPath: parseOrderRegionPath(address.region),
-      shippingAddressDetail: address.addressDetail, shippingLongitude: address.longitude, shippingLatitude: address.latitude
-    } : {
-      receivingAddressId: null, receivingContactName: address.contactName,
-      receivingContactPhone: address.contactPhone, receivingRegionPath: parseOrderRegionPath(address.region),
-      receivingAddressDetail: address.addressDetail, receivingLongitude: address.longitude, receivingLatitude: address.latitude
-    }
+    const patch: Partial<OrderForm> =
+      mode === 'shipping'
+        ? {
+            shippingAddressId: null,
+            shippingContactName: address.contactName,
+            shippingContactPhone: address.contactPhone,
+            shippingRegionPath: parseOrderRegionPath(address.region),
+            shippingAddressDetail: address.addressDetail,
+            shippingLongitude: address.longitude,
+            shippingLatitude: address.latitude
+          }
+        : {
+            receivingAddressId: null,
+            receivingContactName: address.contactName,
+            receivingContactPhone: address.contactPhone,
+            receivingRegionPath: parseOrderRegionPath(address.region),
+            receivingAddressDetail: address.addressDetail,
+            receivingLongitude: address.longitude,
+            receivingLatitude: address.latitude
+          }
     Object.assign(form.data, patch)
   }
 
@@ -2113,7 +2213,7 @@
     customer: CustomerItem
   ): Promise<ContactPatch> {
     const address = await fetchDefaultAddress(customer.id, mode)
-    return createAddressPatch(mode, customer, address)
+    return createCustomerSelectorContactPatch(mode, customer, address)
   }
 
   async function fetchDefaultAddress(
@@ -2122,55 +2222,6 @@
   ): Promise<CustomerAddress | null> {
     const { data } = await fetchCustomerDefaultAddress(customerId, mode)
     return data ?? null
-  }
-
-  function createAddressPatch(
-    mode: SelectorMode,
-    customer: CustomerItem,
-    address?: CustomerAddress | null
-  ): ContactPatch {
-    const contactName = address?.contactName || customer.contactName || customer.customerName
-    const effectiveAccess = address?.fieldAccess ?? customer.fieldAccess
-    const phoneAccess = getFieldAccess(effectiveAccess, 'contactPhone')
-    const addressAccess = getFieldAccess(effectiveAccess, 'addressDetail')
-    const canReadPhone = isReadableFieldAccess(phoneAccess)
-    const canReadAddress = isReadableFieldAccess(addressAccess)
-    const contactPhone = canReadPhone ? address?.contactPhone || customer.contactPhone || '' : ''
-    const regionPath = canReadAddress
-      ? parseOrderRegionPath(address?.region || customer.region)
-      : []
-    const addressText = canReadAddress
-      ? textValue(address?.addressDetail || customer.addressDetail)
-      : ''
-    const longitude = canReadAddress ? (address?.longitude ?? customer.longitude ?? null) : null
-    const latitude = canReadAddress ? (address?.latitude ?? customer.latitude ?? null) : null
-
-    const patchMap: Record<SelectorMode, ContactPatch> = {
-      shipping: {
-        shippingCustomerId: customer.id,
-        shippingCustomerName: customer.customerName,
-        shippingAddressId: address?.id ?? null,
-        shippingContactName: contactName,
-        shippingContactPhone: contactPhone,
-        shippingAddressDetail: addressText,
-        shippingRegionPath: regionPath,
-        shippingLongitude: longitude,
-        shippingLatitude: latitude
-      },
-      receiving: {
-        receivingCustomerId: customer.id,
-        receivingCustomerName: customer.customerName,
-        receivingAddressId: address?.id ?? null,
-        receivingContactName: contactName,
-        receivingContactPhone: contactPhone,
-        receivingAddressDetail: addressText,
-        receivingRegionPath: regionPath,
-        receivingLongitude: longitude,
-        receivingLatitude: latitude
-      }
-    }
-
-    return patchMap[mode]
   }
 
   let priceLookupVersion = 0
@@ -2573,8 +2624,14 @@
 
   async function validateCargoStep(): Promise<boolean> {
     const valid = await validateFormRefs([settlementFormRef], pageRef)
-    if (valid && !(await payableFormRef.value?.validate())) { settlementTab.value = 'payable'; return false }
-    if (valid && !(await loadingFormRef.value?.validate())) { settlementTab.value = 'loading'; return false }
+    if (valid && (await payableFormRef.value?.validate()) === false) {
+      settlementTab.value = 'payable'
+      return false
+    }
+    if (valid && (await loadingFormRef.value?.validate()) === false) {
+      settlementTab.value = 'loading'
+      return false
+    }
     if (!valid) return false
     const hasCargoName = (form.data.cargoItems ?? []).some((item) => textValue(item.cargoName))
     if (!hasCargoName) {

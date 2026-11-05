@@ -321,7 +321,10 @@ export async function submitContractForApproval(contract: Contract) {
       businessId: contract.id,
       businessTitle: `合同 ${contract.contractNo || contract.contractName || contract.id}`
     },
-    { showErrorMessage: false }
+    {
+      showErrorMessage: false,
+      errorMessage: '合同已保存为草稿，但审批未发起。请检查运输合同审批流程是否已发布并启用后重试。'
+    }
   )
 }
 

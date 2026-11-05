@@ -2,11 +2,11 @@
   <div class="business-workspace-page art-full-height waybill-list">
     <BusinessWorkspaceHeader
       eyebrow="DISPATCH QUEUE"
-      title="待调度运单"
+      title="待配载派车"
       description="聚合尚未完成派车的运输需求，统一核对线路、货物、付款方式与调度条件。"
       icon="ri:route-line"
       :tags="[
-        { label: '待调度队列', type: 'warning' },
+        { label: '待配载队列', type: 'warning' },
         { label: '运力匹配', type: 'primary' }
       ]"
     >
@@ -27,7 +27,7 @@
       :table-props="{
         rowKey: 'id',
         tableLayout: 'fixed',
-        emptyText: '暂无待调度运单',
+        emptyText: '暂无待配载派车运单',
         emptyDescription: '当前没有待派车任务，可调整客户、线路、付款方式和时间条件后重新查询。'
       }"
       focusable
@@ -35,6 +35,7 @@
 
     <DispatchDialog ref="dispatchDialogRef" @success="handleDispatchSuccess" />
     <SplitDispatchDialog ref="splitDialogRef" @success="handleDispatchSuccess" />
+    <OrderDetailDrawer ref="orderDetailDrawerRef" />
   </div>
 </template>
 
@@ -65,6 +66,8 @@
     type WaybillSearchParams
   } from '../modules/waybill-shared'
 
+  import OrderDetailDrawer from '../../order-list/modules/order-detail-drawer.vue'
+
   defineOptions({ name: 'TmsPendingWaybillList' })
 
   interface TableGroup {
@@ -78,6 +81,10 @@
   const { getDictMap } = storeToRefs(useUserStore())
   const tableQueryRef = ref<ArtTableQueryExpose>()
   const dispatchDialogRef = ref<WaybillDialogExpose>()
+  const orderDetailDrawerRef = ref<InstanceType<typeof OrderDetailDrawer>>()
+  const openOrderDetail = (id: string, orderNo?: string): void => {
+    void orderDetailDrawerRef.value?.handleOpen(id, orderNo)
+  }
   const splitDialogRef = ref<SplitDialogExpose>()
   const fieldAccess = ref<Api.Tms.Waybill.WaybillFieldAccessMap>({})
   const paymentMethodOptions = computed(() => getDictMap.value.tmsOrderPaymentMethod ?? [])
@@ -96,6 +103,7 @@
     columnsFactory: () =>
       createWaybillColumns({
         mode: 'pending',
+        openOrderDetail,
         fieldAccess,
         router,
         tableQueryRef,

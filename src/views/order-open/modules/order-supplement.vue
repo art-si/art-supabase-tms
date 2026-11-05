@@ -41,6 +41,11 @@
   }>()
   const formRef = ref<InstanceType<typeof ArtForm>>()
   const methods = useDictionaryOptions('tmsOrderPaymentMethod')
+  const payableMethods = computed(() =>
+    methods.filter((item) =>
+      ['cash', 'monthly', 'collect', 'installments', 'receipt_payment'].includes(item.value)
+    )
+  )
   const showPayable = computed(() => props.section === 'payable' && props.canViewAmounts)
   const feeFields = [
     ['driverFreight', '应付司机运费'],
@@ -79,7 +84,7 @@
           type: 'select',
           span: 12,
           props: {
-            options: methods,
+            options: payableMethods.value,
             disabled: !props.canEditAmounts,
             placeholder: '请选择付款方式'
           },

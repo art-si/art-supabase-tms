@@ -1,1 +1,0 @@
-import{$ as e,Y as t}from"./sys-r8bSo_nv.js";var n=t({format:`YYYY-MM-DD`,emptyText:`-`});function r(e,t){return[e,t].filter(Boolean).join(` `)||`--`}function i(t){return t==null||t===``?`-`:`${e(t,2)} km`}function a(e){return e.effectiveFrom||e.effectiveTo?`${n(e.effectiveFrom)} 至 ${n(e.effectiveTo)}`:`-`}export{i as n,a as r,r as t};

@@ -1039,6 +1039,7 @@ declare global {
           transferStationIds?: string[]
           transferStationNames?: string[]
           hasReturnTrip?: boolean
+          returnSourceOrderId?: string | null
           originStation: string
           destinationStation: string
           transferStation?: string | null
@@ -1047,6 +1048,7 @@ declare global {
           transferStationRef?: StationOption | null
           deliveryMethod: string
           shippingCustomerId?: string | null
+          shippingCustomerName?: string | null
           invoiceAccountId?: string | null
           contractId?: string | null
           contract?: Pick<
@@ -1054,6 +1056,7 @@ declare global {
             'id' | 'contractNo' | 'contractName' | 'customerId' | 'contractStatus'
           > | null
           receivingCustomerId?: string | null
+          receivingCustomerName?: string | null
           shippingAddressId?: string | null
           receivingAddressId?: string | null
           shippingCustomer?: CustomerSelectorItem | null
@@ -1088,6 +1091,8 @@ declare global {
           packageFee?: number | string | null
           otherFee?: number | string | null
           totalFee?: number | string | null
+          carrierDeductionFee?: number | string | null
+          ownAbnormalCost?: number | string | null
           paymentMethod: string
           cashAmount?: number | string | null
           collectAmount?: number | string | null
@@ -1119,6 +1124,9 @@ declare global {
           dispatchStatus?: string
           dispatchVehicleId?: string | null
           dispatchDriverId?: string | null
+          driverOwnership?: string | null
+          carrierName?: string | null
+          companyName?: string | null
           dispatchPlateNo?: string | null
           dispatchVehicleType?: string | null
           dispatchVehicleLength?: string | null
@@ -1268,7 +1276,8 @@ declare global {
         interface OrderQuoteRecord extends OrderQuotePayload {
           id: string
           orderId: string
-          status: 'draft' | 'submitted'
+          quoteNo?: string | null
+          status: 'draft' | 'submitted' | 'pending_approval' | 'approved' | 'rejected'
           totalAmount: number
           submittedAt: string | null
           createTime: string
@@ -1304,8 +1313,18 @@ declare global {
           | 'cancelled'
         interface WaybillRecord extends Api.Tms.Order.OrderRecord {
           sourceOrderId?: string | null
+          sourceOrderRefs?: Array<{ id: string; orderNo: string }>
           sourceOrderNos?: string[]
           sourceOrderCount?: number
+          driverOwnership?: string | null
+          driverStatus?: string | null
+          portraitUrl?: string | null
+          identityAuthStatus?: string | null
+          licenseAuthStatus?: string | null
+          qualificationAuthStatus?: string | null
+          carrierName?: string | null
+          companyName?: string | null
+          plateNo?: string | null
           executionKind?: 'single' | 'merge' | 'split'
           dispatchMode?: 'carrier' | 'self_operated' | 'individual_driver' | null
           remainingCargoItems?: Api.Tms.Order.CargoItem[]

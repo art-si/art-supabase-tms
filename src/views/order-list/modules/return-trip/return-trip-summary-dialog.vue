@@ -1,29 +1,33 @@
 <template>
-  <ArtDialog ref="dialogRef" width="700px" :show-footer="false">
+  <ArtDialog ref="dialogRef" width="min(96vw, 760px)" :show-footer="false">
     <div class="space-y-4">
-      <div
-        class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[var(--el-fill-color-light)] p-3"
+      <ArtEntitySummary
+        icon="ri:arrow-go-back-line"
+        eyebrow="关联运输订单"
+        :title="order?.orderNo || '—'"
+        :description="
+          selectedWaybill?.waybillNo
+            ? `主运输任务 ${selectedWaybill.waybillNo}`
+            : '暂无关联主运输任务'
+        "
+        compact
       >
-        <div>
-          <span class="text-xs text-[var(--el-text-color-secondary)]">关联运输订单</span>
-          <strong class="ml-2 text-sm">{{ order?.orderNo }}</strong>
-        </div>
-        <ElSelect
-          v-if="candidates.length > 1"
-          v-model="selectedWaybillId"
-          class="w-52"
-          aria-label="选择主运输任务"
-          @change="loadSummary"
-        >
-          <ElOption
-            v-for="candidate in candidates"
-            :key="candidate.id"
-            :value="candidate.id"
-            :label="candidate.waybillNo"
-          />
-        </ElSelect>
-        <strong v-else class="text-sm">{{ candidates[0]?.waybillNo }}</strong>
-      </div>
+        <template v-if="candidates.length > 1" #aside>
+          <ElSelect
+            v-model="selectedWaybillId"
+            class="w-52 max-w-full"
+            aria-label="选择主运输任务"
+            @change="loadSummary"
+          >
+            <ElOption
+              v-for="candidate in candidates"
+              :key="candidate.id"
+              :value="candidate.id"
+              :label="candidate.waybillNo"
+            />
+          </ElSelect>
+        </template>
+      </ArtEntitySummary>
       <ElTabs v-model="activeTab">
         <ElTabPane name="forecast" label="预计收益">
           <ArtSectionCard
@@ -39,13 +43,13 @@
               <div
                 v-for="metric in metrics"
                 :key="metric.label"
-                class="rounded-lg border border-[var(--el-border-color-light)] p-3"
+                class="min-w-0 rounded-[var(--art-control-radius)] border border-[var(--el-border-color-light)] bg-[var(--el-fill-color-lighter)] p-3"
               >
                 <span class="block text-xs text-[var(--el-text-color-secondary)]">{{
                   metric.label
                 }}</span>
                 <strong
-                  class="mt-1 block text-lg"
+                  class="mt-1 block text-lg tabular-nums"
                   :class="metric.emphasis ? 'text-[var(--el-color-primary)]' : ''"
                 >
                   {{ amount(metric.value) }}
@@ -70,13 +74,13 @@
               <div
                 v-for="metric in actualMetrics"
                 :key="metric.label"
-                class="rounded-lg border border-[var(--el-border-color-light)] p-3"
+                class="min-w-0 rounded-[var(--art-control-radius)] border border-[var(--el-border-color-light)] bg-[var(--el-fill-color-lighter)] p-3"
               >
                 <span class="block text-xs text-[var(--el-text-color-secondary)]">{{
                   metric.label
                 }}</span>
                 <strong
-                  class="mt-1 block text-lg"
+                  class="mt-1 block text-lg tabular-nums"
                   :class="metric.emphasis ? 'text-[var(--el-color-primary)]' : ''"
                 >
                   {{ amount(metric.value) }}
@@ -101,30 +105,48 @@
         </ElTabPane>
         <ElTabPane v-if="summary" name="cost" label="预计成本分解">
           <ArtSectionCard title="返程预计成本分解" preserve-content-structure>
-            <div class="grid gap-2 text-sm sm:grid-cols-2">
-              <div class="flex justify-between gap-4"
-                ><span>返程专属费用</span
-                ><strong>{{ amount(summary.returnDirectPlannedExpense) }}</strong></div
+            <div class="grid gap-2 text-sm">
+              <div
+                class="flex items-start justify-between gap-4 border-b border-[var(--el-border-color-lighter)] py-2"
+                ><span class="min-w-0 text-[var(--el-text-color-regular)]">返程专属费用</span
+                ><strong class="shrink-0 text-right tabular-nums">{{
+                  amount(summary.returnDirectPlannedExpense)
+                }}</strong></div
               >
-              <div class="flex justify-between gap-4"
-                ><span>已审核共用路桥费</span
-                ><strong>{{ amount(summary.sharedApprovedToll) }}</strong></div
+              <div
+                class="flex items-start justify-between gap-4 border-b border-[var(--el-border-color-lighter)] py-2"
+                ><span class="min-w-0 text-[var(--el-text-color-regular)]">已审核共用路桥费</span
+                ><strong class="shrink-0 text-right tabular-nums">{{
+                  amount(summary.sharedApprovedToll)
+                }}</strong></div
               >
-              <div class="flex justify-between gap-4"
-                ><span>返程分摊路桥费</span
-                ><strong>{{ amount(summary.returnAllocatedToll) }}</strong></div
+              <div
+                class="flex items-start justify-between gap-4 border-b border-[var(--el-border-color-lighter)] py-2"
+                ><span class="min-w-0 text-[var(--el-text-color-regular)]">返程分摊路桥费</span
+                ><strong class="shrink-0 text-right tabular-nums">{{
+                  amount(summary.returnAllocatedToll)
+                }}</strong></div
               >
-              <div class="flex justify-between gap-4"
-                ><span>返程预计毛利率</span
-                ><strong>{{ percent(summary.returnProjectedMargin) }}</strong></div
+              <div
+                class="flex items-start justify-between gap-4 border-b border-[var(--el-border-color-lighter)] py-2"
+                ><span class="min-w-0 text-[var(--el-text-color-regular)]">返程预计毛利率</span
+                ><strong class="shrink-0 text-right tabular-nums">{{
+                  percent(summary.returnProjectedMargin)
+                }}</strong></div
               >
-              <div class="flex justify-between gap-4"
-                ><span>正向司机提成预估</span
-                ><strong>{{ commission(summary.forwardCommissionEstimate) }}</strong></div
+              <div
+                class="flex items-start justify-between gap-4 border-b border-[var(--el-border-color-lighter)] py-2"
+                ><span class="min-w-0 text-[var(--el-text-color-regular)]">正向司机提成预估</span
+                ><strong class="shrink-0 text-right tabular-nums">{{
+                  commission(summary.forwardCommissionEstimate)
+                }}</strong></div
               >
-              <div class="flex justify-between gap-4"
-                ><span>返程司机最终提成预估（计入毛利）</span
-                ><strong>{{ amount(summary.returnPlannedCommission) }}</strong></div
+              <div class="flex items-start justify-between gap-4 py-2"
+                ><span class="min-w-0 text-[var(--el-text-color-regular)]"
+                  >返程司机最终提成预估（计入毛利）</span
+                ><strong class="shrink-0 text-right tabular-nums">{{
+                  amount(summary.returnPlannedCommission)
+                }}</strong></div
               >
             </div>
           </ArtSectionCard>
@@ -144,7 +166,9 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
+  import ArtEntitySummary from '@/components/core/surfaces/art-entity-summary/index.vue'
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
+  import { formatPercentValue, formatSensitiveCurrencyValue } from '@/utils/ui/format'
   import {
     fetchReturnTripCandidates,
     fetchReturnTripSummary,
@@ -158,6 +182,9 @@
   const order = ref<OrderRecord>()
   const candidates = ref<ReturnTripCandidate[]>([])
   const selectedWaybillId = ref('')
+  const selectedWaybill = computed(() =>
+    candidates.value.find((candidate) => candidate.id === selectedWaybillId.value)
+  )
   const summary = ref<ReturnTripSummary>()
   const loading = ref(false)
   const loadError = ref(false)
@@ -194,20 +221,12 @@
       : '返程应收完成 FMS 审核后，这里会按已审核费用计算毛利。'
   )
 
-  function money(value: number | string | null | undefined): string {
-    if (value === '***') return '***'
-    if (value == null || value === '') return '—'
-    return Number.isFinite(Number(value)) ? Number(value).toFixed(2) : '—'
-  }
-
   function amount(value: number | string | null | undefined): string {
-    const formatted = money(value)
-    return formatted === '—' || formatted === '***' ? formatted : `¥${formatted}`
+    return value == null || value === '' ? '—' : formatSensitiveCurrencyValue(value)
   }
 
   function percent(value: number | string | null | undefined): string {
-    const formatted = money(value)
-    return formatted === '—' || formatted === '***' ? formatted : `${formatted}%`
+    return formatPercentValue(value, { emptyText: '—', fractionDigits: 2 })
   }
 
   function commission(value: ReturnTripSummary['returnCommissionEstimate']): string {

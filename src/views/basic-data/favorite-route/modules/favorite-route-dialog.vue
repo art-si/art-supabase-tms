@@ -30,16 +30,6 @@
           <div class="favorite-route-dialog__path" aria-hidden="true">
             <span></span><span></span><span></span>
           </div>
-          <div v-if="form.waypointStationIds?.length" class="favorite-route-dialog__waypoints">
-            <strong>途经 {{ form.waypointStationIds.length }} 站</strong>
-            <span v-for="(stationId, index) in form.waypointStationIds" :key="stationId">
-              {{ index + 1 }}.
-              {{
-                stationOptions.find((item) => item.id === stationId)?.stationName || '待选择站点'
-              }}
-            </span>
-            <span v-if="form.returnTrip">返程按相反顺序经过这些站点</span>
-          </div>
           <div class="favorite-route-dialog__endpoint is-destination">
             <span><ArtSvgIcon icon="ri:logout-circle-r-line" /></span>
             <div>
@@ -55,6 +45,20 @@
                 {{ destinationAddress ? getFullAddress(destinationAddress) : '从收货地址中选择' }}
               </p>
             </div>
+          </div>
+          <div v-if="form.waypointStationIds?.length" class="favorite-route-dialog__waypoints">
+            <strong>途经 {{ form.waypointStationIds.length }} 站</strong>
+            <ol aria-label="途经点顺序">
+              <li
+                v-for="(stationId, index) in form.waypointStationIds"
+                :key="stationId"
+                :title="getWaypointStationName(stationId)"
+              >
+                <span>{{ index + 1 }}</span>
+                <span>{{ getWaypointStationName(stationId) }}</span>
+              </li>
+            </ol>
+            <small v-if="form.returnTrip">返程按相反顺序经过这些站点</small>
           </div>
           <div
             v-if="estimateNote"
@@ -140,6 +144,7 @@
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { normalizeNullableText } from '@/utils/form/normalize'
   import { normalizeCoordinatePair } from '@/utils/geo'
+  import { resolveTenantWriteTargetId } from '@/utils/tenant-scope-context'
   import type { FormRules } from 'element-plus'
   import { cloneDeep, omit, uniq } from 'lodash-es'
   import { storeToRefs } from 'pinia'
@@ -157,6 +162,7 @@
   } from '@tms/api'
   import { fetchTenantList } from '@/api/system-manage'
   import { useUserStore } from '@/store/modules/user'
+  import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import FavoriteRouteAddressOption from './favorite-route-address-option.vue'
 
   defineOptions({ name: 'TmsFavoriteRouteDialog' })
@@ -192,11 +198,14 @@
   const formRef = ref<FormExpose>()
   const { estimateDrivingRoute } = useAmapDrivingEstimate()
   const { getUserInfo, isPlatformSuper } = storeToRefs(useUserStore())
+  const tenantScopeStore = useTenantScopeStore()
   const addressOptions = reactive<{
     origin: CustomerAddress[]
     destination: CustomerAddress[]
   }>({ origin: [], destination: [] })
   const stationOptions = ref<StationOption[]>([])
+  const getWaypointStationName = (stationId: string): string =>
+    stationOptions.value.find((item) => item.id === stationId)?.stationName || '待选择站点'
   const estimate = reactive<EstimateGroup>({ status: 'idle' })
   let estimateRequestId = 0
 
@@ -630,8 +639,22 @@
   }
 
   const handleOpen = async (row?: FavoriteRoute, tenantId?: string): Promise<void> => {
+    let targetTenantId: string
+    try {
+      targetTenantId =
+        row?.tenantId ||
+        resolveTenantWriteTargetId({
+          explicitTenantId: tenantId,
+          effectiveTenantId: tenantScopeStore.effectiveTenantId,
+          actorTenantId: getUserInfo.value.tenantId,
+          canWriteToOtherTenant: isPlatformSuper.value
+        })
+    } catch (error) {
+      notifyFriendlyError(error, '目标租户不可用，请重新选择后重试')
+      return
+    }
     Object.assign(form.value, createInitialForm(), row ? cloneDeep(toRaw(row)) : {}, {
-      tenantId: row?.tenantId || tenantId || getUserInfo.value.tenantId || ''
+      tenantId: targetTenantId
     })
     Object.assign(addressOptions, { origin: [], destination: [] })
     resetEstimate()
@@ -754,6 +777,64 @@
           height: 2px;
           border-radius: 999px;
         }
+      }
+    }
+
+    &__waypoints {
+      display: flex;
+      flex-wrap: wrap;
+      grid-column: 1 / -1;
+      gap: 8px 12px;
+      align-items: center;
+      min-width: 0;
+      padding-top: 12px;
+      border-top: 1px dashed var(--el-border-color-lighter);
+
+      > strong {
+        flex: 0 0 auto;
+        font-size: 12px;
+        color: var(--el-text-color-secondary);
+      }
+
+      > ol {
+        display: flex;
+        flex: 1 1 360px;
+        flex-wrap: wrap;
+        gap: 6px;
+        min-width: 0;
+        padding: 0;
+        margin: 0;
+        list-style: none;
+
+        > li {
+          display: inline-flex;
+          gap: 6px;
+          align-items: center;
+          min-width: 0;
+          max-width: 100%;
+          padding: 4px 8px;
+          font-size: 12px;
+          color: var(--el-text-color-regular);
+          background: var(--el-fill-color-light);
+          border-radius: var(--el-border-radius-small);
+
+          > span:first-child {
+            flex: 0 0 auto;
+            font-variant-numeric: tabular-nums;
+            color: var(--el-color-primary);
+          }
+
+          > span:last-child {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+        }
+      }
+
+      > small {
+        flex-basis: 100%;
+        color: var(--el-text-color-secondary);
       }
     }
 

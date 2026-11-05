@@ -56,6 +56,13 @@
       ref="executionOperationDialogRef"
       @success="handleCargoOperationSuccess"
     />
+    <AppointmentDrawer
+      ref="pickupAppointmentDrawerRef"
+      kind="pickup"
+      :permissions="pickupAppointmentPermissions"
+      @success="handleCargoOperationSuccess"
+    />
+    <OrderDetailDrawer ref="orderDetailDrawerRef" />
   </div>
 </template>
 
@@ -91,6 +98,7 @@
     type TableParams,
     type CargoOperationDialogExpose,
     type ExecutionOperationDialogExpose,
+    type PickupAppointmentDrawerExpose,
     type WaybillDialogExpose,
     type WaybillRecord,
     type WaybillSearchParams
@@ -99,6 +107,9 @@
   import { useMasterDataDeleteProcessingContext } from '@/hooks/core/useMasterDataDeleteProcessing'
   import CargoOperationDialog from '../modules/cargo-operation-dialog.vue'
   import ExecutionOperationDialog from '../modules/execution-operation-dialog.vue'
+  import AppointmentDrawer from '../modules/appointment-drawer.vue'
+
+  import OrderDetailDrawer from '../../order-list/modules/order-detail-drawer.vue'
 
   defineOptions({ name: 'TmsLoadedWaybillList' })
 
@@ -124,9 +135,22 @@
   const { hasAuth } = useAuth()
   const tableQueryRef = ref<ArtTableQueryExpose>()
   const dispatchDialogRef = ref<WaybillDialogExpose>()
+  const orderDetailDrawerRef = ref<InstanceType<typeof OrderDetailDrawer>>()
+  const openOrderDetail = (id: string, orderNo?: string): void => {
+    void orderDetailDrawerRef.value?.handleOpen(id, orderNo)
+  }
   const fieldAccess = ref<Api.Tms.Waybill.WaybillFieldAccessMap>({})
   const cargoOperationDialogRef = ref<CargoOperationDialogExpose>()
   const executionOperationDialogRef = ref<ExecutionOperationDialogExpose>()
+  const pickupAppointmentDrawerRef = ref<PickupAppointmentDrawerExpose>()
+  const pickupAppointmentPermissions = {
+    add: 'TmsLoadedWaybillList:PickupAppointment',
+    edit: 'TmsPickupAppointment:Edit',
+    delete: 'TmsPickupAppointment:Delete',
+    confirm: 'TmsPickupAppointment:Confirm',
+    complete: 'TmsPickupAppointment:Complete',
+    arrival: 'TmsPickupAppointment:Arrival'
+  }
   const statusCountRequestId = ref(0)
   const paymentMethodOptions = computed(() => getDictMap.value.tmsOrderPaymentMethod ?? [])
   const loadedStatusFallbackLabels: Record<string, string> = {
@@ -178,12 +202,15 @@
     columnsFactory: () =>
       createWaybillColumns({
         mode: 'loaded',
+        openOrderDetail,
         fieldAccess,
         router,
         tableQueryRef,
         dispatchDialogRef,
         cargoOperationDialogRef,
         executionOperationDialogRef,
+        pickupAppointmentDrawerRef,
+        canPickupAppointment: hasAuth('TmsLoadedWaybillList:PickupAppointment'),
         canAccept: hasAuth('TmsWaybill:Accept'),
         canLoading: hasAuth('TmsWaybill:Loading'),
         canDepart: hasAuth('TmsWaybill:Depart'),

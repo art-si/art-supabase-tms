@@ -56,6 +56,9 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
+  import { useTenantScopeStore } from '@/store/modules/tenant-scope'
+  import { useUserStore } from '@/store/modules/user'
+  import { resolveTenantWorkspaceId } from '@/utils/tenant-scope-context'
   import { archiveDeliveryReceipt, reviewWaybillReceiptOcrArtifact } from '@tms/api'
   import WaybillReceiptOcrPanel from './waybill-receipt-ocr-panel.vue'
 
@@ -91,6 +94,8 @@
   const ocrResult = ref<Api.Tms.Delivery.ReceiptOcrAnalyzeResponse>()
   const anomalyAcknowledged = ref(false)
   const currentRow = shallowRef<DeliveryRecord>()
+  const tenantScopeStore = useTenantScopeStore()
+  const userStore = useUserStore()
 
   const moneyProps = {
     min: 0,
@@ -125,7 +130,9 @@
   const orderContext = computed(() => ({
     id: String(form.data.id ?? ''),
     orderNo: form.data.orderNo || '',
-    tenantId: currentRow.value?.tenantId,
+    tenantId:
+      currentRow.value?.tenantId ||
+      resolveTenantWorkspaceId(tenantScopeStore.effectiveTenantId, userStore.getUserInfo.tenantId),
     receiverName: currentRow.value?.receivingContactName,
     plannedArrivalTime: currentRow.value?.plannedArrivalTime,
     cargoQuantityTotal: currentRow.value?.cargoQuantityTotal

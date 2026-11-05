@@ -1,145 +1,132 @@
 <template>
   <ArtDialog :loading="reloadLoading" ref="dialogRef" size="xl" :show-fullscreen-button="true">
     <ArtAsyncState
-      v-if="loadError || reloadLoading"
-      :error="loadError ? '报价信息加载失败，请重试' : null"
+      v-if="loadError"
+      error="报价信息加载失败，请重试"
       error-title="报价信息加载失败"
       error-description="请重新加载后核对最新报价信息。"
       @retry="loadQuote"
     />
-    <div v-else-if="order" class="space-y-5 pb-2">
-      <section class="rounded-[var(--custom-radius)] bg-[var(--art-gray-100)] p-4">
-        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div class="flex min-w-0 flex-wrap items-center gap-2">
-            <strong class="text-base text-[var(--art-gray-900)]">{{ order.orderNo }}</strong>
-            <span class="text-sm text-[var(--art-gray-700)]">报价单号：{{ quoteNo || '保存后生成' }}</span>
-            <ArtDictDisplay v-if="quoteStatus === 'draft' || quoteStatus === 'submitted'" dict-code="tmsOrderQuoteStatus" :value="quoteStatus" />
-            <ElTag v-else-if="quoteStatus === 'pending_approval'" type="warning" effect="plain">审批中</ElTag>
-            <ElTag v-else-if="quoteStatus === 'approved'" type="success" effect="plain">已生效</ElTag>
-            <ElTag v-else-if="quoteStatus === 'rejected'" type="danger" effect="plain">已驳回</ElTag>
-          </div>
+    <div v-else-if="order" class="space-y-4 pb-2">
+      <ArtEntitySummary icon="ri:file-list-3-line" :title="order.orderNo" compact>
+        <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+          <strong>{{ order.orderNo }}</strong>
           <span class="text-sm text-[var(--art-gray-700)]">
             {{ order.originStation || '始发站未填' }} →
             {{ order.destinationStation || '到货站未填' }}
           </span>
         </div>
-        <div class="grid gap-3 text-sm md:grid-cols-2">
-          <div class="min-w-0">
-            <span class="text-[var(--art-gray-600)]">发货方</span>
-            <p class="mt-1 break-words text-[var(--art-gray-900)]">
-              {{ order.shippingContactName || '—' }} · {{ order.shippingContactPhone || '—' }}
-            </p>
-            <p class="mt-1 break-words text-[var(--art-gray-700)]">
-              {{ order.shippingAddressDetail || '未填写发货地址' }}
-            </p>
-          </div>
-          <div class="min-w-0">
-            <span class="text-[var(--art-gray-600)]">收货方</span>
-            <p class="mt-1 break-words text-[var(--art-gray-900)]">
-              {{ order.receivingContactName || '—' }} · {{ order.receivingContactPhone || '—' }}
-            </p>
-            <p class="mt-1 break-words text-[var(--art-gray-700)]">
-              {{ order.receivingAddressDetail || '未填写收货地址' }}
-            </p>
-          </div>
+        <div class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--art-gray-700)]">
+          <span>报价单号：{{ quoteNo || '保存后生成' }}</span>
+          <span>发货方：{{ order.shippingContactName || '—' }}</span>
+          <span>收货方：{{ order.receivingContactName || '—' }}</span>
         </div>
-        <div
-          class="mt-3 flex flex-wrap gap-x-6 gap-y-1 border-t border-[var(--art-gray-200)] pt-3 text-sm text-[var(--art-gray-700)]"
-        >
-          <span>发货：{{ formatWithDayjs(order.departureAt) || '—' }}</span>
-          <span>到货：{{ formatWithDayjs(order.arrivalAt) || '—' }}</span>
-          <span>数量：{{ order.cargoQuantityTotal ?? 0 }}</span>
-          <span>重量：{{ order.cargoWeightTotal ?? 0 }} kg</span>
-          <span>体积：{{ order.cargoVolumeTotal ?? 0 }} m³</span>
-        </div>
-      </section>
+        <template #aside>
+          <ArtDictDisplay
+            v-if="quoteStatus === 'draft' || quoteStatus === 'submitted'"
+            dict-code="tmsOrderQuoteStatus"
+            :value="quoteStatus"
+          />
+          <ElTag v-else-if="quoteStatus === 'pending_approval'" type="warning" effect="plain"
+            >审批中</ElTag
+          >
+          <ElTag v-else-if="quoteStatus === 'approved'" type="success" effect="plain">已生效</ElTag>
+          <ElTag v-else-if="quoteStatus === 'rejected'" type="danger" effect="plain">已驳回</ElTag>
+        </template>
+      </ArtEntitySummary>
 
       <ArtForm
         ref="formRef"
         v-model="form"
         v-model:active-tab="activeTab"
+        class="quote-dialog__form"
         :items="formItems"
         :rules="amountRules"
         :span="8"
-        :gutter="16"
+        :gutter="12"
+        label-position="top"
       >
         <template #supplementaryItems>
-          <section>
-            <ArtSectionTitle>补充费用</ArtSectionTitle>
-            <p class="mb-3 mt-3 text-sm text-[var(--art-gray-700)]">
-              选择一项后立即加入下方，可继续选择其他费用。
-            </p>
-            <div class="rounded-[var(--custom-radius)] bg-[var(--art-gray-100)] p-3 sm:p-4">
-              <ElSelect
-                v-model="selectedExpenseCode"
-                filterable
-                class="w-full"
-                placeholder="选择要添加的费用项"
-                aria-label="添加补充费用项"
-                :disabled="form.supplementaryItems.length >= expenseOptions.length"
-                @change="addExpenseItem"
+          <ArtSectionCard
+            title="补充费用"
+            subtitle="从费用项目树中多选添加，再逐项填写金额和说明。"
+            :show-scrollbar="false"
+            :empty="!form.supplementaryItems.length"
+            empty-title="暂无补充费用"
+            empty-description="点击右上角「添加费用」，选择需要计入报价的费用项目。"
+          >
+            <template #actions>
+              <ElButton
+                v-auth="'TmsOrderList:Quote'"
+                type="primary"
+                plain
+                :disabled="quoteLocked || reloadLoading"
+                @click="expensePickerRef?.open()"
               >
-                <ElOption
-                  v-for="option in expenseOptions"
-                  :key="option.id"
-                  :label="`${option.itemName}（${option.itemCode}）`"
-                  :value="option.id"
-                  :disabled="form.supplementaryItems.some((item) => item.code === option.id)"
-                />
-              </ElSelect>
-              <ArtTable
-                v-if="form.supplementaryItems.length"
-                ref="expenseTableRef"
-                :data="form.supplementaryItems"
-                :columns="expenseColumns"
-                row-key="code"
-                class="mt-3"
-                :height="form.supplementaryItems.length > 5 ? 320 : undefined"
-              >
-                <template #code="{ row }">{{ expenseLabel(row.code) }}</template>
-                <template #amount="{ row }"
-                  ><ElInputNumber
-                    v-model="row.amount"
-                    v-bind="moneyProps"
-                    :aria-label="expenseLabel(row.code) + '金额（元）'"
-                /></template>
-                <template #remark="{ row }"
-                  ><ElInput
-                    v-model="row.remark"
-                    maxlength="200"
-                    :aria-label="expenseLabel(row.code) + '备注'"
-                    placeholder="费用说明（选填）"
-                /></template>
-                <template #operation="{ row }"
-                  ><ArtIconButton
-                    icon="ri:delete-bin-line"
-                    tone="danger"
-                    :label="'移除' + expenseLabel(row.code)"
-                    @click="removeExpenseItem(row.code)"
-                /></template>
-              </ArtTable>
-              <ArtEmptyState
-                v-else
-                title="暂无补充费用"
-                description="可从上方选择费用项。"
-                size="compact"
-                :visual-size="64"
-              />
-            </div>
-            <div
-              class="mt-3 flex flex-wrap items-baseline justify-end gap-x-3 border-t border-[var(--art-gray-200)] pt-3 text-sm"
+                <ArtSvgIcon icon="ri:add-line" aria-hidden="true" />
+                添加费用
+              </ElButton>
+            </template>
+            <ArtTable
+              v-if="form.supplementaryItems.length"
+              ref="expenseTableRef"
+              :data="form.supplementaryItems"
+              :columns="expenseColumns"
+              row-key="code"
+              :height="form.supplementaryItems.length > 5 ? 320 : undefined"
             >
-              <span class="text-[var(--art-gray-700)]">报价费用与补充费用合计（含税）</span>
-              <strong class="text-lg tabular-nums text-[var(--el-color-primary)]">
-                ¥{{
-                  formatNumberValue(totalAmount, 'zh-CN', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2
-                  })
-                }}
-              </strong>
-            </div>
-          </section>
+              <template #code="{ row }">
+                <div class="min-w-0 py-1 leading-5">
+                  <div class="break-words font-medium text-[var(--art-gray-900)]">
+                    {{ expenseLabel(row.code) }}
+                  </div>
+                  <div class="break-all text-xs text-[var(--art-gray-700)]">
+                    {{ expenseCode(row.code) }}
+                  </div>
+                </div>
+              </template>
+              <template #amount="{ row }"
+                ><ElInputNumber
+                  v-model="row.amount"
+                  v-bind="moneyProps"
+                  placeholder="请输入金额"
+                  :aria-label="expenseLabel(row.code) + '金额（元）'"
+              /></template>
+              <template #remark="{ row }"
+                ><ElInput
+                  v-model="row.remark"
+                  maxlength="200"
+                  :aria-label="expenseLabel(row.code) + '备注'"
+                  placeholder="费用说明（选填）"
+              /></template>
+              <template #operation="{ row }"
+                ><ArtIconButton
+                  v-auth="'TmsOrderList:Quote'"
+                  icon="ri:delete-bin-line"
+                  tone="danger"
+                  :label="'移除' + expenseLabel(row.code)"
+                  @click="removeExpenseItem(row.code)"
+              /></template>
+            </ArtTable>
+            <template #footer>
+              <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span class="text-[var(--art-gray-700)]">
+                  已添加 {{ form.supplementaryItems.length }} 项
+                </span>
+                <div class="flex items-baseline gap-3">
+                  <span class="text-[var(--art-gray-700)]">报价合计（含税）</span>
+                  <strong class="text-lg tabular-nums text-[var(--el-color-primary)]">
+                    ¥{{
+                      formatNumberValue(totalAmount, 'zh-CN', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                      })
+                    }}
+                  </strong>
+                </div>
+              </div>
+            </template>
+          </ArtSectionCard>
         </template>
         <template #attachmentUrls>
           <section>
@@ -159,6 +146,24 @@
         ></template>
       </ArtForm>
     </div>
+
+    <ArtTreeMultipleSelect
+      ref="expensePickerRef"
+      :data="expenseItems"
+      :show-trigger="false"
+      reset-draft-on-open
+      title="选择补充费用项目"
+      subtitle="可多选启用的记账项目；分组仅用于浏览，已添加的项目无需重复选择。"
+      row-key="id"
+      label-key="itemName"
+      description-key="itemCode"
+      :disabled-key="isExpenseItemDisabled"
+      search-placeholder="搜索费用项目名称或编码"
+      empty-text="暂无可用费用项目"
+      empty-description="请先在费用项目中维护当前工作台租户的启用项目。"
+      dialog-width="lg"
+      @confirm="addExpenseItems"
+    />
 
     <template #footer="{ loading, api }">
       <div class="flex w-full flex-wrap items-center justify-end gap-2">
@@ -197,38 +202,69 @@
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
+  import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
-  import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
+  import ArtEntitySummary from '@/components/core/surfaces/art-entity-summary/index.vue'
   import ArtAsyncState from '@/components/core/feedback/art-async-state/index.vue'
   import ArtUploadFile from '@/components/core/forms/art-upload-file/index.vue'
+  import ArtTreeMultipleSelect from '@/components/core/forms/art-data-select/tree-multiple.vue'
+  import type {
+    ArtDataSelectExpose,
+    DataSelectModelValue
+  } from '@/components/core/forms/art-data-select/types'
   import ArtIconButton from '@/components/core/widget/art-icon-button/index.vue'
-  import { formatWithDayjs } from '@/utils/time'
+  import ArtSvgIcon from '@/components/core/base/art-svg-icon/index.vue'
+  import TreeUtils from '@/utils/tree'
+  import { useTenantScopeFormPolicy } from '@/hooks/core/useTenantScopeFormPolicy'
   import { useUserStore } from '@/store/modules/user'
-  import { fetchOrderQuote, fetchOrderQuoteExpenseItems, saveOrderQuote, type OrderQuoteExpenseItem } from '@tms/api'
+  import { fetchOrderQuote, saveOrderQuote } from '@tms/api'
+  import {
+    fetchAbnormalFreightExpenseItems,
+    type AbnormalFreightExpenseItem
+  } from '@tms/api/modules/abnormal-freight'
 
   defineOptions({ name: 'TmsOrderQuoteDialog' })
 
   type OrderRecord = Api.Tms.Order.OrderRecord
   type QuotePayload = Api.Tms.Order.OrderQuotePayload
+  type AmountKey =
+    | 'transportFee'
+    | 'unloadingFee'
+    | 'deliveryFee'
+    | 'insuranceFee'
+    | 'taxFee'
+    | 'prepayment'
+    | 'arrivalPayment'
+    | 'collectPayment'
+  type SupplementaryItem = QuotePayload['supplementaryItems'][number]
+  type EditableItem = Omit<SupplementaryItem, 'amount'> & { amount: number | null | undefined }
+  type QuoteForm = Omit<QuotePayload, AmountKey | 'supplementaryItems'> &
+    Record<AmountKey, number | null | undefined> & { supplementaryItems: EditableItem[] }
   type SubmitMode = 'save' | 'submit'
   type FooterApi = Pick<ArtDialogExpose<OrderRecord>, 'handleConfirm' | 'confirmLoading'>
 
   const emit = defineEmits<{ success: [] }>()
   const userStore = useUserStore()
+  const { defaultWriteTenantId } = useTenantScopeFormPolicy()
   const dialogRef = ref<ArtDialogExpose<OrderRecord>>()
   const formRef = ref<InstanceType<typeof ArtForm>>()
   const activeTab = ref('feeSection')
-  type SupplementaryItem = QuotePayload['supplementaryItems'][number]
-  const expenseTableRef = ref<ArtTableExpose<SupplementaryItem>>()
+  const expenseTableRef = ref<ArtTableExpose<EditableItem>>()
+  const expensePickerRef = ref<ArtDataSelectExpose>()
   const attachmentRef = ref<{ hasPendingUpload: () => boolean }>()
   const orderId = ref('')
   const order = ref<OrderRecord | null>(null)
-  const quoteStatus = ref<'draft' | 'submitted' | 'pending_approval' | 'approved' | 'rejected' | ''>('')
-  const quoteLocked = computed(() => quoteStatus.value === 'pending_approval' || quoteStatus.value === 'approved')
+  const quoteStatus = ref<
+    'draft' | 'submitted' | 'pending_approval' | 'approved' | 'rejected' | ''
+  >('')
+  const quoteLocked = computed(
+    () => quoteStatus.value === 'pending_approval' || quoteStatus.value === 'approved'
+  )
   const quoteNo = ref('')
-  const expenseOptions = ref<OrderQuoteExpenseItem[]>([])
-  const form = ref<QuotePayload>(createInitialForm())
-  const selectedExpenseCode = ref('')
+  const expenseItems = ref<AbnormalFreightExpenseItem[]>([])
+  const expenseTree = new TreeUtils({ parentKey: 'parentId' })
+  const expenseOptions = computed(() => expenseTree.treeToList(expenseItems.value))
+  const form = ref<QuoteForm>(createInitialForm())
   const loadError = ref(false)
   const reloadLoading = ref(false)
   const submitMode = ref<SubmitMode>('save')
@@ -281,7 +317,7 @@
     value >= 0 &&
     value <= 9999999999.99 &&
     round(value, 2) === value
-  const amountRules: FormRules<QuotePayload> = Object.fromEntries(
+  const amountRules: FormRules<QuoteForm> = Object.fromEntries(
     [
       'transportFee',
       'unloadingFee',
@@ -297,19 +333,21 @@
         {
           validator: (_rule: unknown, value: unknown, callback: (error?: Error) => void) =>
             callback(
-              validAmount(value) ? undefined : new Error('费用金额须为非负数，最多保留两位小数')
+              value === undefined || value === null || validAmount(value)
+                ? undefined
+                : new Error('费用金额须为非负数，最多保留两位小数')
             ),
           trigger: ['blur', 'change']
         }
       ]
     ])
   )
-  const expenseColumns: ColumnOption<SupplementaryItem>[] = [
+  const expenseColumns: ColumnOption<EditableItem>[] = [
     { prop: 'code', label: '费用项目', minWidth: 150, useSlot: true },
     {
       prop: 'amount',
       label: '金额（元）',
-      width: 190,
+      width: 165,
       useSlot: true,
       required: true,
       headerTooltip: '金额须为非负数，最多保留两位小数；计入本次报价总额。',
@@ -323,17 +361,17 @@
     { prop: 'operation', label: '操作', width: 68, fixed: 'right', useSlot: true }
   ]
 
-  function createInitialForm(): QuotePayload {
+  function createInitialForm(): QuoteForm {
     return {
-      transportFee: 0,
-      unloadingFee: 0,
-      deliveryFee: 0,
-      insuranceFee: 0,
-      taxFee: 0,
+      transportFee: undefined,
+      unloadingFee: undefined,
+      deliveryFee: undefined,
+      insuranceFee: undefined,
+      taxFee: undefined,
       supplementaryItems: [],
-      prepayment: 0,
-      arrivalPayment: 0,
-      collectPayment: 0,
+      prepayment: undefined,
+      arrivalPayment: undefined,
+      collectPayment: undefined,
       remark: '',
       attachmentUrls: []
     }
@@ -344,16 +382,54 @@
     return Number.isFinite(amount) ? amount : 0
   }
 
+  function initialOrderAmount(value?: number | string | null): number | undefined {
+    const amount = moneyValue(value)
+    return amount > 0 ? amount : undefined
+  }
+
+  function createPayload(values: QuoteForm): QuotePayload {
+    return {
+      ...values,
+      transportFee: moneyValue(values.transportFee),
+      unloadingFee: moneyValue(values.unloadingFee),
+      deliveryFee: moneyValue(values.deliveryFee),
+      insuranceFee: moneyValue(values.insuranceFee),
+      taxFee: moneyValue(values.taxFee),
+      prepayment: moneyValue(values.prepayment),
+      arrivalPayment: moneyValue(values.arrivalPayment),
+      collectPayment: moneyValue(values.collectPayment),
+      supplementaryItems: values.supplementaryItems.map((item) => ({
+        ...item,
+        amount: Number(item.amount)
+      }))
+    }
+  }
+
   function expenseLabel(code: string): string {
     const option = expenseOptions.value.find((item) => item.id === code)
     return option?.itemName || code
   }
 
-  function addExpenseItem(code: string): void {
-    if (code && !form.value.supplementaryItems.some((item) => item.code === code)) {
-      form.value.supplementaryItems.push({ code, amount: 0, remark: '' })
-    }
-    selectedExpenseCode.value = ''
+  function expenseCode(code: string): string {
+    return expenseOptions.value.find((item) => item.id === code)?.itemCode || code
+  }
+
+  const isExpenseItemDisabled = (item: AbnormalFreightExpenseItem): boolean =>
+    !item.isEnabled ||
+    !item.isSelectable ||
+    form.value.supplementaryItems.some((line) => line.code === item.id)
+
+  function addExpenseItems(_keys: DataSelectModelValue, items: AbnormalFreightExpenseItem[]): void {
+    if (quoteLocked.value) return
+    form.value.supplementaryItems.push(
+      ...items
+        .filter((item) => !isExpenseItemDisabled(item))
+        .map((item) => ({
+          code: item.id,
+          amount: undefined,
+          remark: ''
+        }))
+    )
   }
 
   function removeExpenseItem(code: string): void {
@@ -376,12 +452,14 @@
       if (requestId !== loadRequestId) return
       const context = result.data
       if (!context) throw new Error('报价数据不可用')
-      const expenseResult = await fetchOrderQuoteExpenseItems(context.order.tenantId || '')
+      const tenantId = defaultWriteTenantId.value
+      if (!tenantId) throw new Error('当前租户信息缺失，请刷新页面后重试')
+      const expenseResult = await fetchAbnormalFreightExpenseItems(tenantId)
       if (requestId !== loadRequestId) return
-      expenseOptions.value = expenseResult.data || []
-      order.value = context.order
-      quoteStatus.value = (context.quote?.status as typeof quoteStatus.value) || ''
-      quoteNo.value = (context.quote as typeof context.quote & { quoteNo?: string })?.quoteNo || ''
+      expenseItems.value = expenseResult.data || []
+      order.value = { ...context.order, tenantId }
+      quoteStatus.value = context.quote?.status || ''
+      quoteNo.value = context.quote?.quoteNo || ''
       form.value = context.quote
         ? {
             transportFee: moneyValue(context.quote.transportFee),
@@ -398,12 +476,11 @@
           }
         : {
             ...createInitialForm(),
-            transportFee: moneyValue(context.order.transportFee),
-            unloadingFee: moneyValue(context.order.unloadingFee),
-            deliveryFee: moneyValue(context.order.deliveryFee),
-            insuranceFee: moneyValue(context.order.insuranceFee)
+            transportFee: initialOrderAmount(context.order.transportFee),
+            unloadingFee: initialOrderAmount(context.order.unloadingFee),
+            deliveryFee: initialOrderAmount(context.order.deliveryFee),
+            insuranceFee: initialOrderAmount(context.order.insuranceFee)
           }
-      selectedExpenseCode.value = ''
     } catch {
       if (requestId === loadRequestId) loadError.value = true
     } finally {
@@ -423,7 +500,7 @@
     if (!orderId.value || loadError.value || reloadLoading.value || !order.value) return false
     const currentOrderId = orderId.value
     const requestId = loadRequestId
-    const payload = cloneDeep(form.value)
+    const formSnapshot = cloneDeep(form.value)
     const mode = submitMode.value
     const isCurrent = () => currentOrderId === orderId.value && requestId === loadRequestId
     if (attachmentRef.value?.hasPendingUpload()) {
@@ -448,7 +525,7 @@
       ElMessage.warning('请等待附件上传完成后再保存报价')
       return false
     }
-    if (!isEqual(payload, form.value) || mode !== submitMode.value) {
+    if (!isEqual(formSnapshot, form.value) || mode !== submitMode.value) {
       ElMessage.warning('报价内容已变化，请检查后重新提交')
       return false
     }
@@ -458,11 +535,12 @@
       ElMessage.warning('提交报价前请填写费用金额')
       return false
     }
+    const payload = createPayload(formSnapshot)
     try {
       await saveOrderQuote(currentOrderId, payload, mode === 'submit', { showErrorMessage: false })
       emit('success')
       if (!isCurrent()) return false
-      if (!isEqual(payload, form.value)) {
+      if (!isEqual(formSnapshot, form.value)) {
         ElMessage.warning(
           mode === 'submit'
             ? '本次报价已提交，后续修改尚未保存，请检查报价状态后再办理'
@@ -492,12 +570,11 @@
     form.value = createInitialForm()
     quoteStatus.value = ''
     quoteNo.value = ''
-    expenseOptions.value = []
-    selectedExpenseCode.value = ''
+    expenseItems.value = []
     loadError.value = false
     await dialogRef.value?.handleOpen(row, {
       title: `报价 · ${row.orderNo}`,
-      subtitle: '填写费用、付款安排和补充说明；提交后按审批配置处理。',
+      subtitle: '填写完整报价；生效时替换订单原费用，已批准的客户异常应收另行累计。',
       onOpen: async (_row, api) => {
         api.setLoading(true)
         try {
@@ -517,3 +594,15 @@
 
   defineExpose({ handleOpen })
 </script>
+
+<style scoped lang="scss">
+  .quote-dialog__form {
+    :deep(.el-form-item) {
+      margin-bottom: var(--art-space-3);
+    }
+
+    :deep(.el-form-item--label-top .el-form-item__label) {
+      margin-bottom: var(--art-space-1);
+    }
+  }
+</style>

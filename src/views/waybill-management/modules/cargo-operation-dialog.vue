@@ -126,6 +126,7 @@
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
+  import { useUserStore } from '@/store/modules/user'
   import {
     checkInWaybillCargoOperation,
     completeWaybillCargoOperation,
@@ -135,7 +136,10 @@
   import { useAmapGeolocation } from '@/hooks/core/useAmapGeolocation'
   import { useAuth } from '@/hooks/core/useAuth'
   import { useTenantReadTarget } from '@/hooks/core/useTenantReadTarget'
-  import { createTenantScopeReadGuard } from '@/utils/tenant-scope-context'
+  import {
+    createTenantScopeReadGuard,
+    resolveTenantWorkspaceId
+  } from '@/utils/tenant-scope-context'
   import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
   import { ElMessage } from 'element-plus'
   import { notifyFriendlyError, useArtFeedback } from '@/hooks/core/useArtFeedback'
@@ -183,8 +187,11 @@
   const formRef = ref<FormExpose>()
   const currentRow = shallowRef<WaybillRecord>()
   const tenantScopeStore = useTenantScopeStore()
+  const userStore = useUserStore()
   const attachmentTenantId = computed(
-    () => currentRow.value?.tenantId || tenantScopeStore.effectiveTenantId || ''
+    () =>
+      currentRow.value?.tenantId ||
+      resolveTenantWorkspaceId(tenantScopeStore.effectiveTenantId, userStore.getUserInfo.tenantId)
   )
   const operationType = ref<OperationType>('loading')
   const checkinOnly = ref(false)

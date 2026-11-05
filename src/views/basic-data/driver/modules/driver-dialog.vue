@@ -169,12 +169,12 @@
           <ElAlert
             v-else
             class="min-w-0 flex-1"
-            :type="certification?.certified ? 'success' : 'warning'"
+            :type="certificationPassed ? 'success' : 'warning'"
             :title="
               certificationLoading
                 ? '正在核对认证状态'
                 : certification?.required
-                  ? certification.certified
+                  ? certificationPassed
                     ? '司机证件已审核通过'
                     : '司机证件尚未通过审核'
                   : '自营司机按现有流程管理'
@@ -182,22 +182,29 @@
             :description="
               certification?.reason ||
               (certification?.required
-                ? '身份证、驾驶证和从业资格证均须通过审核后才能派单或接单。'
+                ? '证件状态由审核流程维护；派单限制按租户配置执行。'
                 : '此司机不需要外部司机证件认证。')
             "
             :closable="false"
             show-icon
           />
           <ElButton v-if="certificationError" @click="loadCertification">重新加载</ElButton>
+          <ElButton
+            v-if="canViewCertificates"
+            link
+            type="primary"
+            @click="activeTab = 'certificates'"
+            >查看证件材料</ElButton
+          >
           <div
-            v-else-if="canReviewCertification && !viewOnly"
+            v-if="!certificationError && canReviewCertification && !viewOnly"
             class="flex shrink-0 items-center gap-2"
           >
             <ElButton
               v-auth="'TmsDriver:Audit'"
               type="primary"
               plain
-              :disabled="certificationLoading || certification?.certified"
+              :disabled="certificationLoading || certificationPassed"
               @click="openReviewDialog('approved')"
               >审核通过</ElButton
             >
@@ -394,6 +401,13 @@
   }
   const certificationDialogRef = ref<ArtDialogExpose>()
   const certification = ref<DriverCertificationStatus | null>(null)
+  const certificationPassed = computed(
+    () =>
+      certification.value?.certified === true &&
+      certification.value.identityStatus === 'verified' &&
+      certification.value.licenseStatus === 'verified' &&
+      certification.value.qualificationStatus === 'verified'
+  )
   const certificationLoading = ref(false)
   const certificationError = ref(false)
   const reviewDecision = ref<'approved' | 'revoked'>('approved')
@@ -1452,24 +1466,28 @@
       label: '注册状态',
       key: 'registrationStatus',
       type: 'select',
+      description: '司机接受邀请并完成注册后自动更新；可在司机列表发送邀请。',
       props: { options: registrationOptions.value, disabled: true }
     },
     {
       label: '身份证状态',
       key: 'identityAuthStatus',
       type: 'select',
+      description: '由证件审核结果自动更新。',
       props: { options: identityAuthStatusOptions.value, disabled: true }
     },
     {
       label: '驾驶证状态',
       key: 'licenseAuthStatus',
       type: 'select',
+      description: '由证件审核结果自动更新。',
       props: { options: authStatusOptions.value, disabled: true }
     },
     {
       label: '资格证状态',
       key: 'qualificationAuthStatus',
       type: 'select',
+      description: '由证件审核结果自动更新。',
       props: { options: authStatusOptions.value, disabled: true }
     },
     {

@@ -69,6 +69,8 @@
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
+  import { useUserStore } from '@/store/modules/user'
+  import { resolveTenantWorkspaceId } from '@/utils/tenant-scope-context'
   import {
     completeWaybillExecution,
     fetchWaybillExecutionContext,
@@ -127,8 +129,11 @@
   const formRef = ref<FormExpose>()
   const currentRow = shallowRef<WaybillRecord>()
   const tenantScopeStore = useTenantScopeStore()
+  const userStore = useUserStore()
   const attachmentTenantId = computed(
-    () => currentRow.value?.tenantId || tenantScopeStore.effectiveTenantId || ''
+    () =>
+      currentRow.value?.tenantId ||
+      resolveTenantWorkspaceId(tenantScopeStore.effectiveTenantId, userStore.getUserInfo.tenantId)
   )
   const action = ref<ExecutionAction>('departure')
   const context = shallowRef<Api.Tms.Waybill.ExecutionContext>()

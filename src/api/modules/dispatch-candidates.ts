@@ -3,7 +3,12 @@ import { useSupabase } from '@/hooks/core/useSupabase'
 import { normalizeNullableText } from '@/utils/form/normalize'
 
 export type DispatchMode = 'carrier' | 'self_operated' | 'individual_driver'
-export type DispatchCandidateKind = 'carrier' | 'driver' | 'vehicle' | 'individual_driver'
+export type DispatchCandidateKind =
+  | 'carrier'
+  | 'driver'
+  | 'vehicle'
+  | 'return_vehicle'
+  | 'individual_driver'
 export type DispatchAgreementStatus = 'pending_signed' | 'signed' | 'revision_requested'
 
 export interface DispatchCarrierCandidate {
@@ -34,6 +39,7 @@ export interface DispatchDriverCandidate {
   carrierName?: string | null
   companyName?: string | null
   plateNo?: string | null
+  vehicleId?: string | null
   contactName?: string | null
   agreementId?: string | null
   agreementStartsOn?: string | null
@@ -48,6 +54,10 @@ export interface DispatchVehicleCandidate {
   vehicleType: string | null
   specLengthM: number | null
   loadTons: number | null
+  carrierId: string | null
+  vehicleOwnership: 'self_operated' | 'carrier' | null
+  primaryDriverId: string | null
+  companyName: string | null
 }
 
 export interface DispatchAgreementDetail {

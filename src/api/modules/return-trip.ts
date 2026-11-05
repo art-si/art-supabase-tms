@@ -7,6 +7,10 @@ export interface ReturnTripCandidate {
   status: string
   orderId: string
   tenantId: string
+  driverId: string | null
+  vehicleId: string | null
+  driverName: string | null
+  plateNo: string | null
   hasReturnLeg: boolean
   hasForwardAllocation: boolean
   canAddReturn: boolean

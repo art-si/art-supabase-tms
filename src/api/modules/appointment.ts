@@ -113,6 +113,7 @@ export async function fetchAppointmentList(
         }),
       readOptions
     )
+    if (filtered.error) throw filtered.error
     ids = filtered.data ?? []
     if (!ids.length) return { data: [] as AppointmentListRow[], total: 0, error: null }
   }
@@ -131,6 +132,7 @@ export async function fetchAppointmentList(
       }),
     readOptions
   )
+  if (appointmentResult.error) throw appointmentResult.error
   const appointments = appointmentResult.data ?? []
   const data: AppointmentListRow[] = waybills.map((waybill) => {
     const matched = appointments.filter((appointment) =>
@@ -142,7 +144,7 @@ export async function fetchAppointmentList(
       appointmentStatus: deriveAppointmentStatus(matched)
     }
   })
-  return { ...result, data, error: appointmentResult.error ?? result.error }
+  return { ...result, data }
 }
 
 export async function fetchAppointmentCandidates(waybillId: string) {
@@ -153,6 +155,7 @@ export async function fetchAppointmentCandidates(waybillId: string) {
       }),
     readOptions
   )
+  if (result.error) throw result.error
   return result.data ?? []
 }
 
@@ -165,6 +168,7 @@ export async function fetchAppointmentWorkspace(kind: AppointmentKind, waybillId
       }),
     readOptions
   )
+  if (result.error) throw result.error
   return result.data ?? []
 }
 

@@ -1,5 +1,5 @@
 import { computed, type ComputedRef, type Ref } from 'vue'
-import { ElLink, ElMessage } from 'element-plus'
+import { ElLink, ElMessage, ElTag } from 'element-plus'
 import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
 import type {
   ArtTableQueryExcelColumn,
@@ -62,6 +62,10 @@ export interface ExecutionOperationDialogExpose {
   }) => Promise<void>
 }
 
+export interface PickupAppointmentDrawerExpose {
+  handleOpen: (row: WaybillRecord) => Promise<void>
+}
+
 export interface WaybillListContext {
   mode: WaybillMode
   fieldAccess: Ref<Api.Tms.Waybill.WaybillFieldAccessMap>
@@ -73,6 +77,9 @@ export interface WaybillListContext {
   splitDialogRef?: Ref<SplitDialogExpose | undefined>
   cargoOperationDialogRef?: Ref<CargoOperationDialogExpose | undefined>
   executionOperationDialogRef?: Ref<ExecutionOperationDialogExpose | undefined>
+  pickupAppointmentDrawerRef?: Ref<PickupAppointmentDrawerExpose | undefined>
+  openOrderDetail?: (id: string, orderNo?: string) => void
+  canPickupAppointment?: boolean
   canAccept?: boolean
   canLoading?: boolean
   canDepart?: boolean
@@ -172,6 +179,7 @@ const createWaybillExcelColumns = (context: WaybillListContext): ArtTableQueryEx
   },
   ...(context.mode === 'loaded' ? [{ key: 'sourceOrderNos', title: '原始运单号' }] : []),
   { key: 'shippingContactName', title: '发货人' },
+  { key: 'shippingCustomerName', title: '发货单位' },
   ...(canViewField(context.fieldAccess.value, 'shipperContact')
     ? [{ key: 'shippingContactPhone', title: '发货人电话' }]
     : []),
@@ -179,6 +187,8 @@ const createWaybillExcelColumns = (context: WaybillListContext): ArtTableQueryEx
     ? [{ key: 'shippingAddressDetail', title: '发货人地址' }]
     : []),
   { key: 'originStation', title: '发货站' },
+  { key: 'receivingContactName', title: '收货人' },
+  { key: 'receivingCustomerName', title: '收货单位' },
   { key: 'destinationStation', title: '到货站' },
   {
     key: 'transferStation',
@@ -187,14 +197,46 @@ const createWaybillExcelColumns = (context: WaybillListContext): ArtTableQueryEx
   },
   { key: 'dispatchPlateNo', title: '配载车辆' },
   { key: 'dispatchDriverName', title: '司机' },
+  ...(context.mode === 'loaded'
+    ? [
+        { key: 'driverOwnership', title: '司机归属' },
+        { key: 'carrierName', title: '所属承运商' },
+        { key: 'companyName', title: '所属公司' }
+      ]
+    : []),
   ...(canViewField(context.fieldAccess.value, 'driverPhone')
     ? [{ key: 'dispatchDriverPhone', title: '司机电话' }]
     : []),
   { key: 'plannedDepartureTime', title: '计划发车时间' },
   { key: 'plannedArrivalTime', title: '计划到达时间' },
+  ...createFeeExcelColumns(context),
   { key: 'dispatchStatus', title: '配载状态' },
   { key: 'createTime', title: '开单时间' }
 ]
+
+const feeFields = [
+  ['transportFee', '基础运费'],
+  ['deliveryFee', '配送费'],
+  ['unloadingFee', '卸货费'],
+  ['collectPaymentFee', '回款费'],
+  ['transferFee', '中转费'],
+  ['declaredValue', '声明价值'],
+  ['insuranceFee', '保费'],
+  ['packageFee', '包装费'],
+  ['otherFee', '其他费用'],
+  ['totalFee', '运费合计']
+] as const
+
+function createFeeExcelColumns(context: WaybillListContext): ArtTableQueryExcelColumn[] {
+  return feeFields
+    .filter(([field]) =>
+      canViewField(
+        context.fieldAccess.value,
+        field === 'declaredValue' ? 'settlementAmounts' : 'freightAmounts'
+      )
+    )
+    .map(([key, title]) => ({ key, title }))
+}
 
 export const createWaybillSearchItems = (
   paymentMethodOptions: ComputedRef<Api.DataCenter.DictListItem[]>,
@@ -404,8 +446,8 @@ export const createWaybillHeaderActions = (
             ? 'TmsPendingWaybillList:Export'
             : 'TmsLoadedWaybillList:Export',
         type: 'export',
-        exportFilename: context.mode === 'pending' ? '待运载运单' : '已配载运单',
-        exportSheetName: context.mode === 'pending' ? '待运载运单' : '已配载运单',
+        exportFilename: context.mode === 'pending' ? '待配载派车运单' : '运输运单',
+        exportSheetName: context.mode === 'pending' ? '待配载派车运单' : '运输运单',
         exportColumns: () => createWaybillExcelColumns(context),
         exportApi: async ({ selectedIds, searchParams, maxRows }) => {
           const waybillSearchParams = searchParams as WaybillSearchParams
@@ -431,6 +473,8 @@ export const createWaybillColumns = (
   context: WaybillListContext
 ): ColumnOption<WaybillRecord>[] => {
   const orderColumns: ColumnOption<WaybillRecord>[] = [
+    { prop: 'shippingContactName', label: '发货人', width: 110, showOverflowTooltip: true },
+    { prop: 'shippingCustomerName', label: '发货单位', minWidth: 150, showOverflowTooltip: true },
     ...(canViewField(context.fieldAccess.value, 'shipperContact')
       ? [
           {
@@ -461,6 +505,7 @@ export const createWaybillColumns = (
     },
     { prop: 'destinationStation', label: '到达站', width: 110, showOverflowTooltip: true },
     { prop: 'receivingContactName', label: '收货人', width: 110, showOverflowTooltip: true },
+    { prop: 'receivingCustomerName', label: '收货单位', minWidth: 150, showOverflowTooltip: true },
     ...(canViewField(context.fieldAccess.value, 'receiverContact')
       ? [
           {
@@ -521,44 +566,20 @@ export const createWaybillColumns = (
       width: 110,
       dict: { code: 'tmsOrderPaymentMethod', display: 'tag' }
     },
-    ...(canViewField(context.fieldAccess.value, 'settlementAmounts')
-      ? [
-          {
-            prop: 'declaredValue',
-            label: '声明价值',
-            width: 110,
-            formatter: (row: WaybillRecord) => formatSensitiveNumber(row.declaredValue)
-          }
-        ]
-      : []),
-    ...(canViewField(context.fieldAccess.value, 'freightAmounts')
-      ? [
-          {
-            prop: 'insuranceFee',
-            label: '保费',
-            width: 100,
-            formatter: (row: WaybillRecord) => formatSensitiveNumber(row.insuranceFee)
-          },
-          {
-            prop: 'deliveryFee',
-            label: '配送费',
-            width: 100,
-            formatter: (row: WaybillRecord) => formatSensitiveNumber(row.deliveryFee)
-          },
-          {
-            prop: 'unloadingFee',
-            label: '卸货费',
-            width: 100,
-            formatter: (row: WaybillRecord) => formatSensitiveNumber(row.unloadingFee)
-          },
-          {
-            prop: 'totalFee',
-            label: '总运费',
-            width: 110,
-            formatter: (row: WaybillRecord) => formatSensitiveNumber(row.totalFee)
-          }
-        ]
-      : []),
+    ...feeFields
+      .filter(([field]) =>
+        canViewField(
+          context.fieldAccess.value,
+          field === 'declaredValue' ? 'settlementAmounts' : 'freightAmounts'
+        )
+      )
+      .map(([prop, label]) => ({
+        prop,
+        label,
+        width: 112,
+        align: 'right' as const,
+        formatter: (row: WaybillRecord) => formatSensitiveNumber(row[prop])
+      })),
     { prop: 'createdByName', label: '开单人', width: 110, showOverflowTooltip: true },
     {
       prop: 'createTime',
@@ -575,9 +596,30 @@ export const createWaybillColumns = (
       fixed: 'left',
       width: 140,
       formatter: (row) => (
-        <ElLink type="primary" underline="never" onClick={() => openDetail(context, row)}>
-          {context.mode === 'pending' ? row.orderNo : row.waybillNo || row.orderNo}
-        </ElLink>
+        <div class="flex min-w-0 items-center gap-1.5">
+          <ElLink
+            type="primary"
+            underline="never"
+            href={resolveDetailHref(context, row)}
+            onClick={(event: MouseEvent) => {
+              if (
+                context.mode === 'pending' &&
+                context.openOrderDetail &&
+                !isModifiedLinkClick(event)
+              ) {
+                event.preventDefault()
+                openDetail(context, row)
+              }
+            }}
+          >
+            {context.mode === 'pending' ? row.orderNo : row.waybillNo || row.orderNo}
+          </ElLink>
+          {row.hasReturnTrip && (
+            <ElTag size="small" type="warning">
+              返程
+            </ElTag>
+          )}
+        </div>
       )
     }
   ]
@@ -591,7 +633,7 @@ export const createWaybillColumns = (
         label: '原始运单',
         minWidth: 190,
         showOverflowTooltip: true,
-        formatter: (row) => (row.sourceOrderNos ?? [row.orderNo]).join('、')
+        formatter: (row) => renderSourceOrders(context, row)
       },
       {
         prop: 'executionKind',
@@ -599,11 +641,9 @@ export const createWaybillColumns = (
         minWidth: 130,
         showOverflowTooltip: true,
         formatter: (row) => {
-          const direction = row.hasReturnTrip ? ' · 返程配货' : ''
-          return (
-            { single: '正向货配载', merge: '合单', split: '拆单' }[row.executionKind ?? 'single'] +
-            direction
-          )
+          return row.hasReturnTrip
+            ? '返程配货'
+            : { single: '正向货配载', merge: '合单', split: '拆单' }[row.executionKind ?? 'single']
         }
       },
       {
@@ -619,6 +659,19 @@ export const createWaybillColumns = (
       },
       ...orderColumns,
       { prop: 'dispatchDriverName', label: '司机', width: 100, showOverflowTooltip: true },
+      {
+        prop: 'driverOwnership',
+        label: '司机归属',
+        width: 110,
+        formatter: (row) =>
+          row.driverOwnership ? (
+            <ArtDictDisplay dictCode="tmsDriverOwnership" value={row.driverOwnership} />
+          ) : (
+            '-'
+          )
+      },
+      { prop: 'carrierName', label: '所属承运商', minWidth: 150, showOverflowTooltip: true },
+      { prop: 'companyName', label: '所属公司', minWidth: 150, showOverflowTooltip: true },
       ...(canViewField(context.fieldAccess.value, 'driverPhone')
         ? [
             {
@@ -744,6 +797,14 @@ function getMoreActions(context: WaybillListContext, row: WaybillRecord): Button
       auth: 'TmsWaybill:Accept'
     })
   }
+  if (context.canPickupAppointment && row.waybillStatus === 'accepted') {
+    actions.push({
+      key: 'pickup-appointment',
+      label: '提货预约',
+      icon: 'ri:calendar-check-line',
+      auth: 'TmsLoadedWaybillList:PickupAppointment'
+    })
+  }
   if (context.canDepart && row.waybillStatus === 'loading') {
     actions.push({
       key: 'confirm-departure',
@@ -832,6 +893,7 @@ function handleMoreAction(
     dispatch: () => openDispatch(context, row),
     split: () => void context.splitDialogRef?.value?.handleOpen(row),
     'confirm-acceptance': () => void handleConfirmAcceptance(context, row),
+    'pickup-appointment': () => void context.pickupAppointmentDrawerRef?.value?.handleOpen(row),
     'confirm-departure': () =>
       void context.executionOperationDialogRef?.value?.handleOpen({ row, action: 'departure' }),
     'loading-operation': () =>
@@ -868,10 +930,63 @@ function openDetail(context: WaybillListContext, row: WaybillRecord): void {
     return
   }
   if (!row.id) return
+  if (context.openOrderDetail) {
+    context.openOrderDetail(row.id, row.orderNo)
+    return
+  }
   void context.router.push({
     name: 'TmsOrderDetail',
     params: { id: row.id }
   })
+}
+
+function resolveDetailHref(context: WaybillListContext, row: WaybillRecord): string | undefined {
+  if (context.mode === 'loaded' && row.driverWaybillId) {
+    return context.router.resolve({ name: 'TmsWaybillDetail', params: { id: row.driverWaybillId } })
+      .href
+  }
+  return row.id
+    ? context.router.resolve({ name: 'TmsOrderDetail', params: { id: row.id } }).href
+    : undefined
+}
+
+function isModifiedLinkClick(event: MouseEvent): boolean {
+  return event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey
+}
+
+function renderSourceOrders(context: WaybillListContext, row: WaybillRecord) {
+  const refs = row.sourceOrderRefs?.length
+    ? row.sourceOrderRefs
+    : (row.sourceOrderNos?.length ? row.sourceOrderNos : [row.orderNo]).map((orderNo) => ({
+        id: (row.sourceOrderNos?.length ?? 1) === 1 ? row.sourceOrderId : null,
+        orderNo
+      }))
+  return (
+    <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+      {refs.map((source, index) =>
+        source.id ? (
+          <ElLink
+            key={`${source.id}-${index}`}
+            onClick={(event: MouseEvent) => {
+              if (context.openOrderDetail && source.id && !isModifiedLinkClick(event)) {
+                event.preventDefault()
+                context.openOrderDetail(source.id, source.orderNo)
+              }
+            }}
+            type="primary"
+            underline="never"
+            href={
+              context.router.resolve({ name: 'TmsOrderDetail', params: { id: source.id } }).href
+            }
+          >
+            {source.orderNo}
+          </ElLink>
+        ) : (
+          <span key={`${source.orderNo}-${index}`}>{source.orderNo}</span>
+        )
+      )}
+    </div>
+  )
 }
 
 async function handleCancelOrder(context: WaybillListContext, row: WaybillRecord): Promise<void> {

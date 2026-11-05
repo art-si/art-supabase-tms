@@ -52,7 +52,12 @@
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
   import { createDateTimeFormatter } from '@/utils/ui/format'
   import { fetchAppointmentList } from '@tms/api'
-  import type { AppointmentKind, AppointmentListRow, AppointmentSearchParams } from '@tms/api'
+  import type {
+    AppointmentKind,
+    AppointmentListRow,
+    AppointmentRecord,
+    AppointmentSearchParams
+  } from '@tms/api'
   import AppointmentDrawer from './appointment-drawer.vue'
 
   interface AppointmentPermissions {
@@ -171,6 +176,30 @@
     </div>
   )
 
+  const appointmentValues = (
+    row: AppointmentListRow,
+    valueOf: (appointment: AppointmentRecord) => string
+  ) =>
+    row.appointments.length ? (
+      <div class="min-w-0">
+        {row.appointments.map((appointment, index) => {
+          const value = valueOf(appointment)
+          return (
+            <div
+              key={appointment.id}
+              class={`flex min-h-9 min-w-0 items-center py-1 ${index ? 'border-t border-[var(--el-border-color-lighter)]' : ''}`}
+              title={value}
+              aria-label={`第 ${index + 1} 条预约：${value}`}
+            >
+              <span class="block truncate">{value}</span>
+            </div>
+          )
+        })}
+      </div>
+    ) : (
+      '待预约'
+    )
+
   const columnsFactory = (): ColumnOption<AppointmentListRow>[] => [
     { type: 'selection', width: 48, fixed: 'left', reserveSelection: true },
     {
@@ -269,27 +298,49 @@
       prop: 'appointmentNo',
       label: '预约单号',
       width: 170,
-      formatter: (row) => row.appointments[0]?.appointmentNo || '待预约'
-    },
-    {
-      prop: 'appointmentInfo',
-      label: '预约信息',
-      width: 280,
-      formatter: (row) => {
-        const item = row.appointments[0]
-        return item
-          ? displayPair(
-              `${item.driverName} · ${item.plateNo}`,
-              `${item.vehicleType || '车型待补'} · ${item.loadCapacityTon ?? '-'} 吨 · ${item.vehicleLengthM ?? '-'} 米${row.appointments.length > 1 ? ` · 共 ${row.appointments.length} 条` : ''}`
-            )
-          : '待安排司机、车辆和预约时间'
-      }
+      formatter: (row) => appointmentValues(row, (item) => item.appointmentNo || '-')
     },
     {
       prop: 'appointmentEntryTime',
-      label: '预约进场时间',
-      width: 155,
-      formatter: (row) => displayTime(row.appointments[0]?.scheduledAt)
+      label: '进场日期与时间',
+      width: 165,
+      formatter: (row) => appointmentValues(row, (item) => displayTime(item.scheduledAt))
+    },
+    {
+      prop: 'appointmentDriverName',
+      label: '司机姓名',
+      width: 125,
+      formatter: (row) => appointmentValues(row, (item) => item.driverName || '-')
+    },
+    {
+      prop: 'appointmentPlateNo',
+      label: '车牌号',
+      width: 125,
+      formatter: (row) => appointmentValues(row, (item) => item.plateNo || '-')
+    },
+    {
+      prop: 'appointmentVehicleType',
+      label: '车型',
+      width: 125,
+      formatter: (row) => appointmentValues(row, (item) => item.vehicleType || '-')
+    },
+    {
+      prop: 'appointmentLoadCapacityTon',
+      label: '载重（吨）',
+      width: 110,
+      formatter: (row) =>
+        appointmentValues(row, (item) =>
+          item.loadCapacityTon === null ? '-' : String(item.loadCapacityTon)
+        )
+    },
+    {
+      prop: 'appointmentVehicleLengthM',
+      label: '车长（米）',
+      width: 110,
+      formatter: (row) =>
+        appointmentValues(row, (item) =>
+          item.vehicleLengthM === null ? '-' : String(item.vehicleLengthM)
+        )
     },
     {
       prop: 'arrivalInfo',

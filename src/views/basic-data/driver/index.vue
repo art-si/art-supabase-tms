@@ -317,8 +317,7 @@
       label: '司机归属',
       width: 120,
       formatter: (row) =>
-        ownershipOptions.value.find((item) => item.value === (row.driverOwnership || 'self'))
-          ?.label || '—'
+        ownershipOptions.value.find((item) => item.value === row.driverOwnership)?.label || '—'
     },
     {
       prop: 'companyName',

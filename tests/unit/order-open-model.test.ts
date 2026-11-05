@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   createCustomerPriceBusinessPatch,
+  createCustomerSelectorContactPatch,
   createFavoriteRouteContactPatch,
   createInitialForm,
   formatOrderAddress,
@@ -188,6 +189,43 @@ test('favorite route patch fills both endpoint customers, contacts and addresses
     formatOrderAddress('河南省/许昌市/禹州市', '河南省许昌市禹州市矿区一号门'),
     '河南省许昌市禹州市矿区一号门'
   )
+})
+
+test('shared address selection keeps endpoint ownership and field masks for opening and returns', () => {
+  const customer = {
+    id: 'customer-1',
+    customerName: '货主一',
+    contactName: '默认联系人',
+    contactPhone: '13900000001',
+    fieldAccess: { contactPhone: 'read', addressDetail: 'read' }
+  } as Api.Tms.Order.CustomerSelectorItem
+  const address = {
+    id: 'address-1',
+    customerId: customer.id,
+    addressType: 'shipping',
+    contactName: '地址联系人',
+    contactPhone: '13900000002',
+    region: '浙江省/杭州市',
+    addressDetail: '物流园 2 号门',
+    longitude: 120.2,
+    latitude: 30.2,
+    fieldAccess: { contactPhone: 'masked', addressDetail: 'edit' }
+  } as Api.Tms.BasicData.CustomerAddress
+
+  const shipping = createCustomerSelectorContactPatch('shipping', customer, address)
+  assert.equal(shipping.shippingCustomerId, customer.id)
+  assert.equal(shipping.shippingAddressId, address.id)
+  assert.equal(shipping.shippingContactName, '地址联系人')
+  assert.equal(shipping.shippingContactPhone, '')
+  assert.deepEqual(shipping.shippingRegionPath, ['浙江省', '杭州市'])
+  assert.equal(shipping.shippingLongitude, 120.2)
+  assert.equal('receivingCustomerId' in shipping, false)
+
+  const receiving = createCustomerSelectorContactPatch('receiving', customer, address)
+  assert.equal(receiving.receivingCustomerId, customer.id)
+  assert.equal(receiving.receivingContactPhone, '')
+  assert.equal(receiving.receivingAddressDetail, '物流园 2 号门')
+  assert.equal('shippingCustomerId' in receiving, false)
 })
 
 test('favorite route contact backfill never reuses masked or ungranted endpoint values', () => {

@@ -174,7 +174,7 @@
   const baseDescriptionItems = computed<ArtDescriptionItem<Partial<Contract>>[]>(() => [
     {
       key: 'contractStatus',
-      label: '审核状态',
+      label: '合同状态',
       field: 'contractStatus',
       dictCode: 'tmsContractStatus',
       dictDisplay: 'text'
