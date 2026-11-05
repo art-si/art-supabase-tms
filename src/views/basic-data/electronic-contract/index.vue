@@ -120,6 +120,7 @@
     ArtTableQueryHeaderAction
   } from '@/components/core/tables/art-table-query/index.vue'
   import { useUserStore } from '@/store/modules/user'
+  import { useAuth } from '@/hooks/core/useAuth'
   import { notifyFriendlyError, useArtFeedback } from '@/hooks/core/useArtFeedback'
   import type { ColumnOption } from '@/types'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
@@ -147,6 +148,7 @@
   const terminatingId = ref<string | null>(null)
   const submittingId = ref<string | null>(null)
   const userStore = useUserStore()
+  const { hasAuth } = useAuth()
   const { getDictMap } = storeToRefs(userStore)
   const tableRef = ref<ArtTableQueryExpose>()
   const { deleteGuardRef, deleteRecords } = useRecordDeleteGuard(
@@ -245,18 +247,21 @@
       label: '合同号',
       minWidth: 190,
       fixed: 'left',
-      formatter: (row) => (
-        <RouterLink
-          class="font-semibold text-[var(--el-color-primary)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--el-color-primary)]"
-          to={{
-            name: route.name ?? 'TmsElectronicContract',
-            query: { ...route.query, contractId: row.id }
-          }}
-          title={`查看合同 ${row.contractNo}`}
-        >
-          {row.contractNo}
-        </RouterLink>
-      )
+      formatter: (row) =>
+        hasAuth('TmsElectronicContract:View') ? (
+          <RouterLink
+            class="font-semibold text-[var(--el-color-primary)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--el-color-primary)]"
+            to={{
+              name: route.name ?? 'TmsElectronicContract',
+              query: { ...route.query, contractId: row.id }
+            }}
+            title={`查看合同 ${row.contractNo}`}
+          >
+            {row.contractNo}
+          </RouterLink>
+        ) : (
+          <span class="font-semibold text-[var(--el-text-color-primary)]">{row.contractNo}</span>
+        )
     },
     { prop: 'contractName', label: '合同名称', minWidth: 210, showOverflowTooltip: true },
     { prop: 'partyACompany', label: '甲方公司', minWidth: 195, showOverflowTooltip: true },
@@ -375,6 +380,7 @@
   }
 
   const showDetail = async (row: ElectronicContractRecord): Promise<void> => {
+    if (!hasAuth('TmsElectronicContract:View')) return
     await router.push({
       name: route.name ?? 'TmsElectronicContract',
       query: { ...route.query, contractId: row.id }
@@ -454,6 +460,7 @@
   })
 
   const preview = async (row: ElectronicContractRecord): Promise<void> => {
+    if (!hasAuth('TmsElectronicContract:Preview')) return
     try {
       const result = await fetchElectronicContractDetail(row.id)
       if (!result.data) throw new Error('电子合同已不存在或无权查看')
@@ -464,7 +471,7 @@
   }
 
   const submitApproval = async (row: ElectronicContractRecord): Promise<void> => {
-    if (submittingId.value) return
+    if (submittingId.value || !hasAuth('TmsElectronicContract:Submit') || !canEdit(row)) return
     submittingId.value = row.id
     try {
       await submitElectronicContractForApproval(row.id)
@@ -477,6 +484,12 @@
   }
 
   const openSigning = async (row: ElectronicContractRecord): Promise<void> => {
+    if (
+      !hasAuth('TmsElectronicContract:Sign') ||
+      row.approvalStatus !== 'approved' ||
+      row.status !== 'pending_signed'
+    )
+      return
     try {
       const result = await fetchElectronicContractDetail(row.id)
       const record = result.data
@@ -500,7 +513,7 @@
   watch(
     () => route.query.contractId ?? route.query.recordId,
     async (value) => {
-      if (!value || typeof value !== 'string') return
+      if (!value || typeof value !== 'string' || !hasAuth('TmsElectronicContract:View')) return
       detail.value = undefined
       await nextTick()
       await detailDialogRef.value?.handleOpen(undefined, {

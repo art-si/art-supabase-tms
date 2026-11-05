@@ -44,6 +44,7 @@ export {
   fetchTransportAgreementList,
   fetchTransportAgreementDriverOptions,
   fetchTransportAgreementDriverEvidence,
+  fetchTransportAgreementDetail,
   signElectronicContract,
   signTransportAgreement,
   submitElectronicContractForApproval,

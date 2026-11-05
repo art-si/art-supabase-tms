@@ -1,42 +1,58 @@
 <template>
-  <ArtDialog ref="dialogRef" size="xl">
-    <div
-      class="mb-4 rounded-md bg-[var(--el-color-primary-light-9)] px-4 py-3 text-sm text-[var(--el-text-color-primary)]"
-    >
-      协议号保存时自动生成；选择司机后，可复用其已认证的证件图片。
-    </div>
-    <ElAlert
-      v-if="driverEvidenceError"
-      class="mb-4"
-      type="error"
-      :closable="false"
-      title="司机证件读取失败，暂不能保存协议。请重试，或清除司机后手动补充证件。"
-      show-icon
-    >
-      <ElButton type="primary" link :loading="driverEvidenceLoading" @click="retryDriverEvidence">
-        重试读取证件
-      </ElButton>
-    </ElAlert>
-    <ArtForm
-      ref="formRef"
-      v-model:active-tab="activeTab"
-      v-model="form"
-      :items="formItems"
-      :rules="rules"
-      :span="8"
-      :gutter="20"
-      label-width="118px"
-      scroll-to-error
-    >
-      <template #contentHtml>
-        <ArtTiptapEditor
-          v-model="form.contentHtml"
-          :resource-tenant-id="form.tenantId"
-          height="280px"
-          placeholder="请输入运输责任、费用及履约约定…"
-        />
-      </template>
-    </ArtForm>
+  <ArtDialog
+    ref="dialogRef"
+    size="xl"
+    :loading="detailLoading"
+    loading-text="正在读取运输协议…"
+    :confirm-disabled="Boolean(editingId) && !detailReady"
+    @close="invalidateDetailLoad"
+  >
+    <ArtAsyncState
+      v-if="detailError"
+      :error="detailError"
+      error-title="运输协议读取失败"
+      retryable
+      @retry="loadEditDetail"
+    />
+    <template v-else-if="!editingId || detailReady">
+      <div
+        class="mb-4 rounded-md bg-[var(--el-color-primary-light-9)] px-4 py-3 text-sm text-[var(--el-text-color-primary)]"
+      >
+        协议号保存时自动生成；选择司机后，可复用其已认证的证件图片。
+      </div>
+      <ElAlert
+        v-if="driverEvidenceError"
+        class="mb-4"
+        type="error"
+        :closable="false"
+        title="司机证件读取失败，暂不能保存协议。请重试，或清除司机后手动补充证件。"
+        show-icon
+      >
+        <ElButton type="primary" link :loading="driverEvidenceLoading" @click="retryDriverEvidence">
+          重试读取证件
+        </ElButton>
+      </ElAlert>
+      <ArtForm
+        ref="formRef"
+        v-model:active-tab="activeTab"
+        v-model="form"
+        :items="formItems"
+        :rules="rules"
+        :span="8"
+        :gutter="20"
+        label-width="118px"
+        scroll-to-error
+      >
+        <template #contentHtml>
+          <ArtTiptapEditor
+            v-model="form.contentHtml"
+            :resource-tenant-id="form.tenantId"
+            height="280px"
+            placeholder="请输入运输责任、费用及履约约定…"
+          />
+        </template>
+      </ArtForm>
+    </template>
   </ArtDialog>
 </template>
 
@@ -47,6 +63,7 @@
   import type { FormRules } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
+  import ArtAsyncState from '@/components/core/feedback/art-async-state/index.vue'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtTiptapEditor from '@/components/core/forms/art-tiptap-editor/index.vue'
   import { useUserStore } from '@/store/modules/user'
@@ -58,6 +75,7 @@
     fetchBasicRecordCarrierOptions,
     fetchTransportAgreementDriverOptions,
     fetchTransportAgreementDriverEvidence,
+    fetchTransportAgreementDetail,
     fetchTmsVehicleOptions,
     type TransportAgreementInput,
     type TransportAgreementRecord
@@ -99,6 +117,11 @@
   const driverLoadVersion = ref(0)
   const driverEvidenceLoading = ref(false)
   const driverEvidenceError = ref(false)
+  const detailLoading = ref(false)
+  const detailReady = ref(false)
+  const detailError = ref('')
+  let detailLoadVersion = 0
+  let editRow: TransportAgreementRecord | undefined
   const initialForm = (): AgreementForm => ({
     tenantId: props.customer?.tenantId ?? selectedTenantId.value,
     customerId: props.customer?.id ?? null,
@@ -115,6 +138,7 @@
     startsOn: '',
     endsOn: '',
     contentHtml: '',
+    attachments: [],
     idCardImages: [],
     registrationImages: [],
     driverLicenseImages: [],
@@ -187,7 +211,7 @@
       const vehicle = (data ?? []).find((item) => item.id === id)
       form.value.plateNo = vehicle?.plateNo ?? ''
       form.value.vehicleType = vehicle?.vehicleType ?? ''
-      form.value.vehicleLengthText = '车辆档案未维护'
+      form.value.vehicleLengthText = '保存后按车辆档案读取'
       await formRef.value?.reloadOptions('driverId')
     }
   )
@@ -286,7 +310,7 @@
       }
     },
     {
-      label: '乙方代表人（司机）',
+      label: '乙方代表人',
       key: 'driverId',
       type: 'select',
       span: 12,
@@ -305,13 +329,6 @@
         disabled: !form.value.carrierId,
         placeholder: form.value.carrierId ? '从司机管理选择（选填）' : '请先选择承运方'
       }
-    },
-    {
-      label: '乙方代表人',
-      key: 'partyBRepresentative',
-      type: 'input',
-      span: 12,
-      props: { maxlength: 80, placeholder: '选择司机后带入，也可手动填写' }
     },
     {
       label: '车型',
@@ -347,6 +364,19 @@
       props: { valueFormat: 'YYYY-MM-DD', placeholder: '请选择结束时间' }
     },
     { label: '协议内容', key: 'contentHtml', span: 24 },
+    {
+      label: '协议附件',
+      key: 'attachments',
+      type: 'uploadFile',
+      span: 24,
+      props: {
+        title: '选择或拖入协议附件',
+        resourceTenantId: form.value.tenantId,
+        disabled: !form.value.tenantId,
+        limit: 10,
+        multiple: true
+      }
+    },
     { label: '证件附件', key: 'documentsSection', type: 'tab', span: 24 },
     {
       label: '身份证（最多 5 张）',
@@ -420,6 +450,7 @@
 
   const handleSubmit = async (): Promise<boolean> => {
     try {
+      if (editingId.value && !detailReady.value) return false
       if (driverEvidenceLoading.value || driverEvidenceError.value) {
         ElMessage.warning('司机证件尚未读取成功，请重试或清除司机后补充证件')
         return false
@@ -440,6 +471,7 @@
         startsOn: form.value.startsOn,
         endsOn: form.value.endsOn,
         contentHtml: form.value.contentHtml,
+        attachments: form.value.attachments,
         idCardImages: form.value.idCardImages,
         registrationImages: form.value.registrationImages,
         driverLicenseImages: form.value.driverLicenseImages,
@@ -456,38 +488,94 @@
     }
   }
 
+  const hydrateEditForm = async (row: TransportAgreementRecord, version: number): Promise<void> => {
+    hydrating.value = true
+    Object.assign(form.value, {
+      ...initialForm(),
+      tenantId: row.tenantId,
+      customerId: row.customerId,
+      shipperName: row.shipperName,
+      carrierId: row.carrierId,
+      carrierName: row.carrierName,
+      driverId: row.driverId,
+      driverName: row.partyBRepresentative || '',
+      contactPhone: row.contactPhone,
+      vehicleId: row.vehicleId,
+      plateNo: row.plateNo,
+      vehicleType: row.vehicleType ?? '',
+      vehicleLengthText: row.vehicleLengthM ? `${row.vehicleLengthM} m` : '车辆档案未维护',
+      startsOn: row.startsOn || '',
+      endsOn: row.endsOn || '',
+      contentHtml: row.contentHtml,
+      attachments: [...row.attachments],
+      idCardImages: [...row.idCardImages],
+      registrationImages: [...row.registrationImages],
+      driverLicenseImages: [...row.driverLicenseImages],
+      roadPermitImages: [...row.roadPermitImages],
+      partyBRepresentative: row.partyBRepresentative
+    })
+    await nextTick()
+    if (version === detailLoadVersion) hydrating.value = false
+  }
+  const invalidateDetailLoad = (): void => {
+    ++detailLoadVersion
+    editRow = undefined
+    detailLoading.value = false
+    detailReady.value = false
+  }
+  const loadEditDetail = async (): Promise<void> => {
+    const row = editRow
+    if (!row) return
+    const version = ++detailLoadVersion
+    detailLoading.value = true
+    detailReady.value = false
+    detailError.value = ''
+    try {
+      const result = await fetchTransportAgreementDetail(row.id)
+      if (version !== detailLoadVersion) return
+      if (result.error) throw result.error
+      const current = result.data
+      if (!current) throw new Error('运输协议不存在或已超出当前租户范围')
+      if (
+        current.status !== 'pending_signed' ||
+        !['draft', 'rejected'].includes(current.approvalStatus)
+      ) {
+        detailError.value = '协议状态已变化，请刷新列表后重试。'
+        return
+      }
+      await hydrateEditForm(current, version)
+      if (version !== detailLoadVersion) return
+      detailReady.value = true
+      await nextTick()
+      await formRef.value?.reloadOptions('carrierId')
+      if (version !== detailLoadVersion) return
+      await formRef.value?.reloadOptions('vehicleId')
+      if (version !== detailLoadVersion) return
+      if (current.carrierId) await formRef.value?.reloadOptions('driverId')
+      if (version !== detailLoadVersion) return
+      formRef.value?.clearValidate()
+    } catch {
+      if (version === detailLoadVersion) {
+        detailReady.value = false
+        detailError.value = '运输协议读取失败，请重试或关闭弹窗。'
+      }
+    } finally {
+      if (version === detailLoadVersion) detailLoading.value = false
+    }
+  }
   const handleOpen = async (row?: TransportAgreementRecord): Promise<void> => {
+    ++detailLoadVersion
+    editRow = row
     activeTab.value = 'transportSection'
     editingId.value = row?.id ?? ''
+    detailReady.value = !row
+    detailLoading.value = Boolean(row)
+    detailError.value = ''
     hydrating.value = true
     ++driverLoadVersion.value
     driverEvidenceLoading.value = false
     driverEvidenceError.value = false
     Object.assign(form.value, initialForm())
-    if (row) {
-      Object.assign(form.value, {
-        tenantId: row.tenantId,
-        customerId: row.customerId,
-        shipperName: row.shipperName,
-        carrierId: row.carrierId,
-        carrierName: row.carrierName,
-        driverId: row.driverId,
-        driverName: row.partyBRepresentative || '',
-        contactPhone: row.contactPhone,
-        vehicleId: row.vehicleId,
-        plateNo: row.plateNo,
-        vehicleType: row.vehicleType ?? '',
-        vehicleLengthText: row.vehicleLengthM ? `${row.vehicleLengthM} m` : '车辆档案未维护',
-        startsOn: row.startsOn || '',
-        endsOn: row.endsOn || '',
-        contentHtml: row.contentHtml,
-        idCardImages: [...row.idCardImages],
-        registrationImages: [...row.registrationImages],
-        driverLicenseImages: [...row.driverLicenseImages],
-        roadPermitImages: [...row.roadPermitImages],
-        partyBRepresentative: row.partyBRepresentative
-      })
-    }
     await nextTick()
     hydrating.value = false
     await dialogRef.value?.handleOpen(row, {
@@ -496,10 +584,11 @@
       contentMaxHeight: 'calc(100vh - 160px)',
       onOpen: async () => {
         await nextTick()
-        await formRef.value?.reloadOptions('carrierId')
-        if (row) await formRef.value?.reloadOptions('vehicleId')
-        if (row?.carrierId) await formRef.value?.reloadOptions('driverId')
-        formRef.value?.clearValidate()
+        if (row) await loadEditDetail()
+        else {
+          await formRef.value?.reloadOptions('carrierId')
+          formRef.value?.clearValidate()
+        }
       },
       onConfirm: handleSubmit
     })

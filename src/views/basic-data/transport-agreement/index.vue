@@ -56,7 +56,11 @@
               v-html="safeContent"
             />
           </ElTabPane>
-          <ElTabPane name="documents" label="证件附件">
+          <ElTabPane name="documents" label="证件与附件">
+            <div v-if="detail.attachments.length" class="mb-5">
+              <div class="mb-2 text-sm font-medium">协议附件</div>
+              <ArtUploadFile :model-value="detail.attachments" multiple readonly />
+            </div>
             <ArtEmptyState
               v-if="
                 !detail.idCardImages.length &&
@@ -176,6 +180,7 @@
 
   import DOMPurify from 'dompurify'
   import { useUserStore } from '@/store/modules/user'
+  import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import {
     formatVehicleTypeDisplay,
     getVehicleTypeFallbackLabel
@@ -196,6 +201,7 @@
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
   import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
+  import ArtUploadFile from '@/components/core/forms/art-upload-file/index.vue'
   import BusinessWorkspaceHeader from '@/components/business/business-workspace-header/index.vue'
   import BusinessTableWorkspaceActions from '@/components/business/business-table-workspace-actions/index.vue'
   import BusinessTableRowActions from '@/components/business/business-table-row-actions/index.vue'
@@ -210,6 +216,7 @@
   import {
     deleteTmsBasicRecords,
     fetchBasicRecordCarrierOptions,
+    fetchTransportAgreementDetail,
     fetchTransportAgreementList,
     signTransportAgreement,
     submitTransportAgreementForApproval,
@@ -222,6 +229,7 @@
   const props = defineProps<{ embedded?: boolean; customer?: Api.Tms.BasicData.Customer }>()
   const route = useRoute()
   const userStore = useUserStore()
+  const tenantScopeStore = useTenantScopeStore()
   const { hasAuth } = useAuth()
 
   const tableRef = ref<ArtTableQueryExpose>()
@@ -236,7 +244,10 @@
   const activeDetailTab = ref('transport')
   const detailDialogRef = ref<ArtDialogExpose<TransportAgreementRecord>>()
   const detail = ref<TransportAgreementRecord>()
+  let recordLoadVersion = 0
   const safeContent = computed(() => DOMPurify.sanitize(detail.value?.contentHtml || ''))
+  const signedOn = (signedAt: string | null, legacyOn: string): string | null =>
+    signedAt ? formatWithDayjs(signedAt, 'YYYY-MM-DD') : legacyOn || null
   const search = ref<TransportAgreementSearch>({
     agreementNo: '',
     shipperName: '',
@@ -319,10 +330,18 @@
   const signatureItems: ArtDescriptionItem<TransportAgreementRecord>[] = [
     { key: 'partyASeal', label: '甲方（盖章）', field: 'partyASeal' },
     { key: 'partyARepresentative', label: '甲方代表人', field: 'partyARepresentative' },
-    { key: 'partyASignedOn', label: '甲方签订日期', field: 'partyASignedOn' },
+    {
+      key: 'partyASignedOn',
+      label: '甲方签订日期',
+      value: (row: TransportAgreementRecord) => signedOn(row.partyASignedAt, row.partyASignedOn)
+    },
     { key: 'partyBSeal', label: '乙方（盖章）', field: 'partyBSeal' },
     { key: 'partyBRepresentative', label: '乙方代表人', field: 'partyBRepresentative' },
-    { key: 'partyBSignedOn', label: '乙方签订日期', field: 'partyBSignedOn' }
+    {
+      key: 'partyBSignedOn',
+      label: '乙方签订日期',
+      value: (row: TransportAgreementRecord) => signedOn(row.partyBSignedAt, row.partyBSignedOn)
+    }
   ]
 
   const columnsFactory = (): ColumnOption<TransportAgreementRecord>[] => [
@@ -333,15 +352,18 @@
       label: '协议号',
       minWidth: 190,
       fixed: 'left',
-      formatter: (row) => (
-        <button
-          type="button"
-          class="font-medium text-[var(--el-color-primary)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--el-color-primary)]"
-          onClick={() => void showDetail(row)}
-        >
-          {row.agreementNo}
-        </button>
-      )
+      formatter: (row) =>
+        hasAuth('TmsTransportAgreement:View') ? (
+          <button
+            type="button"
+            class="font-medium text-[var(--el-color-primary)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--el-color-primary)]"
+            onClick={() => void showDetail(row)}
+          >
+            {row.agreementNo}
+          </button>
+        ) : (
+          row.agreementNo
+        )
     },
     { prop: 'shipperName', label: '托运方', minWidth: 185, showOverflowTooltip: true },
     { prop: 'carrierName', label: '承运方', minWidth: 185, showOverflowTooltip: true },
@@ -380,8 +402,18 @@
       width: 105,
       formatter: (row) => (row.vehicleLengthM == null ? '—' : `${row.vehicleLengthM} m`)
     },
-    { prop: 'partyASignedOn', label: '甲方签订日期', width: 130 },
-    { prop: 'partyBSignedOn', label: '乙方签订日期', width: 130 },
+    {
+      prop: 'partyASignedOn',
+      label: '甲方签订日期',
+      width: 130,
+      formatter: (row) => signedOn(row.partyASignedAt, row.partyASignedOn) || '—'
+    },
+    {
+      prop: 'partyBSignedOn',
+      label: '乙方签订日期',
+      width: 130,
+      formatter: (row) => signedOn(row.partyBSignedAt, row.partyBSignedOn) || '—'
+    },
     {
       prop: 'createTime',
       label: '创建时间',
@@ -411,7 +443,7 @@
             <ArtButtonTable
               type="edit"
               permission="TmsTransportAgreement:Edit"
-              onClick={() => void formDialogRef.value?.handleOpen(row)}
+              onClick={() => void openEdit(row)}
             />
           )}
           <ArtButtonMore
@@ -491,64 +523,87 @@
     })
   }
 
+  const loadCurrentRecord = async (
+    row: TransportAgreementRecord,
+    fallbackMessage: string
+  ): Promise<TransportAgreementRecord | undefined> => {
+    const requestVersion = ++recordLoadVersion
+    try {
+      const result = await fetchTransportAgreementDetail(row.id)
+      if (requestVersion !== recordLoadVersion) return
+      if (result.error) throw result.error
+      if (!result.data) throw new Error('运输协议不存在或已超出当前租户范围')
+      return result.data
+    } catch (error) {
+      if (requestVersion === recordLoadVersion) notifyFriendlyError(error, fallbackMessage)
+    }
+  }
+
+  const openEdit = async (row: TransportAgreementRecord): Promise<void> => {
+    if (!canEdit(row) || !hasAuth('TmsTransportAgreement:Edit')) return
+    await formDialogRef.value?.handleOpen(row)
+  }
+
   const preview = async (row: TransportAgreementRecord): Promise<void> => {
     if (!hasAuth('TmsTransportAgreement:Preview')) return
+    const current = await loadCurrentRecord(row, '协议证照读取失败，请稍后重试')
+    if (!current) return
     const document: ContractDocument = {
       title: '货物运输协议',
-      documentNo: row.agreementNo,
-      startsOn: row.startsOn,
-      endsOn: row.endsOn,
+      documentNo: current.agreementNo,
+      startsOn: current.startsOn,
+      endsOn: current.endsOn,
       partyA: {
         label: '托运方',
-        name: row.shipperName,
-        representative: row.partyARepresentative,
-        signatureUrl: row.partyASignatureUrl,
-        sealUrl: row.partyASealUrl,
-        signedOn: row.partyASignedOn
+        name: current.shipperName,
+        representative: current.partyARepresentative,
+        signatureUrl: current.partyASignatureUrl,
+        sealUrl: current.partyASealUrl,
+        signedOn: signedOn(current.partyASignedAt, current.partyASignedOn)
       },
       partyB: {
         label: '承运方',
-        name: row.carrierName,
-        representative: row.partyBRepresentative,
-        signatureUrl: row.partyBSignatureUrl,
-        sealUrl: row.partyBSealUrl,
-        signedOn: row.partyBSignedOn
+        name: current.carrierName,
+        representative: current.partyBRepresentative,
+        signatureUrl: current.partyBSignatureUrl,
+        sealUrl: current.partyBSealUrl,
+        signedOn: signedOn(current.partyBSignedAt, current.partyBSignedOn)
       },
       facts: [
-        { label: '联系电话', value: row.contactPhone || '—' },
-        { label: '车牌号码', value: row.plateNo || '—' },
+        { label: '联系电话', value: current.contactPhone || '—' },
+        { label: '车牌号码', value: current.plateNo || '—' },
         {
           label: '车型及车长',
           value: [
             formatVehicleTypeDisplay(
-              row.vehicleType,
-              userStore.getDictItemByValue('vehicleType', row.vehicleType || '')
+              current.vehicleType,
+              userStore.getDictItemByValue('vehicleType', current.vehicleType || '')
             ),
-            row.vehicleLengthM == null ? '' : `${row.vehicleLengthM} m`
+            current.vehicleLengthM == null ? '' : `${current.vehicleLengthM} m`
           ]
             .filter(Boolean)
             .join(' · ')
         }
       ],
-      contentHtml: row.contentHtml,
-      attachments: [],
+      contentHtml: current.contentHtml,
+      attachments: current.attachments,
       certificateGroups: [
-        { label: '身份证', urls: row.idCardImages },
+        { label: '身份证', urls: current.idCardImages },
         {
           label: '驾驶证',
-          urls: row.driverLicenseImages.length
-            ? row.driverLicenseImages
-            : row.driverLicenseImage
-              ? [row.driverLicenseImage]
+          urls: current.driverLicenseImages.length
+            ? current.driverLicenseImages
+            : current.driverLicenseImage
+              ? [current.driverLicenseImage]
               : []
         },
-        { label: '行驶证', urls: row.registrationImages },
+        { label: '行驶证', urls: current.registrationImages },
         {
           label: '道路运输证',
-          urls: row.roadPermitImages.length
-            ? row.roadPermitImages
-            : row.roadPermitImage
-              ? [row.roadPermitImage]
+          urls: current.roadPermitImages.length
+            ? current.roadPermitImages
+            : current.roadPermitImage
+              ? [current.roadPermitImage]
               : []
         }
       ]
@@ -606,8 +661,24 @@
             )
         },
         { key: 'vehicleLengthM', title: '车长（米）' },
-        { key: 'partyASignedOn', title: '甲方签订日期' },
-        { key: 'partyBSignedOn', title: '乙方签订日期' }
+        {
+          key: 'partyASignedOn',
+          title: '甲方签订日期',
+          formatter: (_value: unknown, row: Record<string, unknown>) =>
+            signedOn(
+              typeof row.partyASignedAt === 'string' ? row.partyASignedAt : null,
+              typeof row.partyASignedOn === 'string' ? row.partyASignedOn : ''
+            ) || '—'
+        },
+        {
+          key: 'partyBSignedOn',
+          title: '乙方签订日期',
+          formatter: (_value: unknown, row: Record<string, unknown>) =>
+            signedOn(
+              typeof row.partyBSignedAt === 'string' ? row.partyBSignedAt : null,
+              typeof row.partyBSignedOn === 'string' ? row.partyBSignedOn : ''
+            ) || '—'
+        }
       ],
       exportApi: async ({ maxRows }) => {
         await userStore.ensureDictLoaded('vehicleType')
@@ -634,14 +705,28 @@
     })
   }
   const showDetail = async (row: TransportAgreementRecord): Promise<void> => {
-    detail.value = row
-    await detailDialogRef.value?.handleOpen(row, { title: `运输协议 · ${row.agreementNo}` })
+    if (!hasAuth('TmsTransportAgreement:View')) return
+    const current = await loadCurrentRecord(row, '运输协议详情读取失败，请稍后重试')
+    if (!current) return
+    detail.value = current
+    await detailDialogRef.value?.handleOpen(current, {
+      title: `运输协议 · ${current.agreementNo}`
+    })
   }
   const refresh = (mode: 'add' | 'edit'): void => {
     void (mode === 'add' ? tableRef.value?.refreshCreate() : tableRef.value?.refreshUpdate())
   }
   watch(
     () => route.query.recordId,
-    () => void nextTick().then(() => tableRef.value?.refreshCreate())
+    () => {
+      ++recordLoadVersion
+      void nextTick().then(() => tableRef.value?.refreshCreate())
+    }
+  )
+  watch(
+    () => [props.customer?.id, tenantScopeStore.effectiveTenantId],
+    () => {
+      ++recordLoadVersion
+    }
   )
 </script>

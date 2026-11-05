@@ -2,8 +2,14 @@ import { useSupabase } from '@/hooks/core/useSupabase'
 import { useTenantScopeStore } from '@/store/modules/tenant-scope'
 import { useUserStore } from '@/store/modules/user'
 import { normalizeNullableText } from '@/utils/form/normalize'
+import {
+  isPrivateAttachmentPath,
+  privateAttachmentPathFromSignedUrl,
+  signPrivateAttachmentPaths
+} from '@/utils/supabase/private-attachment'
 import type { DataSelectFetchParams } from '@/components/core/forms/art-data-select/types'
 import { resolveTenantWriteTargetId } from '@/utils/tenant-scope-context'
+import { uniq } from 'lodash-es'
 
 export interface TmsRecordAudit {
   id: string
@@ -122,6 +128,7 @@ export interface TransportAgreementRecord extends TmsRecordAudit {
   endsOn: string | null
   status: 'pending_signed' | 'signed' | 'revision_requested'
   contentHtml: string
+  attachments: string[]
   idCardImages: string[]
   registrationImages: string[]
   driverLicenseImage: string | null
@@ -190,6 +197,7 @@ export type TransportAgreementInput = Pick<
   | 'startsOn'
   | 'endsOn'
   | 'contentHtml'
+  | 'attachments'
   | 'idCardImages'
   | 'registrationImages'
   | 'driverLicenseImages'
@@ -197,6 +205,66 @@ export type TransportAgreementInput = Pick<
   | 'driverId'
   | 'partyBRepresentative'
 > & { tenantId?: string; customerId?: string | null }
+
+const AGREEMENT_DRIVER_PRIVATE_BUCKET = 'tms-driver-private'
+const AGREEMENT_VEHICLE_PRIVATE_BUCKET = 'vms-vehicle-private'
+
+function storedAgreementEvidenceUrl(url: string, bucket: string): string {
+  return url.includes(`/storage/v1/object/sign/${bucket}/`)
+    ? privateAttachmentPathFromSignedUrl(url, bucket)
+    : url
+}
+
+function storedAgreementEvidenceInput(input: TransportAgreementInput): TransportAgreementInput {
+  return {
+    ...input,
+    idCardImages: input.idCardImages.map((url) =>
+      storedAgreementEvidenceUrl(url, AGREEMENT_DRIVER_PRIVATE_BUCKET)
+    ),
+    registrationImages: input.registrationImages.map((url) =>
+      storedAgreementEvidenceUrl(url, AGREEMENT_VEHICLE_PRIVATE_BUCKET)
+    ),
+    driverLicenseImages: input.driverLicenseImages.map((url) =>
+      storedAgreementEvidenceUrl(url, AGREEMENT_DRIVER_PRIVATE_BUCKET)
+    ),
+    roadPermitImages: input.roadPermitImages.map((url) =>
+      storedAgreementEvidenceUrl(url, AGREEMENT_VEHICLE_PRIVATE_BUCKET)
+    )
+  }
+}
+
+async function previewAgreementEvidence<
+  T extends Pick<
+    TransportAgreementRecord,
+    'idCardImages' | 'registrationImages' | 'driverLicenseImages' | 'roadPermitImages'
+  >
+>(data: T): Promise<T> {
+  const driverPaths = uniq(
+    [...data.idCardImages, ...data.driverLicenseImages].filter(isPrivateAttachmentPath)
+  )
+  const vehiclePaths = uniq(
+    [...data.registrationImages, ...data.roadPermitImages].filter(isPrivateAttachmentPath)
+  )
+  if (!driverPaths.length && !vehiclePaths.length) return data
+  const [signedDriver, signedVehicle] = await Promise.all([
+    signPrivateAttachmentPaths(AGREEMENT_DRIVER_PRIVATE_BUCKET, driverPaths),
+    signPrivateAttachmentPaths(AGREEMENT_VEHICLE_PRIVATE_BUCKET, vehiclePaths)
+  ])
+  const preview = (urls: string[], signed: Map<string, string>): string[] =>
+    urls.map((url) => {
+      if (!isPrivateAttachmentPath(url)) return url
+      const signedUrl = signed.get(url)
+      if (!signedUrl) throw new Error('认证证照预览暂不可用，请重试')
+      return signedUrl
+    })
+  return {
+    ...data,
+    idCardImages: preview(data.idCardImages, signedDriver),
+    registrationImages: preview(data.registrationImages, signedVehicle),
+    driverLicenseImages: preview(data.driverLicenseImages, signedDriver),
+    roadPermitImages: preview(data.roadPermitImages, signedVehicle)
+  }
+}
 
 interface ListPage {
   from?: number
@@ -571,7 +639,11 @@ export async function submitElectronicContractForApproval(id: string) {
 
 export async function signElectronicContract(id: string, input: AgreementSignatureInput) {
   return await responseHandle<ElectronicContractRecord>(
-    () => supabase.rpc('tms_sign_electronic_contract_secure', { p_id: id, p_signatures: keysToSnakeDeep(input) }),
+    () =>
+      supabase.rpc('tms_sign_electronic_contract_secure', {
+        p_id: id,
+        p_signatures: keysToSnakeDeep(input)
+      }),
     { showMessage: true, breakReturn: true }
   )
 }
@@ -624,7 +696,7 @@ export async function addTransportAgreement(input: TransportAgreementInput) {
         .from('tms_transport_agreement')
         .insert(
           keysToSnakeDeep({
-            ...input,
+            ...storedAgreementEvidenceInput(input),
             tenantId: writeTenantId(input.tenantId),
             agreementNo: '',
             carrierName: '',
@@ -646,7 +718,11 @@ export async function submitTransportAgreementForApproval(id: string) {
 
 export async function signTransportAgreement(id: string, input: AgreementSignatureInput) {
   return await responseHandle<TransportAgreementRecord>(
-    () => supabase.rpc('tms_sign_transport_agreement_secure', { p_id: id, p_signatures: keysToSnakeDeep(input) }),
+    () =>
+      supabase.rpc('tms_sign_transport_agreement_secure', {
+        p_id: id,
+        p_signatures: keysToSnakeDeep(input)
+      }),
     { showMessage: true, breakReturn: true }
   )
 }
@@ -664,28 +740,44 @@ export interface TransportAgreementDriverEvidence {
   roadPermitImages: string[]
 }
 
-export async function fetchTransportAgreementDriverOptions(params: { carrierId: string; vehicleId?: string }) {
+export async function fetchTransportAgreementDriverOptions(params: {
+  carrierId: string
+  vehicleId?: string
+}) {
   return await responseHandle<TransportAgreementDriverOption[]>(
-    () => supabase.rpc('tms_list_agreement_driver_options_secure', {
-      p_carrier_id: params.carrierId,
-      p_vehicle_id: params.vehicleId || null
-    }),
+    () =>
+      supabase.rpc('tms_list_agreement_driver_options_secure', {
+        p_carrier_id: params.carrierId,
+        p_vehicle_id: params.vehicleId || null
+      }),
     { showErrorMessage: true }
   )
 }
 
 export async function fetchTransportAgreementDriverEvidence(driverId: string, vehicleId?: string) {
-  return await responseHandle<TransportAgreementDriverEvidence>(
-    () => supabase.rpc('tms_get_agreement_driver_evidence_secure', {
-      p_driver_id: driverId,
-      p_vehicle_id: vehicleId || null
-    }),
+  const result = await responseHandle<TransportAgreementDriverEvidence>(
+    () =>
+      supabase.rpc('tms_get_agreement_driver_evidence_secure', {
+        p_driver_id: driverId,
+        p_vehicle_id: vehicleId || null
+      }),
     { showErrorMessage: false }
   )
+  return result.data ? { ...result, data: await previewAgreementEvidence(result.data) } : result
+}
+
+export async function fetchTransportAgreementDetail(id: string) {
+  let query = supabase.from('tms_transport_agreement').select('*').eq('id', id)
+  const tenantId = readTenantId()
+  if (tenantId) query = query.eq('tenant_id', tenantId)
+  const result = await responseHandle<TransportAgreementRecord | null>(() => query.maybeSingle(), {
+    showErrorMessage: false
+  })
+  return result.data ? { ...result, data: await previewAgreementEvidence(result.data) } : result
 }
 
 export async function editTransportAgreement(id: string, input: TransportAgreementInput) {
-  const payload = { ...input }
+  const payload = storedAgreementEvidenceInput(input)
   delete payload.tenantId
   return await responseHandle<TransportAgreementRecord>(
     () =>
