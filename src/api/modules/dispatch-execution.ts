@@ -23,6 +23,18 @@ export interface DispatchCertificateRiskCheck {
   canOverride: boolean
 }
 
+export interface DispatchAdvisory {
+  subjectLabel: string
+  message: string
+  executionIndex?: number
+}
+
+export interface DispatchPlanResult {
+  waybillIds: string[]
+  waybillNos: string[]
+  warnings?: DispatchAdvisory[]
+}
+
 interface DispatchWorkbenchResponse {
   records: WaybillRecord[]
   total: number
@@ -106,12 +118,28 @@ export async function fetchDispatchWorkbench(
 }
 
 export async function submitDispatchPlan(plan: DispatchPlan) {
-  return await responseHandle<{ waybillIds: string[]; waybillNos: string[] }>(
+  return await responseHandle<DispatchPlanResult>(
     () =>
       supabase.rpc('tms_create_dispatch_plan_secure', {
         p_plan: keysToSnakeDeep(plan)
       }),
     { showMessage: true, breakReturn: true }
+  )
+}
+
+export async function fetchDispatchAdvisories(
+  orderId: string,
+  vehicleId?: string | null,
+  driverId?: string | null
+) {
+  return await responseHandle<DispatchAdvisory[]>(
+    () =>
+      supabase.rpc('tms_check_dispatch_advisories_secure', {
+        p_order_id: orderId,
+        p_vehicle_id: vehicleId || null,
+        p_driver_id: driverId || null
+      }),
+    { breakReturn: true, showErrorMessage: false }
   )
 }
 

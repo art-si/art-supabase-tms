@@ -19,92 +19,6 @@
         <span>运单号：{{ dialog.rows[0]?.orderNo || '-' }}</span>
       </div>
 
-      <ArtForm v-model="form.data" :items="dispatchModeItems" :span="24" label-position="top" />
-
-      <section
-        v-if="dialog.mode === 'single' && form.data.dispatchMode === 'self_operated'"
-        class="dispatch-dialog__advisor art-card-xs"
-      >
-        <header>
-          <div>
-            <span class="dispatch-dialog__advisor-icon"
-              ><ArtSvgIcon icon="ri:sparkling-2-line"
-            /></span>
-            <div>
-              <strong>AI 调度推荐</strong>
-              <small>综合车辆资格、当前占用、线路经验、准点率与载重利用率</small>
-            </div>
-          </div>
-          <ElButton type="primary" plain :loading="advisor.loading" @click="loadRecommendations">
-            {{ advisor.data ? '重新推荐' : '生成推荐' }}
-          </ElButton>
-        </header>
-
-        <ElAlert
-          v-if="advisor.error"
-          type="warning"
-          :closable="false"
-          show-icon
-          :title="advisor.error"
-        />
-
-        <template v-else-if="advisor.data">
-          <p class="dispatch-dialog__advisor-summary">{{ advisor.data.summary }}</p>
-          <div v-if="advisor.data.recommendations.length" class="dispatch-dialog__recommendations">
-            <article
-              v-for="item in advisor.data.recommendations"
-              :key="item.vehicle.id"
-              :class="{ 'is-first': item.rank === 1 }"
-            >
-              <div class="dispatch-dialog__recommendation-main">
-                <span class="dispatch-dialog__recommendation-rank">#{{ item.rank }}</span>
-                <div>
-                  <strong>{{ item.vehicle.plateNo }}</strong>
-                  <small>
-                    {{ item.vehicle.companyName || '公司未维护' }} ·
-                    {{ item.vehicle.primaryDriver.driverName }}
-                  </small>
-                </div>
-                <ElTag :type="item.score >= 75 ? 'success' : 'primary'" effect="light">
-                  推荐分 {{ item.score }}
-                </ElTag>
-                <ElButton type="primary" link @click="applyRecommendation(item)">采用</ElButton>
-              </div>
-              <div class="dispatch-dialog__recommendation-reasons">
-                <span class="art-icon-label" v-for="reason in item.reasons" :key="reason">
-                  <ArtSvgIcon icon="ri:checkbox-circle-line" />{{ reason }}
-                </span>
-                <span v-for="warning in item.warnings" :key="warning" class="is-warning">
-                  <ArtSvgIcon icon="ri:error-warning-line" />{{ warning }}
-                </span>
-              </div>
-              <footer>
-                <span>置信度 {{ Math.round(item.confidence * 100) }}%</span>
-                <span>同线路 {{ item.metrics.routeTrips }} 单</span>
-                <span
-                  v-if="item.metrics.onTimeRate !== null && item.metrics.onTimeRate !== undefined"
-                >
-                  准点率 {{ Math.round(item.metrics.onTimeRate * 100) }}%
-                </span>
-              </footer>
-            </article>
-          </div>
-          <ArtAiFeedback
-            :run-id="advisor.data.runId"
-            context-label="AI 调度推荐"
-            class="dispatch-dialog__feedback"
-          />
-        </template>
-
-        <ArtEmptyState
-          v-else
-          title="暂无调度建议"
-          description="生成后只提供候选建议，不会自动配载或改变订单状态。"
-          size="compact"
-          :visual-size="64"
-        />
-      </section>
-
       <ArtForm
         ref="formRef"
         v-model="form.data"
@@ -114,7 +28,108 @@
         label-width="112px"
         root-class="dispatch-dialog__form"
       >
+        <template #advisor>
+          <section
+            v-if="dialog.mode === 'single' && form.data.dispatchMode === 'self_operated'"
+            class="dispatch-dialog__advisor art-card-xs"
+          >
+            <header>
+              <div>
+                <span class="dispatch-dialog__advisor-icon"
+                  ><ArtSvgIcon icon="ri:sparkling-2-line"
+                /></span>
+                <div>
+                  <strong>AI 调度推荐</strong>
+                  <small>综合车辆资格、当前占用、线路经验、准点率与载重利用率</small>
+                </div>
+              </div>
+              <ElButton
+                type="primary"
+                plain
+                :loading="advisor.loading"
+                @click="loadRecommendations"
+              >
+                {{ advisor.data ? '重新推荐' : '生成推荐' }}
+              </ElButton>
+            </header>
+
+            <ElAlert
+              v-if="advisor.error"
+              type="warning"
+              :closable="false"
+              show-icon
+              :title="advisor.error"
+            />
+
+            <template v-else-if="advisor.data">
+              <p class="dispatch-dialog__advisor-summary">{{ advisor.data.summary }}</p>
+              <div
+                v-if="advisor.data.recommendations.length"
+                class="dispatch-dialog__recommendations"
+              >
+                <article
+                  v-for="item in advisor.data.recommendations"
+                  :key="item.vehicle.id"
+                  :class="{ 'is-first': item.rank === 1 }"
+                >
+                  <div class="dispatch-dialog__recommendation-main">
+                    <span class="dispatch-dialog__recommendation-rank">#{{ item.rank }}</span>
+                    <div>
+                      <strong>{{ item.vehicle.plateNo }}</strong>
+                      <small>
+                        {{ item.vehicle.companyName || '公司未维护' }} ·
+                        {{ item.vehicle.primaryDriver.driverName }}
+                      </small>
+                    </div>
+                    <ElTag :type="item.score >= 75 ? 'success' : 'primary'" effect="light">
+                      推荐分 {{ item.score }}
+                    </ElTag>
+                    <ElButton type="primary" link @click="applyRecommendation(item)">采用</ElButton>
+                  </div>
+                  <div class="dispatch-dialog__recommendation-reasons">
+                    <span class="art-icon-label" v-for="reason in item.reasons" :key="reason">
+                      <ArtSvgIcon icon="ri:checkbox-circle-line" />{{ reason }}
+                    </span>
+                    <span v-for="warning in item.warnings" :key="warning" class="is-warning">
+                      <ArtSvgIcon icon="ri:error-warning-line" />{{ warning }}
+                    </span>
+                  </div>
+                  <footer>
+                    <span>置信度 {{ Math.round(item.confidence * 100) }}%</span>
+                    <span>同线路 {{ item.metrics.routeTrips }} 单</span>
+                    <span
+                      v-if="
+                        item.metrics.onTimeRate !== null && item.metrics.onTimeRate !== undefined
+                      "
+                    >
+                      准点率 {{ Math.round(item.metrics.onTimeRate * 100) }}%
+                    </span>
+                  </footer>
+                </article>
+              </div>
+              <ArtAiFeedback
+                :run-id="advisor.data.runId"
+                context-label="AI 调度推荐"
+                class="dispatch-dialog__feedback"
+              />
+            </template>
+
+            <ArtEmptyState
+              v-else
+              title="暂无调度建议"
+              description="生成后只提供候选建议，不会自动配载或改变订单状态。"
+              size="compact"
+              :visual-size="64"
+            />
+          </section>
+        </template>
       </ArtForm>
+
+      <DispatchAdvisoryNotice
+        :order-id="dialog.rows[0]?.id"
+        :vehicle-id="form.data.dispatchVehicleId"
+        :driver-id="form.data.dispatchDriverId"
+      />
 
       <div v-if="form.selectedCarrier" class="dispatch-dialog__selection art-card-xs">
         <strong>{{ form.selectedCarrier.companyName }}</strong>
@@ -241,17 +256,12 @@
       </div>
     </template>
   </ArtDialog>
-  <DispatchCertificateRiskDialog ref="certificateRiskDialogRef" />
 </template>
 
 <script setup lang="ts">
   import { h } from 'vue'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
-  import {
-    isPrivateAttachmentPath,
-    signPrivateAttachmentPaths
-  } from '@/utils/supabase/private-attachment'
   import { normalizeNullableText } from '@/utils/form/normalize'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import DOMPurify from 'dompurify'
@@ -259,7 +269,6 @@
   import { notifyFriendlyError, useArtFeedback } from '@/hooks/core/useArtFeedback'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import { useUserStore } from '@/store/modules/user'
-  import { resolveTenantWorkspaceId } from '@/utils/tenant-scope-context'
   import { carrierSelections } from '@tms/views/basic-data/carrier/modules/carrier-selection'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import type { FormRules } from 'element-plus'
@@ -272,7 +281,12 @@
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
   import TmsDataSourceEmptyActions from '../../components/tms-data-source-empty-actions.vue'
-  import DispatchCertificateRiskDialog from './dispatch-certificate-risk-dialog.vue'
+  import DispatchAdvisoryNotice from './dispatch-advisory-notice.vue'
+  import { notifyDispatchAdvisories } from './dispatch-advisory-feedback'
+  import {
+    dispatchResourceColumns,
+    fetchDispatchResourceOptions
+  } from './dispatch-resource-options'
   import type {
     DataSelectColumn,
     DataSelectFetchParams,
@@ -282,7 +296,6 @@
     dispatchWaybill,
     dispatchWaybillBatch,
     fetchCarrierBillingAccountsForDispatch,
-    checkDispatchCertificateRisk,
     recommendDispatchResourcesByAi,
     mergeWaybills
   } from '@tms/api'
@@ -323,6 +336,7 @@
 
   interface FormGroup {
     data: DispatchPayload
+    driverChosenDirectly: boolean
     selectedCarriers: DataSelectRecord[]
     selectedCarrier: ComputedRef<DispatchCarrierCandidate | undefined>
     selectedDrivers: DataSelectRecord[]
@@ -367,7 +381,6 @@
       .join('、') || '—'
   const dialogRef = ref<ArtDialogExpose<DialogOpenData>>()
   const agreementDialogRef = ref<ArtDialogExpose<DispatchAgreementDetail>>()
-  const certificateRiskDialogRef = ref<InstanceType<typeof DispatchCertificateRiskDialog>>()
   const agreementDetail = ref<DispatchAgreementDetail | null>(null)
   const safeAgreementContent = computed(() =>
     DOMPurify.sanitize(agreementDetail.value?.contentHtml || '')
@@ -376,9 +389,7 @@
   const carrierBillingAccounts = ref<Api.Tms.BasicData.CarrierBillingAccount[]>([])
   const carrierBillingLoading = ref(false)
   const carrierBillingError = ref('')
-  const linkedVehicleLoading = ref(false)
   const linkedVehicleMessage = ref('')
-  let linkedVehicleRequestId = 0
 
   const dialog: UnwrapNestedRefs<DialogGroup> = reactive<DialogGroup>({
     rows: [],
@@ -393,6 +404,7 @@
 
   const form: UnwrapNestedRefs<FormGroup> = reactive<FormGroup>({
     data: createInitialForm(),
+    driverChosenDirectly: false,
     selectedCarriers: [],
     selectedCarrier: computed(
       () => form.selectedCarriers[0] as DispatchCarrierCandidate | undefined
@@ -407,6 +419,14 @@
       () => form.selectedVehicles[0] as DispatchVehicleCandidate | DispatchVehicleOption | undefined
     ),
     items: computed<FormItem[]>(() => [
+      ...dispatchModeItems.value,
+      {
+        key: 'advisor',
+        label: '',
+        type: 'dispatchAdvisor',
+        span: 24,
+        hidden: dialog.mode !== 'single' || form.data.dispatchMode !== 'self_operated'
+      },
       {
         label: '承运方',
         key: 'dispatchCarrierId',
@@ -460,12 +480,16 @@
           carrierBillingError.value || '选择承运方后自动带出默认账户；可改选该承运方的其他账户。'
       },
       {
-        label: form.data.dispatchMode === 'individual_driver' ? '个体司机' : '自营司机',
+        label:
+          form.data.dispatchMode === 'individual_driver'
+            ? '个体司机'
+            : form.data.dispatchMode === 'carrier'
+              ? '承运商司机'
+              : '自营司机',
         key: 'dispatchDriverId',
         type: 'dataSelect',
-        span: form.data.dispatchMode === 'self_operated' ? 12 : 24,
-        hidden: form.data.dispatchMode === 'carrier',
-        description: '仅显示已启用、未列入黑名单且当前未占用的司机；证件风险将在提交前核验。',
+        span: 12,
+        description: '司机状态、黑名单、未完成任务及证件风险仅作提醒，不阻断配载。',
         props: {
           mode: 'table',
           multiple: false,
@@ -476,20 +500,23 @@
           'onUpdate:selectedData': (value: typeof selectedDriverRows.value) => {
             selectedDriverRows.value = value
           },
-          title: form.data.dispatchMode === 'individual_driver' ? '选择个体司机' : '选择自营司机',
-          placeholder:
-            form.data.dispatchMode === 'individual_driver' ? '请选择个体司机' : '请选择自营司机',
-          searchPlaceholder: '请输入司机姓名',
+          title:
+            form.data.dispatchMode === 'individual_driver'
+              ? '选择个体司机'
+              : form.data.dispatchMode === 'carrier'
+                ? '选择承运商司机'
+                : '选择自营司机',
+          placeholder: '请选择司机',
+          dialogWidth: 'xl',
+          showTableHeader: true,
+          searchPlaceholder: '搜索司机、车牌、公司或承运商',
           rowKey: 'id',
           labelKey: 'driverName',
           descriptionKey: 'phone',
           emptyText:
             form.data.dispatchMode === 'individual_driver' ? '暂无个体司机档案' : '暂无可调度司机',
-          emptyDescription: '当前没有可调度司机；请检查启用状态、黑名单和任务占用。',
-          apiFn:
-            form.data.dispatchMode === 'individual_driver'
-              ? fetchIndividualSelectData
-              : fetchDriverSelectData,
+          emptyDescription: '当前调度对象下没有司机资料，可检查司机归属与关联车辆。',
+          apiFn: fetchDriverSelectData,
           columns:
             form.data.dispatchMode === 'individual_driver'
               ? form.individualColumns
@@ -505,14 +532,11 @@
         key: 'dispatchVehicleId',
         type: 'dataSelect',
         span: 12,
-        hidden: form.data.dispatchMode !== 'self_operated',
-        description: linkedVehicleLoading.value
-          ? '正在核对司机关联车辆是否可配载…'
-          : linkedVehicleMessage.value || '选择司机后自动带入可配载的关联车辆，也可手动改选。',
+        description:
+          linkedVehicleMessage.value || '参选车辆或司机后自动带入关联信息，也可手动改选。',
         props: {
           mode: 'table',
           multiple: false,
-          disabled: linkedVehicleLoading.value,
           modelValue: form.data.dispatchVehicleId,
           'onUpdate:modelValue': (value: typeof form.data.dispatchVehicleId) => {
             form.data.dispatchVehicleId = value
@@ -522,8 +546,10 @@
             form.selectedVehicles = value
           },
           title: '选择配载车辆',
+          dialogWidth: 'xl',
+          showTableHeader: true,
           placeholder: '请选择车辆',
-          searchPlaceholder: '请输入车牌号或车型',
+          searchPlaceholder: '搜索车牌、司机、公司或承运商',
           rowKey: 'id',
           labelKey: 'plateNo',
           descriptionKey: 'vehicleType',
@@ -578,8 +604,10 @@
     ]),
     rules: computed<FormRules<DispatchPayload>>(() => ({
       dispatchCarrierId:
-        form.data.dispatchMode === 'carrier'
-          ? [{ required: true, message: '请选择承运方', trigger: 'change' }]
+        form.data.dispatchMode === 'carrier' &&
+        !form.data.dispatchVehicleId &&
+        !form.data.dispatchDriverId
+          ? [{ required: true, message: '请选择承运方、车辆或司机', trigger: 'change' }]
           : [],
       dispatchDriverId:
         form.data.dispatchMode !== 'carrier'
@@ -603,33 +631,15 @@
       { prop: 'contactName', label: '联系人', minWidth: 110 },
       { prop: 'contactPhone', label: '联系电话', minWidth: 135 }
     ]),
-    driverColumns: computed<DataSelectColumn[]>(() => [
-      ...driverCandidateColumns(),
-      { prop: 'licenseType', label: '驾照类型', minWidth: 105 },
-      { prop: 'licenseExpireDate', label: '到期日期', minWidth: 125 }
-    ]),
+    driverColumns: computed<DataSelectColumn[]>(() => dispatchResourceColumns('driver')),
     individualColumns: computed<DataSelectColumn[]>(() => [
-      ...driverCandidateColumns(),
+      ...dispatchResourceColumns('driver', true),
       { prop: 'agreementStartsOn', label: '协议开始时间', minWidth: 125 },
-      { prop: 'agreementEndsOn', label: '协议结束时间', minWidth: 125 },
-      {
-        prop: 'agreementStatus',
-        label: '协议状态',
-        minWidth: 110,
-        dict: { code: 'tmsTransportAgreementStatus', display: 'auto' }
-      }
+      { prop: 'agreementEndsOn', label: '协议结束时间', minWidth: 125 }
     ]),
-    vehicleColumns: computed<DataSelectColumn[]>(() => [
-      { prop: 'plateNo', label: '车牌号', minWidth: 130 },
-      {
-        prop: 'vehicleType',
-        label: '车型',
-        width: 120,
-        dict: { code: 'vehicleType', display: 'text' }
-      },
-      { prop: 'specLengthM', label: '车长（米）', width: 115 },
-      { prop: 'loadTons', label: '载重（吨）', width: 115 }
-    ])
+    vehicleColumns: computed<DataSelectColumn[]>(() =>
+      dispatchResourceColumns('vehicle', form.data.dispatchMode === 'individual_driver')
+    )
   })
   const selectedDriverRows = computed<DataSelectRecord[]>({
     get: () =>
@@ -652,80 +662,6 @@
     return `身份${label(driver.identityAuthStatus)} · 驾驶证${label(driver.licenseAuthStatus)} · 从业资格${label(driver.qualificationAuthStatus)}`
   }
 
-  type DriverCandidateWithPreview = DispatchDriverCandidate & { portraitPreviewUrl?: string | null }
-
-  function portraitCell(driver: DriverCandidateWithPreview) {
-    const portraitUrl =
-      driver.portraitPreviewUrl ||
-      (driver.portraitUrl && !isPrivateAttachmentPath(driver.portraitUrl)
-        ? driver.portraitUrl
-        : null)
-    return defineComponent({
-      render: () =>
-        portraitUrl
-          ? h('img', {
-              src: portraitUrl,
-              alt: `${driver.driverName}的照片`,
-              width: 36,
-              height: 36,
-              class: 'h-9 w-9 rounded-[var(--el-border-radius-base)] object-cover'
-            })
-          : h(
-              'span',
-              {
-                class:
-                  'inline-flex h-9 w-9 items-center justify-center rounded-[var(--el-border-radius-base)] bg-[var(--art-gray-100)] text-[var(--art-gray-600)]',
-                'aria-label': '暂无照片'
-              },
-              '—'
-            )
-    })
-  }
-
-  function driverCandidateColumns(): DataSelectColumn[] {
-    return [
-      {
-        prop: 'portraitUrl',
-        label: '照片',
-        width: 72,
-        formatter: (row) => portraitCell(row as DriverCandidateWithPreview)
-      },
-      { prop: 'driverName', label: '司机姓名', minWidth: 120 },
-      { prop: 'phone', label: '联系电话', minWidth: 130 },
-      {
-        prop: 'driverOwnership',
-        label: '司机归属',
-        minWidth: 105,
-        dict: { code: 'tmsDriverOwnership', display: 'text' }
-      },
-      {
-        prop: 'identityAuthStatus',
-        label: '认证状态',
-        minWidth: 280,
-        formatter: (row) => formatDriverAuth(row as DispatchDriverCandidate)
-      },
-      { prop: 'plateNo', label: '车牌号', minWidth: 125, formatter: (row) => row.plateNo || '—' },
-      {
-        prop: 'driverType',
-        label: '司机类型',
-        minWidth: 105,
-        dict: { code: 'tmsDriverType', display: 'text' }
-      },
-      {
-        prop: 'carrierName',
-        label: '所属承运商',
-        minWidth: 160,
-        formatter: (row) => row.carrierName || '—'
-      },
-      {
-        prop: 'companyName',
-        label: '所属公司',
-        minWidth: 160,
-        formatter: (row) => row.companyName || '—'
-      }
-    ]
-  }
-
   async function handleOpen(data: DialogOpenData): Promise<void> {
     resetForm(data)
     await dialogRef.value?.handleOpen(data, {
@@ -744,9 +680,7 @@
 
   function candidateParams(params: DataSelectFetchParams) {
     const { from, to } = buildSupabasePageRange({ current: params.page, size: params.pageSize })
-    const tenantId =
-      dialog.rows[0]?.tenantId ||
-      resolveTenantWorkspaceId(tenantScopeStore.effectiveTenantId, userStore.getUserInfo.tenantId)
+    const tenantId = dialog.rows[0]?.tenantId || tenantScopeStore.effectiveTenantId
     if (!tenantId) throw new Error('运单缺少所属租户，请刷新列表后重试')
     return { tenantId, keyword: params.keyword, from, to }
   }
@@ -758,44 +692,22 @@
     })
   }
 
-  async function fetchDriverSelectData(params: DataSelectFetchParams) {
-    return await fetchDriverCandidateData(params, 'driver')
+  function fetchDriverSelectData(params: DataSelectFetchParams) {
+    return fetchDispatchResourceOptions(
+      form.data.dispatchMode,
+      'driver',
+      candidateParams(params).tenantId,
+      params
+    )
   }
 
-  async function fetchIndividualSelectData(params: DataSelectFetchParams) {
-    return await fetchDriverCandidateData(params, 'individual_driver')
-  }
-
-  async function fetchDriverCandidateData(
-    params: DataSelectFetchParams,
-    kind: 'driver' | 'individual_driver'
-  ) {
-    const result = await fetchDispatchCandidates<DriverCandidateWithPreview>({
-      ...candidateParams(params),
-      kind
-    })
-    const paths = result.data
-      .map((driver) => driver.portraitUrl)
-      .filter((path): path is string => Boolean(path && isPrivateAttachmentPath(path)))
-    if (paths.length) {
-      try {
-        const previews = await signPrivateAttachmentPaths('tms-driver-private', paths)
-        for (const driver of result.data) {
-          if (driver.portraitUrl)
-            driver.portraitPreviewUrl = previews.get(driver.portraitUrl) ?? null
-        }
-      } catch (error) {
-        notifyFriendlyError(error, '司机照片暂时无法预览，仍可按姓名选择司机')
-      }
-    }
-    return result
-  }
-
-  async function fetchVehicleSelectData(params: DataSelectFetchParams) {
-    return await fetchDispatchCandidates<DispatchVehicleCandidate>({
-      ...candidateParams(params),
-      kind: 'vehicle'
-    })
+  function fetchVehicleSelectData(params: DataSelectFetchParams) {
+    return fetchDispatchResourceOptions(
+      form.data.dispatchMode,
+      'vehicle',
+      candidateParams(params).tenantId,
+      params
+    )
   }
 
   const dispatchModeItems = computed<FormItem[]>(() => [
@@ -808,8 +720,7 @@
     }
   ])
   function handleModeChange(): void {
-    ++linkedVehicleRequestId
-    linkedVehicleLoading.value = false
+    form.driverChosenDirectly = false
     linkedVehicleMessage.value = ''
     Object.assign(form.data, {
       dispatchCarrierId: null,
@@ -826,6 +737,7 @@
     form.selectedCarriers = []
     carrierBillingAccounts.value = []
     carrierBillingError.value = ''
+    carrierBillingLoading.value = false
     form.selectedDrivers = []
     form.selectedIndividuals = []
     form.selectedVehicles = []
@@ -834,6 +746,20 @@
 
   function handleCarrierConfirm(_value: unknown, rows: DataSelectRecord[]): void {
     const carrier = rows[0] as DispatchCarrierCandidate | undefined
+    if (
+      (form.selectedVehicle?.carrierId && form.selectedVehicle.carrierId !== carrier?.id) ||
+      (selectedDriver.value?.carrierId && selectedDriver.value.carrierId !== carrier?.id)
+    ) {
+      form.selectedVehicles = []
+      selectedDriverRows.value = []
+      applyVehicle(undefined)
+      Object.assign(form.data, {
+        dispatchDriverId: null,
+        dispatchAgreementId: null,
+        dispatchDriverName: '',
+        dispatchDriverPhone: ''
+      })
+    }
     form.data.dispatchCarrierId = carrier?.id ?? null
     form.data.carrierBillingAccountId = null
     carrierBillingAccounts.value = []
@@ -857,7 +783,7 @@
         '开票账户加载失败；可先完成调度，稍后在承运商档案中检查账户。'
       )
     } finally {
-      carrierBillingLoading.value = false
+      if (form.data.dispatchCarrierId === carrierId) carrierBillingLoading.value = false
     }
   }
 
@@ -866,152 +792,134 @@
     form.data.carrierBillingAccountId = null
     carrierBillingAccounts.value = []
     form.selectedCarriers = []
+    form.selectedVehicles = []
+    selectedDriverRows.value = []
+    applyVehicle(undefined)
+    Object.assign(form.data, {
+      dispatchDriverId: null,
+      dispatchAgreementId: null,
+      dispatchDriverName: '',
+      dispatchDriverPhone: ''
+    })
+    carrierBillingLoading.value = false
+  }
+
+  function applyResourceCarrier(
+    carrier?: DispatchCarrierCandidate | null,
+    carrierId?: string | null
+  ): void {
+    const id = carrierId || carrier?.id || null
+    const changed = form.data.dispatchCarrierId !== id
+    form.data.dispatchCarrierId = id
+    if (carrier) form.selectedCarriers = [carrier]
+    else if (changed) form.selectedCarriers = []
+    if (!changed || form.data.dispatchMode !== 'carrier') return
+    form.data.carrierBillingAccountId = null
+    carrierBillingAccounts.value = []
+    carrierBillingError.value = ''
+    carrierBillingLoading.value = false
+    if (id) void loadCarrierBillingAccounts(id)
   }
 
   function handleDriverConfirm(_value: unknown, rows: DataSelectRecord[]): void {
     const driver = rows[0] as DispatchDriverCandidate | undefined
-    if (
-      form.data.dispatchMode === 'self_operated' &&
-      form.selectedVehicle?.id !== driver?.vehicleId
-    ) {
-      form.selectedVehicles = []
-      applyVehicle(undefined)
+    if (!driver) {
+      handleDriverClear()
+      return
     }
-    selectedDriverRows.value = rows
-    form.data.dispatchDriverId = driver?.id ?? null
-    form.data.dispatchAgreementId = driver?.agreementId ?? null
-    form.data.dispatchDriverName = driver?.driverName ?? ''
-    form.data.dispatchDriverPhone = driver?.phone ?? ''
-    if (form.data.dispatchMode === 'individual_driver' || !form.selectedVehicle) {
-      form.data.dispatchPlateNo = driver?.plateNo ?? ''
-    }
-    const requestId = ++linkedVehicleRequestId
-    linkedVehicleMessage.value = ''
-    if (form.data.dispatchMode === 'self_operated' && driver) {
-      if (driver.vehicleId && form.selectedVehicle?.id !== driver.vehicleId) {
-        void resolveLinkedVehicle(driver, requestId)
-      } else if (!driver.vehicleId) {
-        linkedVehicleMessage.value = '司机档案未关联可配载车辆，请手动选择车辆。'
-      }
-    }
-  }
-
-  async function resolveLinkedVehicle(
-    driver: DispatchDriverCandidate,
-    requestId: number
-  ): Promise<void> {
-    linkedVehicleLoading.value = true
-    try {
-      const result = await fetchDispatchCandidates<DispatchVehicleCandidate>({
-        ...candidateParams({ page: 1, pageSize: 100, keyword: driver.plateNo || '', filters: {} }),
-        kind: 'vehicle'
-      })
-      if (requestId !== linkedVehicleRequestId || form.data.dispatchDriverId !== driver.id) return
-      if (result.error) throw result.error
-      const vehicle = result.data.find((candidate) => candidate.id === driver.vehicleId)
-      if (vehicle) {
-        form.selectedVehicles = [vehicle as DataSelectRecord]
-        applyVehicle(vehicle)
-      } else {
-        linkedVehicleMessage.value = '司机关联车辆当前不可配载，请手动选择可用车辆。'
-      }
-    } catch (error) {
-      if (requestId !== linkedVehicleRequestId || form.data.dispatchDriverId !== driver.id) return
-      linkedVehicleMessage.value = '关联车辆加载失败，请手动选择车辆或重选司机后重试。'
-      notifyFriendlyError(error, linkedVehicleMessage.value)
-    } finally {
-      if (requestId === linkedVehicleRequestId) linkedVehicleLoading.value = false
-    }
+    form.driverChosenDirectly = true
+    const previousVehicle = form.selectedVehicle
+    const vehicle =
+      driver.vehicle ||
+      (previousVehicle && previousVehicle.carrierId === driver.carrierId
+        ? previousVehicle
+        : undefined)
+    selectedDriverRows.value = [driver]
+    form.selectedVehicles = vehicle ? [vehicle] : []
+    applyVehicle(vehicle)
+    Object.assign(form.data, {
+      dispatchDriverId: driver.id,
+      dispatchAgreementId: driver.agreementId || null,
+      dispatchDriverName: driver.driverName,
+      dispatchDriverPhone: driver.phone || '',
+      dispatchPlateNo: vehicle?.plateNo || driver.plateNo || ''
+    })
+    applyResourceCarrier(driver.carrier, driver.carrierId || vehicle?.carrierId)
+    linkedVehicleMessage.value = vehicle
+      ? ''
+      : '司机未关联车辆，可手动参选；不会按姓名或车牌猜测车辆关联。'
   }
 
   function handleDriverClear(): void {
-    ++linkedVehicleRequestId
-    linkedVehicleLoading.value = false
-    linkedVehicleMessage.value = ''
-    form.data.dispatchDriverId = null
-    form.data.dispatchAgreementId = null
-    form.data.dispatchDriverName = ''
-    form.data.dispatchDriverPhone = ''
-    if (form.data.dispatchMode === 'self_operated') {
-      form.selectedVehicles = []
-      applyVehicle(undefined)
-    } else {
-      form.data.dispatchPlateNo = ''
-    }
+    form.driverChosenDirectly = false
+    Object.assign(form.data, {
+      dispatchDriverId: null,
+      dispatchAgreementId: null,
+      dispatchDriverName: '',
+      dispatchDriverPhone: ''
+    })
     selectedDriverRows.value = []
+    linkedVehicleMessage.value = ''
   }
 
   function handleVehicleConfirm(_value: unknown, rows: DataSelectRecord[]): void {
     const vehicle = rows[0] as DispatchVehicleCandidate | undefined
+    if (!vehicle) {
+      handleVehicleClear()
+      return
+    }
+    const previousDriver = selectedDriver.value
+    const driver =
+      vehicle.primaryDriver ||
+      (form.driverChosenDirectly && previousDriver && previousDriver.carrierId === vehicle.carrierId
+        ? previousDriver
+        : undefined)
+    form.driverChosenDirectly = !vehicle.primaryDriver && Boolean(driver)
+    form.selectedVehicles = [vehicle]
+    selectedDriverRows.value = driver ? [driver] : []
     applyVehicle(vehicle)
-    linkedVehicleMessage.value = ''
+    Object.assign(form.data, {
+      dispatchDriverId: driver?.id || null,
+      dispatchAgreementId: driver?.agreementId || null,
+      dispatchDriverName: driver?.driverName || '',
+      dispatchDriverPhone: driver?.phone || ''
+    })
+    applyResourceCarrier(vehicle.carrier || driver?.carrier, vehicle.carrierId || driver?.carrierId)
+    linkedVehicleMessage.value = driver ? '' : '车辆未关联当前调度对象下的司机，可手动参选。'
   }
 
   function handleVehicleClear(): void {
+    form.selectedVehicles = []
     applyVehicle(undefined)
+    form.data.dispatchPlateNo = selectedDriver.value?.plateNo || ''
+    linkedVehicleMessage.value = ''
   }
 
   async function handleSubmit(): Promise<boolean> {
     try {
-      if (linkedVehicleLoading.value) {
-        ElMessage.warning('正在核对司机关联车辆，请稍候再提交')
-        return false
-      }
       if (!(await validateArtFormForSubmit(formRef.value))) return false
-      if (
-        form.data.dispatchMode === 'individual_driver' &&
-        form.selectedIndividual?.agreementStatus !== 'signed'
-      ) {
-        ElMessage.warning('请先完成个体司机运输协议签署后再调度')
-        return false
-      }
       const payload = normalizePayload()
-      if (payload.dispatchMode !== 'carrier') {
-        const check = await checkDispatchCertificateRisk(
-          payload.dispatchMode === 'self_operated' ? payload.dispatchVehicleId : null,
-          payload.dispatchDriverId
-        )
-        if (check.blocked) {
-          await certificateRiskDialogRef.value?.handleOpen(check, async (reason) => {
-            try {
-              await submitPayload({
-                ...payload,
-                certificateRiskOverride: true,
-                certificateRiskOverrideReason: reason
-              })
-              dialogRef.value?.handleClose(true)
-              emit('success')
-              return true
-            } catch (error) {
-              notifyFriendlyError(error, '强制派车失败，请核对权限和证件状态后重试')
-              return false
-            }
-          })
-          return false
-        }
-      }
       await submitPayload(payload)
       emit('success')
       return true
     } catch (error) {
-      notifyFriendlyError(error, '证件风险检查或运单调度失败，请重试；未完成检查前不会派车')
+      notifyFriendlyError(error, '配载未完成，请核对单据和必填信息后重试')
       return false
     }
   }
 
   async function submitPayload(payload: DispatchPayload): Promise<void> {
-    if (dialog.mode === 'batch') {
-      await dispatchWaybillBatch(dialog.rows, payload)
-    } else if (dialog.mode === 'merge') {
-      await mergeWaybills(dialog.rows, payload)
-    } else {
-      await dispatchWaybill(dialog.rows[0], payload)
-    }
+    const result =
+      dialog.mode === 'batch'
+        ? await dispatchWaybillBatch(dialog.rows, payload)
+        : dialog.mode === 'merge'
+          ? await mergeWaybills(dialog.rows, payload)
+          : await dispatchWaybill(dialog.rows[0], payload)
+    notifyDispatchAdvisories(result.data)
   }
 
   function resetForm(data: DialogOpenData): void {
-    ++linkedVehicleRequestId
-    linkedVehicleLoading.value = false
+    form.driverChosenDirectly = false
     linkedVehicleMessage.value = ''
     Object.assign(dialog, {
       rows: data.rows,
@@ -1047,6 +955,7 @@
   }
 
   function applyRecommendation(item: DispatchRecommendation): void {
+    form.driverChosenDirectly = false
     const vehicle: DispatchVehicleOption = {
       id: item.vehicle.id,
       carrierId: item.vehicle.carrierId,
@@ -1106,7 +1015,7 @@
     const ids = dialog.rows.map((row) => String(row.id || '')).filter(Boolean)
     return {
       ...toRaw(form.data),
-      dispatchCarrierId: form.data.dispatchMode === 'carrier' ? form.data.dispatchCarrierId : null,
+      dispatchCarrierId: form.data.dispatchCarrierId,
       carrierBillingAccountId:
         form.data.dispatchMode === 'carrier'
           ? carrierBillingError.value
@@ -1115,9 +1024,8 @@
           : null,
       dispatchAgreementId:
         form.data.dispatchMode === 'individual_driver' ? form.data.dispatchAgreementId : null,
-      dispatchVehicleId:
-        form.data.dispatchMode === 'self_operated' ? form.data.dispatchVehicleId : '',
-      dispatchDriverId: form.data.dispatchMode === 'carrier' ? null : form.data.dispatchDriverId,
+      dispatchVehicleId: form.data.dispatchVehicleId,
+      dispatchDriverId: form.data.dispatchDriverId,
       id: dialog.mode === 'single' ? ids[0] : undefined,
       ids: dialog.mode === 'batch' ? ids : undefined,
       dispatchRemark: normalizeNullableText(form.data.dispatchRemark)

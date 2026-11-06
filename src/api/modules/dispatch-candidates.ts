@@ -9,6 +9,10 @@ export type DispatchCandidateKind =
   | 'vehicle'
   | 'return_vehicle'
   | 'individual_driver'
+  | 'self_driver'
+  | 'carrier_driver'
+  | 'carrier_vehicle'
+  | 'individual_vehicle'
 export type DispatchAgreementStatus = 'pending_signed' | 'signed' | 'revision_requested'
 
 export interface DispatchCarrierCandidate {
@@ -27,6 +31,7 @@ export interface DispatchDriverCandidate {
   carrierId: string | null
   driverName: string
   phone: string | null
+  gender?: string | null
   licenseType: string | null
   licenseExpireDate: string | null
   driverType?: 'primary' | 'secondary'
@@ -45,6 +50,9 @@ export interface DispatchDriverCandidate {
   agreementStartsOn?: string | null
   agreementEndsOn?: string | null
   agreementStatus?: DispatchAgreementStatus
+  vehicle?: DispatchVehicleCandidate | null
+  carrier?: DispatchCarrierCandidate | null
+  portraitPreviewUrl?: string | null
 }
 
 export interface DispatchVehicleCandidate {
@@ -55,9 +63,12 @@ export interface DispatchVehicleCandidate {
   specLengthM: number | null
   loadTons: number | null
   carrierId: string | null
-  vehicleOwnership: 'self_operated' | 'carrier' | null
+  vehicleOwnership: 'self_operated' | 'carrier' | 'third_party' | 'individual_affiliation' | null
   primaryDriverId: string | null
   companyName: string | null
+  carrierName?: string | null
+  primaryDriver?: DispatchDriverCandidate | null
+  carrier?: DispatchCarrierCandidate | null
 }
 
 export interface DispatchAgreementDetail {

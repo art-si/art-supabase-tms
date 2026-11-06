@@ -44,7 +44,7 @@
         class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--el-color-danger-light-7)] bg-[var(--el-color-danger-light-9)] p-4"
         role="alert"
       >
-        <span>预约详情加载失败，请重试。</span>
+        <span>{{ loadErrorMessage || '预约详情加载失败，请重试。' }}</span>
         <ElButton type="primary" plain @click="load">重新加载</ElButton>
       </div>
 
@@ -263,6 +263,7 @@
   const candidates = ref<AppointmentCandidate[]>([])
   const form = reactive<{ entries: EditableEntry[] }>({ entries: [] })
   const saving = ref(false)
+  const loadErrorMessage = ref('')
   const loadFailed = ref(false)
   const selectingEntry = ref<EditableEntry | null>(null)
 
@@ -470,11 +471,18 @@
     }
   }
 
+  function createLocalKey(): string {
+    if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+    const bytes = crypto.getRandomValues(new Uint8Array(16))
+    return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('')
+  }
+
   async function load(): Promise<void> {
     if (!waybill.value?.id) return
     form.entries = []
     candidates.value = []
     loadFailed.value = false
+    loadErrorMessage.value = ''
     drawerRef.value?.setLoading(true)
     try {
       const [nextCandidates, records] = await Promise.all([
@@ -490,8 +498,10 @@
       if (!form.entries.length && canAdd.value) addEntry()
       await nextTick()
       formRefs.value.forEach((instance) => instance.clearValidate())
-    } catch {
+    } catch (error) {
       loadFailed.value = true
+      loadErrorMessage.value =
+        error instanceof Error && error.message ? error.message : '预约详情加载失败，请重试。'
     } finally {
       drawerRef.value?.setLoading(false)
     }
@@ -512,7 +522,7 @@
   function addEntry(): void {
     if (!waybill.value?.id || !canAdd.value) return
     form.entries.push({
-      localKey: crypto.randomUUID(),
+      localKey: createLocalKey(),
       id: '',
       appointmentNo: '',
       anchorWaybillId: waybill.value.id,

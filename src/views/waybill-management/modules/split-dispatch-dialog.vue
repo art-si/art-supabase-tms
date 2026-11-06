@@ -24,62 +24,70 @@
         root-class="p-0! md:p-0!"
       >
         <template #allocations>
-          <ElScrollbar class="max-w-full rounded border border-[var(--el-border-color-lighter)]">
-            <table class="w-full min-w-[640px] border-collapse text-left text-sm">
-              <thead class="bg-[var(--el-fill-color-light)]">
-                <tr>
-                  <th class="p-3">货物行 / SKU</th>
-                  <th class="p-3">可分配{{ basisLabel }}</th>
-                  <th v-for="(part, index) in parts" :key="part.key" class="p-3">
-                    批次 {{ index + 1 }}
-                  </th>
-                  <th class="p-3">未分配</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="(item, lineIndex) in cargoItems"
-                  :key="`${item.cargoId || item.cargoName}-${lineIndex}`"
-                  class="border-t border-[var(--el-border-color-lighter)]"
-                >
-                  <th class="p-3 font-medium">
-                    <span class="block">{{ item.cargoName || `第 ${lineIndex + 1} 行货物` }}</span>
-                    <small class="text-[var(--el-text-color-secondary)]">{{
-                      item.cargoCode || item.specModel || '无 SKU'
-                    }}</small>
-                  </th>
-                  <td class="p-3 tabular-nums">{{ basisValue(item) }}</td>
-                  <td v-for="part in parts" :key="part.key" class="p-3">
-                    <ElInputNumber
-                      v-model="part.amounts[lineIndex]"
-                      :min="0"
-                      :max="basisValue(item)"
-                      :precision="basis === 'quantity' ? 3 : 4"
-                      :controls="false"
-                      class="w-28!"
-                      :aria-label="`${item.cargoName || `第 ${lineIndex + 1} 行货物`}在批次${parts.indexOf(part) + 1}的分配量`"
-                    />
-                  </td>
-                  <td
-                    class="p-3 tabular-nums"
-                    :class="remaining(lineIndex) < 0 ? 'text-[var(--el-color-danger)]' : ''"
+          <div class="grid min-w-0 w-full gap-4 pb-4">
+            <ElScrollbar class="max-w-full rounded border border-[var(--el-border-color-lighter)]">
+              <table class="w-full min-w-[640px] border-collapse text-left text-sm">
+                <thead class="bg-[var(--el-fill-color-light)]">
+                  <tr>
+                    <th class="p-3">货物行 / SKU</th>
+                    <th class="p-3">可分配{{ basisLabel }}</th>
+                    <th v-for="(part, index) in parts" :key="part.key" class="p-3">
+                      批次 {{ index + 1 }}
+                    </th>
+                    <th class="p-3">未分配</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(item, lineIndex) in cargoItems"
+                    :key="`${item.cargoId || item.cargoName}-${lineIndex}`"
+                    class="border-t border-[var(--el-border-color-lighter)]"
                   >
-                    {{ remaining(lineIndex) }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </ElScrollbar>
-          <p v-if="validationError" role="alert" class="m-0 text-sm text-[var(--el-color-danger)]">
-            {{ validationError }}
-          </p>
-          <ElAlert
-            v-else-if="hasRemainder"
-            type="warning"
-            :closable="false"
-            show-icon
-            title="仍有货量未调度；提交后原始单保留在待运载列表，可继续安排后续批次。"
-          />
+                    <th class="p-3 font-medium">
+                      <span class="block">{{
+                        item.cargoName || `第 ${lineIndex + 1} 行货物`
+                      }}</span>
+                      <small class="text-[var(--el-text-color-secondary)]">{{
+                        item.cargoCode || item.specModel || '无 SKU'
+                      }}</small>
+                    </th>
+                    <td class="p-3 tabular-nums">{{ basisValue(item) }}</td>
+                    <td v-for="part in parts" :key="part.key" class="p-3">
+                      <ElInputNumber
+                        v-model="part.amounts[lineIndex]"
+                        :min="0"
+                        :max="basisValue(item)"
+                        :precision="basis === 'quantity' ? 3 : 4"
+                        :controls="false"
+                        class="w-28!"
+                        :aria-label="`${item.cargoName || `第 ${lineIndex + 1} 行货物`}在批次${parts.indexOf(part) + 1}的分配量`"
+                      />
+                    </td>
+                    <td
+                      class="p-3 tabular-nums"
+                      :class="remaining(lineIndex) < 0 ? 'text-[var(--el-color-danger)]' : ''"
+                    >
+                      {{ remaining(lineIndex) }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </ElScrollbar>
+            <p
+              v-if="validationError"
+              role="alert"
+              class="m-0 text-sm text-[var(--el-color-danger)]"
+            >
+              {{ validationError }}
+            </p>
+            <ElAlert
+              v-else-if="hasRemainder"
+              type="warning"
+              :closable="false"
+              show-icon
+              title="仍有货量未调度；提交后原始单保留在待运载列表，可继续安排后续批次。"
+            />
+          </div>
         </template>
         <template v-for="(part, index) in parts" :key="part.key" #[`part_${part.key}Actions`]>
           <ElButton v-if="parts.length > minimumParts" link type="danger" @click="removePart(index)"
@@ -87,19 +95,25 @@
           >
         </template>
       </ArtForm>
+      <DispatchAdvisoryNotice
+        v-for="(part, index) in parts"
+        :key="part.key"
+        :order-id="source?.id"
+        :vehicle-id="part.vehicleId"
+        :driver-id="part.driverId"
+        :label="`执行批次 ${index + 1}`"
+      />
       <ElButton plain type="primary" class="justify-self-start" @click="addPart"
         >添加执行批次</ElButton
       >
     </div>
   </ArtDialog>
-  <DispatchCertificateRiskDialog ref="certificateRiskDialogRef" />
 </template>
 
 <script setup lang="ts">
-  import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
+  import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import type {
-    DataSelectColumn,
     DataSelectFetchParams,
     DataSelectRecord
   } from '@/components/core/forms/art-data-select/types'
@@ -107,13 +121,19 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
-  import DispatchCertificateRiskDialog from './dispatch-certificate-risk-dialog.vue'
+  import DispatchAdvisoryNotice from './dispatch-advisory-notice.vue'
+  import { notifyDispatchAdvisories } from './dispatch-advisory-feedback'
+  import {
+    dispatchResourceColumns,
+    fetchDispatchResourceOptions
+  } from './dispatch-resource-options'
   import { ElMessage } from 'element-plus'
   import {
     fetchCustomerAddressOptions,
-    fetchDispatchVehicleOptions,
-    checkDispatchCertificateRisk,
-    submitDispatchPlan
+    submitDispatchPlan,
+    type DispatchMode,
+    type DispatchDriverCandidate,
+    type DispatchVehicleCandidate
   } from '@tms/api'
   import {
     buildSplitLines,
@@ -129,6 +149,13 @@
     amounts: number[]
     vehicleId: string
     selectedVehicles: DataSelectRecord[]
+    dispatchMode: DispatchMode
+    driverId: string | null
+    carrierId: string | null
+    agreementId: string | null
+    selectedDrivers: DataSelectRecord[]
+    driverChosenDirectly: boolean
+    resourceMessage: string
     departure: string
     arrival: string
     receivingAddressId: string
@@ -136,11 +163,17 @@
 
   const emit = defineEmits<{ success: [] }>()
   const dialogRef = ref<ArtDialogExpose<Api.Tms.Waybill.WaybillRecord>>()
-  const certificateRiskDialogRef = ref<InstanceType<typeof DispatchCertificateRiskDialog>>()
   const source = shallowRef<Api.Tms.Waybill.WaybillRecord>()
   const deliveryAddresses = ref<Api.Tms.BasicData.CustomerAddress[]>([])
   const parts = ref<SplitPart[]>([])
   const basis = ref<SplitBasis>('quantity')
+  const tenantScope = useTenantScopeStore()
+  const configuredModeOptions = useDictionaryOptions('tmsDispatchOperatorMode')
+  const modeOptions = computed(() =>
+    configuredModeOptions.filter((option) =>
+      ['carrier', 'self_operated', 'individual_driver'].includes(option.value)
+    )
+  )
   const configuredBasisOptions = useDictionaryOptions('tmsWaybillSplitBasis')
   const basisOptions = computed(() =>
     configuredBasisOptions.filter((option) =>
@@ -161,10 +194,20 @@
     ...parts.value.flatMap((part, index): FormItem[] => [
       { key: `part_${part.key}`, label: `执行批次 ${index + 1}`, type: 'divider', span: 24 },
       {
+        key: `parts.${index}.dispatchMode`,
+        label: '调度对象',
+        type: 'radioGroup',
+        span: 24,
+        options: modeOptions.value,
+        props: { optionType: 'button', onChange: () => resetPartResources(part) }
+      },
+      {
         key: `parts.${index}.vehicleId`,
         label: '执行车辆',
         type: 'dataSelect',
-        span: 24,
+        span: 12,
+        description:
+          part.resourceMessage || '选择车辆后自动带入关联司机；风险信息只提醒，不阻断配载。',
         props: {
           mode: 'table',
           multiple: false,
@@ -182,9 +225,46 @@
           rowKey: 'id',
           labelKey: 'plateNo',
           descriptionKey: 'companyName',
-          apiFn: fetchVehicleSelectData,
-          columns: vehicleColumns,
+          apiFn: (params: DataSelectFetchParams) => fetchPartResources(part, 'vehicle', params),
+          columns: dispatchResourceColumns('vehicle', part.dispatchMode === 'individual_driver'),
+          dialogWidth: 'xl',
+          showTableHeader: true,
+          searchPlaceholder: '搜索车牌、司机、公司或承运商',
+          onConfirm: (_value: unknown, rows: DataSelectRecord[]) => handlePartVehicle(part, rows),
+          onClear: () => handlePartVehicle(part, []),
           showPagination: true
+        }
+      },
+      {
+        key: `parts.${index}.driverId`,
+        label: '司机',
+        type: 'dataSelect',
+        span: 12,
+        props: {
+          mode: 'table',
+          multiple: false,
+          showSelectedPanel: false,
+          modelValue: part.driverId ?? undefined,
+          'onUpdate:modelValue': (value: unknown) => {
+            part.driverId = value ? String(value) : null
+          },
+          selectedData: part.selectedDrivers,
+          'onUpdate:selectedData': (rows: DataSelectRecord[]) => {
+            part.selectedDrivers = rows
+          },
+          title: '选择执行司机',
+          placeholder: '请选择司机',
+          rowKey: 'id',
+          labelKey: 'driverName',
+          descriptionKey: 'phone',
+          dialogWidth: 'xl',
+          showTableHeader: true,
+          searchPlaceholder: '搜索司机、车牌、公司或承运商',
+          apiFn: (params: DataSelectFetchParams) => fetchPartResources(part, 'driver', params),
+          columns: dispatchResourceColumns('driver', part.dispatchMode === 'individual_driver'),
+          showPagination: true,
+          onConfirm: (_value: unknown, rows: DataSelectRecord[]) => handlePartDriver(part, rows),
+          onClear: () => handlePartDriver(part, [])
         }
       },
       {
@@ -226,11 +306,6 @@
   const basisLabel = computed(
     () => ({ quantity: '件数', weight: '重量 (kg)', volume: '体积 (m³)' })[basis.value]
   )
-  const vehicleColumns: DataSelectColumn[] = [
-    { prop: 'plateNo', label: '车牌号', minWidth: 130 },
-    { prop: 'companyName', label: '所属公司', minWidth: 160 },
-    { prop: 'tonnageOrSeat', label: '吨位/座位', width: 120 }
-  ]
 
   const validationError = computed(() =>
     validateSplitInputs(
@@ -267,6 +342,13 @@
       amounts: cargoItems.value.map(() => 0),
       vehicleId: '',
       selectedVehicles: [],
+      dispatchMode: 'self_operated',
+      driverId: null,
+      carrierId: null,
+      agreementId: null,
+      selectedDrivers: [],
+      driverChosenDirectly: false,
+      resourceMessage: '',
       departure: '',
       arrival: '',
       receivingAddressId: source.value?.receivingAddressId || ''
@@ -277,14 +359,71 @@
     parts.value.splice(index, 1)
   }
 
-  async function fetchVehicleSelectData(params: DataSelectFetchParams) {
-    const { from, to } = buildSupabasePageRange({ current: params.page, size: params.pageSize })
-    const result = await fetchDispatchVehicleOptions({
-      from,
-      to,
-      keyword: params.keyword
+  function fetchPartResources(
+    part: SplitPart,
+    resource: 'vehicle' | 'driver',
+    params: DataSelectFetchParams
+  ) {
+    const tenantId = source.value?.tenantId || tenantScope.effectiveTenantId || undefined
+    return fetchDispatchResourceOptions(part.dispatchMode, resource, tenantId, params)
+  }
+
+  function resetPartResources(part: SplitPart): void {
+    Object.assign(part, {
+      vehicleId: '',
+      driverId: null,
+      carrierId: null,
+      agreementId: null,
+      selectedVehicles: [],
+      selectedDrivers: [],
+      driverChosenDirectly: false,
+      resourceMessage: ''
     })
-    return { data: result.data ?? [], total: result.total ?? 0 }
+  }
+
+  function handlePartVehicle(part: SplitPart, rows: DataSelectRecord[]): void {
+    const vehicle = rows[0] as DispatchVehicleCandidate | undefined
+    const previousDriver = part.selectedDrivers[0] as DispatchDriverCandidate | undefined
+    const driver =
+      vehicle?.primaryDriver ||
+      (part.driverChosenDirectly && vehicle && previousDriver?.carrierId === vehicle.carrierId
+        ? previousDriver
+        : undefined)
+    Object.assign(part, {
+      vehicleId: vehicle?.id || '',
+      selectedVehicles: vehicle ? [vehicle] : [],
+      driverId: driver?.id || null,
+      selectedDrivers: driver ? [driver] : [],
+      driverChosenDirectly: !vehicle?.primaryDriver && Boolean(driver),
+      carrierId: vehicle?.carrierId || driver?.carrierId || null,
+      agreementId: driver?.agreementId || null,
+      resourceMessage:
+        vehicle && !driver ? '车辆未关联该调度对象下的司机，可手动选择；不会按姓名猜测关联。' : ''
+    })
+  }
+
+  function handlePartDriver(part: SplitPart, rows: DataSelectRecord[]): void {
+    const driver = rows[0] as DispatchDriverCandidate | undefined
+    const previousVehicle = part.selectedVehicles[0] as DispatchVehicleCandidate | undefined
+    const vehicle =
+      driver?.vehicle ||
+      (driver &&
+      previousVehicle &&
+      (previousVehicle.primaryDriverId === driver.id ||
+        (part.dispatchMode === 'carrier' && previousVehicle.carrierId === driver.carrierId))
+        ? previousVehicle
+        : undefined)
+    Object.assign(part, {
+      driverId: driver?.id || null,
+      selectedDrivers: driver ? [driver] : [],
+      driverChosenDirectly: Boolean(driver),
+      vehicleId: vehicle?.id || '',
+      selectedVehicles: vehicle ? [vehicle] : [],
+      carrierId: driver?.carrierId || vehicle?.carrierId || null,
+      agreementId: driver?.agreementId || null,
+      resourceMessage:
+        driver && !vehicle ? '司机未关联车辆，可手动选择；已有车牌信息以司机档案为准。' : ''
+    })
   }
 
   async function handleOpen(row: Api.Tms.Waybill.WaybillRecord): Promise<void> {
@@ -324,68 +463,37 @@
       ElMessage.warning(validationError.value || '请先选择原始运输单')
       return false
     }
-    if (parts.value.some((part) => !part.vehicleId || !part.departure || !part.arrival)) {
-      ElMessage.warning('请为每个批次选择车辆、计划发车和到达时间')
+    if (
+      parts.value.some(
+        (part) => (!part.vehicleId && !part.driverId) || !part.departure || !part.arrival
+      )
+    ) {
+      ElMessage.warning('请为每个批次选择车辆或司机，并填写计划发车和到达时间')
       return false
     }
     try {
-      const checks = await Promise.all(
-        parts.value.map((part) =>
-          checkDispatchCertificateRisk(
-            part.vehicleId,
-            (part.selectedVehicles[0] as Api.Tms.Waybill.DispatchVehicleOption | undefined)
-              ?.primaryDriverId
-          )
-        )
-      )
-      const blockedIndexes = checks.flatMap((check, index) => (check.blocked ? [index] : []))
-      if (blockedIndexes.length) {
-        await certificateRiskDialogRef.value?.handleOpen(
-          {
-            blocked: true,
-            risks: checks.flatMap((check) => check.risks),
-            canOverride: blockedIndexes.every((index) => checks[index].canOverride)
-          },
-          async (reason) => {
-            try {
-              await submitPlan(new Set(blockedIndexes), reason)
-              dialogRef.value?.handleClose(true)
-              emit('success')
-              return true
-            } catch (error) {
-              notifyFriendlyError(error, '强制派车失败，请核对权限和证件状态后重试')
-              return false
-            }
-          }
-        )
-        return false
-      }
       await submitPlan()
       emit('success')
       return true
     } catch (error) {
-      notifyFriendlyError(error, '证件风险检查或拆单配载失败，请重试；未完成检查前不会派车')
+      notifyFriendlyError(error, '拆单配载未完成，请核对单据和货量分配后重试')
       return false
     }
   }
 
-  async function submitPlan(
-    blockedIndexes: ReadonlySet<number> = new Set(),
-    reason?: string
-  ): Promise<void> {
+  async function submitPlan(): Promise<void> {
     const orderId = source.value?.id
     if (!orderId) throw new Error('请先选择原始运输单')
-    await submitDispatchPlan({
+    const result = await submitDispatchPlan({
       kind: 'split',
-      executions: parts.value.map((part, index) => ({
+      executions: parts.value.map((part) => ({
         dispatchVehicleId: part.vehicleId,
-        dispatchDriverId: (
-          part.selectedVehicles[0] as Api.Tms.Waybill.DispatchVehicleOption | undefined
-        )?.primaryDriverId,
+        dispatchMode: part.dispatchMode,
+        dispatchDriverId: part.driverId,
+        dispatchCarrierId: part.carrierId,
+        dispatchAgreementId: part.agreementId,
         plannedDepartureTime: part.departure,
         plannedArrivalTime: part.arrival,
-        certificateRiskOverride: blockedIndexes.has(index),
-        certificateRiskOverrideReason: blockedIndexes.has(index) ? reason : null,
         receivingAddressId: part.receivingAddressId || null,
         allocations: [
           {
@@ -399,6 +507,7 @@
         ]
       }))
     })
+    notifyDispatchAdvisories(result.data)
   }
 
   defineExpose({ handleOpen })

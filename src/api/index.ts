@@ -295,9 +295,12 @@ export {
   fetchExecutionSources,
   signExecutionAllocations,
   submitDispatchPlan,
+  fetchDispatchAdvisories,
   checkDispatchCertificateRisk
 } from '@tms/api/modules/dispatch-execution'
 export type {
+  DispatchAdvisory,
+  DispatchPlanResult,
   DispatchCertificateRisk,
   DispatchCertificateRiskCheck
 } from '@tms/api/modules/dispatch-execution'

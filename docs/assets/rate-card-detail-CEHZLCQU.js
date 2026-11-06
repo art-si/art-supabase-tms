@@ -1,1 +1,0 @@
-import{$ as e,rt as t}from"./sys-CLg2TUYy.js";var n=e({format:`YYYY-MM-DD`,emptyText:`-`});function r(e,t){return[e,t].filter(Boolean).join(` `)||`--`}function i(e){return e==null||e===``?`-`:`${t(e,2)} km`}function a(e){return e.effectiveFrom||e.effectiveTo?`${n(e.effectiveFrom)} 至 ${n(e.effectiveTo)}`:`-`}export{i as n,a as r,r as t};
