@@ -228,6 +228,14 @@
   defineOptions({ name: 'TmsTransportAgreement' })
   const props = defineProps<{ embedded?: boolean; customer?: Api.Tms.BasicData.Customer }>()
   const route = useRoute()
+  const isStandaloneRoute = () =>
+    !props.embedded &&
+    (route.name === 'TmsTransportAgreement' || route.path === '/tms/basic-data/transport-agreement')
+  const routeRecordId = computed(() =>
+    isStandaloneRoute() && typeof route.query.recordId === 'string'
+      ? route.query.recordId
+      : undefined
+  )
   const userStore = useUserStore()
   const tenantScopeStore = useTenantScopeStore()
   const { hasAuth } = useAuth()
@@ -687,7 +695,7 @@
           from: 0,
           to: maxRows - 1,
           customerId: props.customer?.id,
-          recordId: typeof route.query.recordId === 'string' ? route.query.recordId : undefined
+          recordId: routeRecordId.value
         })
         if (result.error) throw result.error
         return { data: result.data ?? [] }
@@ -701,7 +709,7 @@
       from,
       to,
       customerId: props.customer?.id,
-      recordId: typeof route.query.recordId === 'string' ? route.query.recordId : undefined
+      recordId: routeRecordId.value
     })
   }
   const showDetail = async (row: TransportAgreementRecord): Promise<void> => {
@@ -716,13 +724,11 @@
   const refresh = (mode: 'add' | 'edit'): void => {
     void (mode === 'add' ? tableRef.value?.refreshCreate() : tableRef.value?.refreshUpdate())
   }
-  watch(
-    () => route.query.recordId,
-    () => {
-      ++recordLoadVersion
-      void nextTick().then(() => tableRef.value?.refreshCreate())
-    }
-  )
+  watch(routeRecordId, () => {
+    if (!isStandaloneRoute()) return
+    ++recordLoadVersion
+    void nextTick().then(() => tableRef.value?.refreshCreate())
+  })
   watch(
     () => [props.customer?.id, tenantScopeStore.effectiveTenantId],
     () => {

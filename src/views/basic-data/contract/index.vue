@@ -438,6 +438,12 @@
       dict: { code: 'tmsContractBusinessType', display: 'auto' }
     },
     {
+      prop: 'contractCategory',
+      label: '合同类别',
+      width: 125,
+      dict: { code: 'tmsContractCategory', display: 'text' }
+    },
+    {
       prop: 'transportMode',
       label: '运输方式',
       width: 110,
@@ -451,7 +457,7 @@
     },
     {
       prop: 'customer',
-      label: '客户',
+      label: '客户/货主',
       minWidth: 160,
       formatter: (row) => row.customer?.customerName || '-'
     },
@@ -483,12 +489,18 @@
           }
         ]
       : []),
+    {
+      prop: 'billingUnit',
+      label: '计费单位',
+      width: 110,
+      dict: { code: 'tmsCargoUnit', display: 'text' }
+    },
     { prop: 'handler', label: '经办人', width: 110 },
-    { prop: 'contactName', label: '联系人', width: 110 },
+    { prop: 'contactName', label: '业务联系人', width: 120 },
     { prop: 'customerSignatory', label: '客户签约人', width: 120 },
     {
       prop: 'signTime',
-      label: '签订日期',
+      label: '签约日期',
       width: 150,
       formatter: (row) => formatDateTime(row.signTime)
     },

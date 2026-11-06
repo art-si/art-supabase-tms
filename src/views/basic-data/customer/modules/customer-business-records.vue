@@ -27,6 +27,7 @@
   import { useUserStore } from '@/store/modules/user'
   import { navigateToApplication } from '@/utils/application-navigation'
   import { financePaths } from '@/router/business-paths'
+  import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   defineOptions({ name: 'TmsCustomerBusinessRecords' })
   const props = defineProps<{ kind: 'waybill' | 'statement'; customerId: string }>()
   type Row = Api.Tms.Waybill.WaybillRecord | CustomerStatementLinkRecord
@@ -71,7 +72,11 @@
                 type="view"
                 permission="TmsLoadedWaybillList:View"
                 onClick={() =>
-                  void router.push({ name: 'TmsWaybillDetail', params: { id: row.id } })
+                  void router
+                    .push({ name: 'TmsWaybillDetail', params: { id: row.id } })
+                    .catch((error) =>
+                      notifyFriendlyError(error, '运单详情打开失败，请刷新页面后重试')
+                    )
                 }
               />
             )
@@ -103,15 +108,16 @@
               <ArtButtonTable
                 type="view"
                 permission="FinanceCustomerSettlement:View"
-                onClick={() => {
-                  if ('statementNo' in row)
-                    void navigateToApplication(
-                      'fms',
-                      financePaths.customerSettlement,
-                      { customerId: props.customerId, recordId: row.id },
-                      router
-                    )
-                }}
+                onClick={() =>
+                  void navigateToApplication(
+                    'fms',
+                    financePaths.customerSettlement,
+                    { customerId: props.customerId, recordId: row.id },
+                    router
+                  ).catch((error) =>
+                    notifyFriendlyError(error, '客户对账详情打开失败，请检查财务应用权限后重试')
+                  )
+                }
               />
             )
           }

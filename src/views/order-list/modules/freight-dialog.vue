@@ -3,6 +3,7 @@
     ref="dialogRef"
     size="xl"
     :loading="loading"
+    :confirm-disabled="!formRef?.readyToSubmit || loading || loadError"
     :show-fullscreen-button="true"
     @close="invalidateLoad"
   >
@@ -368,13 +369,15 @@
     }
   }
   async function handleSubmit(): Promise<boolean> {
-    if (
-      loading.value ||
-      loadError.value ||
-      !order.value?.id ||
-      !(await validateArtFormForSubmit(formRef.value))
-    )
+    if (loading.value || loadError.value || !order.value?.id) return false
+    if (!formRef.value?.readyToSubmit) {
+      ElMessage.warning('表单控件仍在加载，请稍后再提交')
       return false
+    }
+    if (!(await validateArtFormForSubmit(formRef.value))) {
+      ElMessage.warning('请检查费用承担方')
+      return false
+    }
     if (!form.value.lines.length) {
       ElMessage.warning('请至少添加一项异常事件')
       return false

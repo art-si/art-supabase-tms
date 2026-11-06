@@ -32,6 +32,7 @@
     />
 
     <CarrierDialog ref="dialogRef" @success="handleSaveSuccess" />
+    <CarrierDetailDialog ref="detailDialogRef" />
     <MasterDataDeleteGuard ref="deleteGuardRef" @cleared="handleDeleteGuardCleared" />
   </div>
 </template>
@@ -40,7 +41,6 @@
   import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
   import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
   import { ElButton, ElMessage } from 'element-plus'
-  import { RouterLink } from 'vue-router'
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
   import type {
     ArtTableQueryExpose,
@@ -65,6 +65,7 @@
     importCarriers
   } from '@tms/api'
   import CarrierDialog from './modules/carrier-dialog.vue'
+  import CarrierDetailDialog from './modules/carrier-detail-dialog.vue'
   import {
     carrierSelections,
     carrierSelectionLabels,
@@ -89,6 +90,10 @@
     handleOpen: (row?: Carrier) => Promise<void>
   }
 
+  interface CarrierDetailDialogExpose {
+    handleOpen: (id: string) => Promise<void>
+  }
+
   interface MasterDataDeleteGuardExpose {
     inspect: (options: MasterDataDeleteGuardOpenOptions) => Promise<boolean>
   }
@@ -99,6 +104,7 @@
   const { getDictMap } = storeToRefs(userStore)
   const tableQueryRef = ref<ArtTableQueryExpose>()
   const dialogRef = ref<CarrierDialogExpose>()
+  const detailDialogRef = ref<CarrierDetailDialogExpose>()
   const deleteGuardRef = ref<MasterDataDeleteGuardExpose>()
   const carrierFieldAccess = ref<Api.Tms.BasicData.CarrierFieldAccessMap>({})
 
@@ -225,13 +231,14 @@
       width: 165,
       formatter: (row) =>
         row.id ? (
-          <RouterLink
+          <button
+            type="button"
             class="tms-carrier__code-link"
-            to={`/tms/basic-data/carrier-detail/${row.id}`}
             title={`查看承运商 ${row.carrierCode || row.companyName} 详情`}
+            onClick={() => openDetail(row)}
           >
             {row.carrierCode || '-'}
-          </RouterLink>
+          </button>
         ) : (
           row.carrierCode || '-'
         )
@@ -439,7 +446,7 @@
 
   const openDetail = (row: Carrier): void => {
     if (!row.id) return
-    void router.push(`/tms/basic-data/carrier-detail/${row.id}`)
+    void detailDialogRef.value?.handleOpen(String(row.id))
   }
 
   const goDriverManage = (row: Carrier): void => {
@@ -537,6 +544,7 @@
     :deep(.tms-carrier__code-link) {
       display: inline-block;
       max-width: 100%;
+      padding: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       font-weight: 600;
@@ -544,6 +552,9 @@
       color: var(--el-color-primary);
       white-space: nowrap;
       text-decoration: none;
+      cursor: pointer;
+      background: transparent;
+      border: 0;
 
       &:hover {
         color: var(--el-color-primary-dark-2);

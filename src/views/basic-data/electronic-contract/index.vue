@@ -144,6 +144,20 @@
 
   const route = useRoute()
   const router = useRouter()
+  const isDetailRoute = () =>
+    props.embedded
+      ? route.path === '/tms/basic-data/customer'
+      : route.name === 'TmsElectronicContract' ||
+        route.path === '/tms/basic-data/electronic-contract'
+  const routeRecordId = computed(() =>
+    !props.embedded && isDetailRoute() && typeof route.query.recordId === 'string'
+      ? route.query.recordId
+      : undefined
+  )
+  const detailRouteId = computed(() => {
+    if (!isDetailRoute()) return undefined
+    return typeof route.query.contractId === 'string' ? route.query.contractId : routeRecordId.value
+  })
   const { confirmAction } = useArtFeedback()
   const terminatingId = ref<string | null>(null)
   const submittingId = ref<string | null>(null)
@@ -375,7 +389,7 @@
       from,
       to,
       customerId: props.customer?.id,
-      recordId: typeof route.query.recordId === 'string' ? route.query.recordId : undefined
+      recordId: routeRecordId.value
     })
   }
 
@@ -511,20 +525,30 @@
   }
 
   watch(
-    () => route.query.contractId ?? route.query.recordId,
+    detailRouteId,
     async (value) => {
-      if (!value || typeof value !== 'string' || !hasAuth('TmsElectronicContract:View')) return
+      if (!value) {
+        detail.value = undefined
+        await detailDialogRef.value?.handleClose(true)
+        return
+      }
+      if (!hasAuth('TmsElectronicContract:View')) return
       detail.value = undefined
       await nextTick()
+      if (detailRouteId.value !== value) return
       await detailDialogRef.value?.handleOpen(undefined, {
         title: '电子合同',
         loading: true,
         onOpen: async (_data, api) => {
           try {
             const result = await fetchElectronicContractDetail(value)
+            if (detailRouteId.value !== value) return
             if (!result.data) throw new Error('电子合同已不存在或无权查看')
             detail.value = result.data
             api.setOptions({ title: `电子合同 · ${result.data.contractNo}` })
+          } catch (error) {
+            notifyFriendlyError(error, '电子合同详情加载失败，请刷新列表后重试')
+            await api.handleClose(true)
           } finally {
             api.setLoading(false)
           }
@@ -535,10 +559,10 @@
   )
 
   const clearDetailQuery = (): void => {
-    if (!route.query.contractId && !route.query.recordId) return
+    if (!isDetailRoute() || (!route.query.contractId && !routeRecordId.value)) return
     const query = { ...route.query }
     delete query.contractId
-    delete query.recordId
+    if (routeRecordId.value) delete query.recordId
     void router.replace({ name: route.name ?? 'TmsElectronicContract', query })
   }
 

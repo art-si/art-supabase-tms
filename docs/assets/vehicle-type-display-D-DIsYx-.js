@@ -1,0 +1,1 @@
+import{a as e}from"./sys-BoBGh9cI.js";function t(e,t={}){let n=e?.trim();return n?/[\u3400-\u9fff]/u.test(n)&&/^[\u3400-\u9fff0-9\s·（）().、/－-]+$/u.test(n)?n:t.unknownText??`未识别`:t.emptyText??`--`}function n(n,r){return e(r,n,{unknownText:t(typeof n==`string`?n:String(n??``),{unknownText:`待核对`})})}export{t as n,n as t};
