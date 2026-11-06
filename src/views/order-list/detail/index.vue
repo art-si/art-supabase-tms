@@ -216,6 +216,7 @@
   import ArtTable from '@/components/core/tables/art-table/index.vue'
   import type { ColumnOption } from '@/types'
   import { formatWithDayjs } from '@/utils/time'
+  import { getDictionaryDisplayLabel } from '@/utils/form/option'
   import { canViewField, formatSensitiveNumberWithAffix } from '@/utils/field-permission'
   import { formatCompactNumberValue } from '@/utils/ui/format'
   import { useUserStore } from '@/store/modules/user'
@@ -379,9 +380,11 @@
       label: '运输要求',
       value: (data: Partial<OrderConfig>) =>
         data.transportRequirements
-          ?.map(
-            (item) =>
-              userStore.getDictItemByValue('tmsOrderTransportRequirement', item)?.label || item
+          ?.map((item) =>
+            getDictionaryDisplayLabel(
+              userStore.getDictItemByValue('tmsOrderTransportRequirement', item),
+              item
+            )
           )
           .join('、') || '--'
     },

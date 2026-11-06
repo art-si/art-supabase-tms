@@ -71,6 +71,7 @@
   import CargoMultipleSelect from '@tms/views/modules/cargo-multiple-select.vue'
   import { mergeContractCargoSelections } from './contract-cargo-selection'
   import { formatSensitiveNumber } from '@/utils/field-permission'
+  import { getDictionaryDisplayLabel } from '@/utils/form/option'
 
   defineOptions({ name: 'ContractTransportDetails' })
 
@@ -222,7 +223,7 @@
           {props.unitOptions.map((item) => (
             <ElOption
               key={item.value}
-              label={item.label || item.name || item.value}
+              label={getDictionaryDisplayLabel(item, item.value)}
               value={item.value}
             />
           ))}

@@ -241,6 +241,7 @@
   import { useDocumentNumberRule } from '@/hooks/core/useDocumentNumberRule'
 
   import { formatNameCodeOption } from '@/utils/form'
+  import { getDictionaryDisplayLabel } from '@/utils/form/option'
   import { fetchRegionOptions } from '@/api/region-options'
   import {
     addCarrierPrice,
@@ -771,7 +772,7 @@
     const option = form.transportModeOptions.find(
       (item) => String(item.value) === form.data.transportMode
     )
-    return String(option?.label || option?.name || option?.value || '')
+    return getDictionaryDisplayLabel(option, form.data.transportMode, { emptyText: '' })
   }
 
   onMounted(() => {

@@ -74,6 +74,7 @@
   } from '@/components/core/forms/art-button-more/index.vue'
   import { ColumnOption, DialogType } from '@/types'
   import { formatNameCodeOption } from '@/utils/form'
+  import { getDictionaryDisplayLabel } from '@/utils/form/option'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { formatWithDayjs } from '@/utils/time'
   import { canViewField, formatSensitiveNumber } from '@/utils/field-permission'
@@ -190,7 +191,7 @@
   const billingLabelMap = computed(() => {
     const map = new Map<string, string>()
     billingMethodOptions.value.forEach((item) => {
-      if (item.value) map.set(item.value, item.label || item.name || item.value)
+      if (item.value) map.set(item.value, getDictionaryDisplayLabel(item, item.value))
     })
     return map
   })
@@ -688,7 +689,7 @@
   const createDictLabelMap = (options: Api.DataCenter.DictListItem[]): Map<string, string> => {
     const map = new Map<string, string>()
     options.forEach((item) => {
-      if (item.value) map.set(item.value, item.label || item.name || item.value)
+      if (item.value) map.set(item.value, getDictionaryDisplayLabel(item, item.value))
     })
     return map
   }
