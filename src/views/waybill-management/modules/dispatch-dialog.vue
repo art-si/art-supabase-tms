@@ -808,6 +808,11 @@
     carrier?: DispatchCarrierCandidate | null,
     carrierId?: string | null
   ): void {
+    if (form.data.dispatchMode === 'self_operated') {
+      form.data.dispatchCarrierId = null
+      form.selectedCarriers = []
+      return
+    }
     const id = carrierId || carrier?.id || null
     const changed = form.data.dispatchCarrierId !== id
     form.data.dispatchCarrierId = id
@@ -1015,7 +1020,8 @@
     const ids = dialog.rows.map((row) => String(row.id || '')).filter(Boolean)
     return {
       ...toRaw(form.data),
-      dispatchCarrierId: form.data.dispatchCarrierId,
+      dispatchCarrierId:
+        form.data.dispatchMode === 'self_operated' ? null : form.data.dispatchCarrierId,
       carrierBillingAccountId:
         form.data.dispatchMode === 'carrier'
           ? carrierBillingError.value

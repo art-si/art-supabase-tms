@@ -31,6 +31,7 @@ export interface DispatchDriverCandidate {
   carrierId: string | null
   driverName: string
   phone: string | null
+  /** Shared sex-dictionary value; resource RPCs normalize legacy master-data aliases. */
   gender?: string | null
   licenseType: string | null
   licenseExpireDate: string | null
