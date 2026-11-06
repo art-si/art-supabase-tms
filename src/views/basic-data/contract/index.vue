@@ -57,10 +57,10 @@
 </template>
 
 <script setup lang="tsx">
-  import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
+  import { notifyFriendlyError, useArtFeedback } from '@/hooks/core/useArtFeedback'
   import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
   import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
-  import { ElMessage, ElMessageBox, ElSegmented, ElTag } from 'element-plus'
+  import { ElMessage, ElSegmented, ElTag } from 'element-plus'
   import { RouterLink } from 'vue-router'
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
   import type {
@@ -141,6 +141,7 @@
   }
 
   const router = useRouter()
+  const { confirmAction } = useArtFeedback()
   const route = useRoute()
   const deleteContext = useMasterDataDeleteProcessingContext()
   const userStore = useUserStore()
@@ -902,7 +903,7 @@
     if (!row.id || copyingContractId.value) return
     copyingContractId.value = row.id
     try {
-      await ElMessageBox.confirm(
+      await confirmAction(
         `确定复制运输合同“${row.contractName}”吗？将生成新的草稿合同。`,
         '复制合同',
         {

@@ -87,13 +87,13 @@
   import { normalizeNullableText } from '@/utils/form/normalize'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
-  import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
+  import { notifyFriendlyError, useArtFeedback } from '@/hooks/core/useArtFeedback'
   import { useAuth } from '@/hooks/core/useAuth'
   import { useDraftAttachmentRemoval } from '@/hooks/core/useDraftAttachmentRemoval'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import { cloneDeep, omit } from 'lodash-es'
   import type { FormRules } from 'element-plus'
-  import { ElButton, ElMessage, ElMessageBox } from 'element-plus'
+  import { ElButton, ElMessage } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtUploadFile from '@/components/core/forms/art-upload-file/index.vue'
@@ -160,6 +160,7 @@
 
   const emit = defineEmits<Emits>()
   const router = useRouter()
+  const { confirmAction } = useArtFeedback()
   const { hasAuth } = useAuth()
   const contextCustomerId = ref<string>()
   const contextCustomerTenantId = ref<string>()
@@ -909,7 +910,7 @@
           )
           if (hasAuth('WorkflowDefinition:Add')) {
             try {
-              await ElMessageBox.confirm(
+              await confirmAction(
                 '合同已保存为草稿。可前往流程管理，基于“运输合同审批”模板配置并发布审批流程。',
                 '审批未发起',
                 { confirmButtonText: '前往流程管理', cancelButtonText: '稍后处理', type: 'warning' }

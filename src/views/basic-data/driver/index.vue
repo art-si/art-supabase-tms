@@ -301,7 +301,13 @@
       label: '姓名',
       minWidth: 180,
       formatter: (row) => (
-        <div class={row.isBlacklisted ? 'tms-driver__blocked' : undefined}>
+        <div
+          class={
+            row.isBlacklisted
+              ? 'tms-driver__blocked [&_.business-record-link__control]:text-[var(--el-color-danger)]! [&_.business-record-link__static]:text-[var(--el-color-danger)]!'
+              : undefined
+          }
+        >
           <BusinessRecordLink
             label={row.driverName || '未命名司机'}
             meta={row.isBlacklisted ? '黑名单' : ''}

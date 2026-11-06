@@ -241,7 +241,13 @@
           { prop: 'materialName', label: '物料名称', minWidth: 180 },
           { prop: 'description', label: '物料描述', minWidth: 160 },
           { prop: 'specificationModel', label: '规格型号', minWidth: 150 },
-          { prop: 'baseUnit.unitName', label: '单位', width: 100 }
+          {
+            prop: 'baseUnit.unitName',
+            label: '单位',
+            width: 100,
+            formatter: (row: CargoMaterialOption) =>
+              unitDisplayName(row.tenantId, row.baseUnit?.unitName || row.basicUnit)
+          }
         ],
         clearable: true,
         disabled: !form.value.tenantId || referenceLoading.value || !!referenceError.value,

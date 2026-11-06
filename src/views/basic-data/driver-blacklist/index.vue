@@ -65,7 +65,7 @@
     isPrivateAttachmentPath,
     signPrivateAttachmentPaths
   } from '@/utils/supabase/private-attachment'
-  import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
+  import { notifyFriendlyError, useArtFeedback } from '@/hooks/core/useArtFeedback'
   import { useTenantOperationGuard } from '@/hooks/core/useTenantOperationGuard'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import { useAuth } from '@/hooks/core/useAuth'
@@ -73,7 +73,7 @@
   import { useUserStore } from '@/store/modules/user'
   import { getDictionaryDisplayLabel } from '@/utils/form/option'
   import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
-  import { ElMessage, ElMessageBox } from 'element-plus'
+  import { ElMessage } from 'element-plus'
   import {
     fetchDriverBlacklistList,
     fetchDriverBlacklistDetail,
@@ -96,8 +96,10 @@
   const tenantScope = useTenantScopeStore()
   const userStore = useUserStore()
   const { hasAuth } = useAuth()
+  const { confirmAction } = useArtFeedback()
   const canView = computed(() => hasAuth('TmsDriverBlacklist:View'))
   const captureDetailOperation = useTenantOperationGuard('TmsDriverBlacklist:View')
+  const captureReleaseOperation = useTenantOperationGuard('TmsDriverBlacklist:Release')
   const ownershipOptions = useDictionaryOptions('tmsDriverOwnership')
   const driverTypeOptions = useDictionaryOptions('tmsDriverType')
   const blacklistStatusOptions = useDictionaryOptions('tmsDriverBlacklistStatus')
@@ -362,13 +364,18 @@
   }
 
   const releaseRecord = async (row: DriverBlacklistRecord): Promise<void> => {
+    const isCurrentOperation = captureReleaseOperation()
     try {
-      await ElMessageBox.confirm(
+      await confirmAction(
         `解除 ${row.driverName} 的黑名单后，司机将恢复登记前的启用状态，拉黑记录会继续保留。`,
         '解除黑名单',
         { type: 'warning', confirmButtonText: '确认解除', cancelButtonText: '取消' }
       )
     } catch {
+      return
+    }
+    if (!isCurrentOperation()) {
+      ElMessage.warning('操作权限或租户范围已变化，请刷新页面后重试')
       return
     }
     try {

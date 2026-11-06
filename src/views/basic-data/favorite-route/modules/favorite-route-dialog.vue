@@ -107,13 +107,13 @@
             </ElSelect>
             <ElButton
               :disabled="index === 0"
-              aria-label="上移途经点"
+              :aria-label="`上移第 ${index + 1} 个途经点`"
               @click="moveWaypoint(index, -1)"
               >↑</ElButton
             >
             <ElButton
               :disabled="index === (form.waypointStationIds?.length ?? 0) - 1"
-              aria-label="下移途经点"
+              :aria-label="`下移第 ${index + 1} 个途经点`"
               @click="moveWaypoint(index, 1)"
               >↓</ElButton
             >
