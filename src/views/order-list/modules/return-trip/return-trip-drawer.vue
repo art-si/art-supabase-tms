@@ -298,6 +298,7 @@
   import { useAmapGeocoder } from '@/hooks/core/useAmapGeocoder'
   import ArtAddressPicker from '@/components/core/forms/art-address-picker/index.vue'
   import ArtButtonMore from '@/components/core/forms/art-button-more/index.vue'
+  import { useAuth } from '@/hooks/core/useAuth'
   import ArtIconButton from '@/components/core/widget/art-icon-button/index.vue'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import type {
@@ -361,6 +362,7 @@
   type ReturnForm = OrderForm & { cargoItems: Api.Tms.Order.CargoItem[] }
   const tenantScopeStore = useTenantScopeStore()
   const userStore = useUserStore()
+  const { hasAuth } = useAuth()
   const { estimateDrivingRoute } = useAmapDrivingEstimate()
   const { geocodeAddress } = useAmapGeocoder()
   const workspaceTenantId = computed(() =>
@@ -387,8 +389,18 @@
     { mode: 'receiving', label: '收货' }
   ]
   const addressActions = [
-    { key: 'recognize', label: '地址识别', icon: 'ri:magic-line' },
-    { key: 'select', label: '选择地址', icon: 'ri:map-pin-2-line' }
+    {
+      key: 'recognize',
+      label: '地址识别',
+      icon: 'ri:magic-line',
+      auth: 'TmsOrderList:AddReturnTrip'
+    },
+    {
+      key: 'select',
+      label: '选择地址',
+      icon: 'ri:map-pin-2-line',
+      auth: 'TmsOrderList:AddReturnTrip'
+    }
   ]
   const source = ref<OrderRecord>()
   const form = ref<ReturnForm>(createReturnForm())
@@ -758,6 +770,7 @@
     handleWaypointChange(ids)
   }
   async function handleAddressAction(mode: SelectorMode, action: string | number): Promise<void> {
+    if (!hasAuth('TmsOrderList:AddReturnTrip')) return
     if (action === 'select') {
       await customerSelectorRef.value?.handleOpen(mode)
       return
@@ -774,6 +787,7 @@
     })
   }
   function handleRecognizedAddress(address: CustomerAddress): void {
+    if (!hasAuth('TmsOrderList:AddReturnTrip')) return
     const isShipping = recognitionEndpoint.value === 'shipping'
     Object.assign(
       form.value,

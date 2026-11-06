@@ -849,7 +849,9 @@
   import OrderConfig from './modules/order-config.vue'
   import OrderSupplement from './modules/order-supplement.vue'
   import OrderExecutionSupplement from '../components/order-execution-supplement/index.vue'
-  import ArtButtonMore from '@/components/core/forms/art-button-more/index.vue'
+  import ArtButtonMore, {
+    type ButtonMoreItem
+  } from '@/components/core/forms/art-button-more/index.vue'
   import CustomerAddressDialog from '../basic-data/customer-address/modules/customer-address-dialog.vue'
 
   defineOptions({ name: 'TmsOrderOpen' })
@@ -1026,10 +1028,23 @@
   const loadingFormRef = ref<InstanceType<typeof OrderSupplement>>()
   const addressRecognitionRef = ref<InstanceType<typeof CustomerAddressDialog>>()
   const recognitionEndpoint = ref<SelectorMode>('shipping')
-  const addressActions = [
-    { key: 'recognize', label: '地址识别', icon: 'ri:magic-line' },
-    { key: 'select', label: '选择地址', icon: 'ri:map-pin-2-line' }
-  ]
+  const contactActionPermission = computed(() =>
+    isNewOrder.value ? 'TmsOrderOpen:Create' : 'TmsOrderList:Edit'
+  )
+  const addressActions = computed<ButtonMoreItem[]>(() => [
+    {
+      key: 'recognize',
+      label: '地址识别',
+      icon: 'ri:magic-line',
+      auth: contactActionPermission.value
+    },
+    {
+      key: 'select',
+      label: '选择地址',
+      icon: 'ri:map-pin-2-line',
+      auth: contactActionPermission.value
+    }
+  ])
   const emptyTransferVisible = ref(false)
   const transferPointCount = computed(() => form.data.transferStationIds?.length ?? 0)
   const stepLabels = ['收发信息', '配置信息', '货物信息']
@@ -2139,6 +2154,7 @@
   }
 
   async function handleAddressAction(mode: SelectorMode, action: string | number): Promise<void> {
+    if (!hasAuth(contactActionPermission.value) || !canEditContactEndpoint(mode)) return
     if (action === 'select') return openCustomerSelector(mode)
     recognitionEndpoint.value = mode
     await addressRecognitionRef.value?.handleOpen(undefined, {
@@ -2155,7 +2171,7 @@
 
   function handleRecognizedAddress(address: CustomerAddress): void {
     const mode = recognitionEndpoint.value
-    if (!canEditContactEndpoint(mode)) return
+    if (!hasAuth(contactActionPermission.value) || !canEditContactEndpoint(mode)) return
     const patch: Partial<OrderForm> =
       mode === 'shipping'
         ? {
