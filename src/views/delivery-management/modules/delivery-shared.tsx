@@ -14,6 +14,7 @@ import { buildSupabasePageRange } from '@/utils/supabase/pagination'
 import { exportDeliveryList, fetchDeliveryList } from '@tms/api'
 import { canEditField, canViewField, formatSensitiveNumber } from '@/utils/field-permission'
 import { formatArtValue, formatCompactNumberValue } from '@/utils/ui/format'
+import { getDictionaryDisplayLabel } from '@/utils/form/option'
 import { useUserStore } from '@/store/modules/user'
 import { useWebsiteConfig } from '@/hooks/core/useWebsiteConfig'
 import { printLoadedWaybill } from '../../modules/waybill-print'
@@ -370,7 +371,9 @@ function printDeliveryWaybill(context: DeliveryListContext, row: DeliveryRecord)
     logoUrl: websiteConfig.value.logoUrl,
     detailUrl,
     label: (dictCode, value) =>
-      userStore.getDictItemByValue(dictCode, value ?? undefined)?.label || value || ''
+      getDictionaryDisplayLabel(userStore.getDictItemByValue(dictCode, value ?? undefined), value, {
+        emptyText: ''
+      })
   })
 }
 

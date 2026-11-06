@@ -664,7 +664,7 @@
 
     const normalizedStatus = normalizeOrderStatus(status)
     const dictItem = userStore.getDictItemByValue('tmsOrderStatus', normalizedStatus)
-    return dictItem?.label || normalizedStatus || '-'
+    return dictItem?.label || '状态待核对'
   }
 
   function getOrderStatusTimeText(status: OrderStatusValue): string {

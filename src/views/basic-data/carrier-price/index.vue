@@ -68,6 +68,7 @@
   import { useUserStore } from '@/store/modules/user'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { createDateTimeFormatter } from '@/utils/ui/format'
+  import { getDictionaryDisplayLabel } from '@/utils/form/option'
   import BusinessWorkspaceHeader from '@/components/business/business-workspace-header/index.vue'
   import BusinessTableWorkspaceActions from '@/components/business/business-table-workspace-actions/index.vue'
   import BusinessTableRowActions from '@/components/business/business-table-row-actions/index.vue'
@@ -541,7 +542,7 @@
     if (!value) return ''
     const text = String(value)
     const item = options.find((option) => option.value === text || option.label === text)
-    return item?.label || text
+    return getDictionaryDisplayLabel(item, text)
   }
 
   const formatDateTime = createDateTimeFormatter({

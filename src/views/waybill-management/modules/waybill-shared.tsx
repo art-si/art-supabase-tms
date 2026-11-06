@@ -14,6 +14,7 @@ import { ColumnOption } from '@/types'
 import { buildSupabasePageRange } from '@/utils/supabase/pagination'
 import { formatWithDayjs } from '@/utils/time'
 import { formatArtValue, formatCompactNumberValue } from '@/utils/ui/format'
+import { getDictionaryDisplayLabel } from '@/utils/form/option'
 import { canViewField, formatSensitiveNumber, mergeFieldAccessMaps } from '@/utils/field-permission'
 import { useUserStore } from '@/store/modules/user'
 import { useWebsiteConfig } from '@/hooks/core/useWebsiteConfig'
@@ -1065,7 +1066,9 @@ function handlePrint(context: WaybillListContext, row: WaybillRecord): void {
     logoUrl: websiteConfig.value.logoUrl,
     detailUrl,
     label: (dictCode, value) =>
-      userStore.getDictItemByValue(dictCode, value ?? undefined)?.label || value || ''
+      getDictionaryDisplayLabel(userStore.getDictItemByValue(dictCode, value ?? undefined), value, {
+        emptyText: ''
+      })
   })
 }
 

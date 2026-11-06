@@ -196,7 +196,9 @@
         width: 125,
         formatter: (row) => (
           <ElTag type={eventTagType(row.eventType)} effect="light" size="small" round>
-            {eventLabels.value[row.eventType] || row.eventType}
+            {Object.hasOwn(eventLabels.value, row.eventType)
+              ? eventLabels.value[row.eventType]
+              : '事件待核对'}
           </ElTag>
         )
       },

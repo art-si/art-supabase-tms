@@ -71,6 +71,7 @@
   import MasterDataDeleteGuard, {
     type MasterDataDeleteDependencyMeta
   } from '@/components/business/master-data-delete-guard/index.vue'
+  import { formatReferenceStatus } from '@/components/business/master-data-delete-guard/record-meta'
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
   import type {
     ArtTableQueryExpose,
@@ -669,8 +670,12 @@
     cancelled: '已取消'
   }
 
-  const formatDependencyStatus = (status?: string | null): string =>
-    status ? dependencyStatusLabelMap[status] || status : ''
+  const formatDependencyStatus = (status?: string | null): string => {
+    if (!status) return ''
+    return Object.hasOwn(dependencyStatusLabelMap, status)
+      ? dependencyStatusLabelMap[status]!
+      : formatReferenceStatus(status)
+  }
 
   const safeCleanupLabelMap: Record<CustomerDeleteSafeCleanupCode, string> = {
     customer_price: '客户报价',
@@ -707,7 +712,10 @@
   }
 
   const showCustomerDeleteBlockersIfNeeded = async (customers: Customer[]): Promise<boolean> => {
-    if (!deleteGuardRef.value) return true
+    if (!deleteGuardRef.value) {
+      ElMessage.error('关联校验尚未就绪，请刷新页面后重试删除')
+      return true
+    }
     const customerIds = customers.map((item) => String(item.id)).filter(Boolean)
     let cleanupCandidates: CustomerDeleteSafeCleanupCandidate[] = []
     const dependencyMeta: Record<string, MasterDataDeleteDependencyMeta> = Object.fromEntries(

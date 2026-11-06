@@ -263,16 +263,27 @@
       fixed: 'left',
       formatter: (row) =>
         hasAuth('TmsElectronicContract:View') ? (
-          <RouterLink
-            class="font-semibold text-[var(--el-color-primary)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--el-color-primary)]"
-            to={{
-              name: route.name ?? 'TmsElectronicContract',
-              query: { ...route.query, contractId: row.id }
-            }}
-            title={`查看合同 ${row.contractNo}`}
-          >
-            {row.contractNo}
-          </RouterLink>
+          props.embedded ? (
+            <button
+              type="button"
+              class="font-semibold text-[var(--el-color-primary)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--el-color-primary)]"
+              title={`查看合同 ${row.contractNo}`}
+              onClick={() => void showDetail(row)}
+            >
+              {row.contractNo}
+            </button>
+          ) : (
+            <RouterLink
+              class="font-semibold text-[var(--el-color-primary)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--el-color-primary)]"
+              to={{
+                name: route.name ?? 'TmsElectronicContract',
+                query: { ...route.query, contractId: row.id }
+              }}
+              title={`查看合同 ${row.contractNo}`}
+            >
+              {row.contractNo}
+            </RouterLink>
+          )
         ) : (
           <span class="font-semibold text-[var(--el-text-color-primary)]">{row.contractNo}</span>
         )
@@ -393,8 +404,36 @@
     })
   }
 
+  const openDetail = async (id: string, fromRoute = false): Promise<void> => {
+    detail.value = undefined
+    await nextTick()
+    if (fromRoute && detailRouteId.value !== id) return
+    await detailDialogRef.value?.handleOpen(undefined, {
+      title: '电子合同',
+      loading: true,
+      onOpen: async (_data, api) => {
+        try {
+          const result = await fetchElectronicContractDetail(id)
+          if (fromRoute && detailRouteId.value !== id) return
+          if (!result.data) throw new Error('电子合同已不存在或无权查看')
+          detail.value = result.data
+          api.setOptions({ title: `电子合同 · ${result.data.contractNo}` })
+        } catch (error) {
+          notifyFriendlyError(error, '电子合同详情加载失败，请刷新列表后重试')
+          await api.handleClose(true)
+        } finally {
+          api.setLoading(false)
+        }
+      }
+    })
+  }
+
   const showDetail = async (row: ElectronicContractRecord): Promise<void> => {
     if (!hasAuth('TmsElectronicContract:View')) return
+    if (props.embedded) {
+      await openDetail(row.id)
+      return
+    }
     await router.push({
       name: route.name ?? 'TmsElectronicContract',
       query: { ...route.query, contractId: row.id }
@@ -533,27 +572,7 @@
         return
       }
       if (!hasAuth('TmsElectronicContract:View')) return
-      detail.value = undefined
-      await nextTick()
-      if (detailRouteId.value !== value) return
-      await detailDialogRef.value?.handleOpen(undefined, {
-        title: '电子合同',
-        loading: true,
-        onOpen: async (_data, api) => {
-          try {
-            const result = await fetchElectronicContractDetail(value)
-            if (detailRouteId.value !== value) return
-            if (!result.data) throw new Error('电子合同已不存在或无权查看')
-            detail.value = result.data
-            api.setOptions({ title: `电子合同 · ${result.data.contractNo}` })
-          } catch (error) {
-            notifyFriendlyError(error, '电子合同详情加载失败，请刷新列表后重试')
-            await api.handleClose(true)
-          } finally {
-            api.setLoading(false)
-          }
-        }
-      })
+      await openDetail(value, true)
     },
     { immediate: true }
   )

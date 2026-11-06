@@ -1,4 +1,5 @@
 import { normalizeNullableNumber, normalizeNullableText } from '@/utils/form/normalize'
+import { getDictionaryDisplayLabel } from '@/utils/form/option'
 import { cloneDeep, omit, round, trim } from 'lodash-es'
 import dayjs from 'dayjs'
 import { isReadableFieldAccess, getFieldAccess } from '@/utils/field-permission'
@@ -461,5 +462,11 @@ export function getDictLabel(
   value?: string | null
 ): string {
   if (!value) return ''
-  return options.find((item) => item.value === value)?.label || value
+  return getDictionaryDisplayLabel(
+    options.find((item) => item.value === value),
+    value,
+    {
+      emptyText: ''
+    }
+  )
 }

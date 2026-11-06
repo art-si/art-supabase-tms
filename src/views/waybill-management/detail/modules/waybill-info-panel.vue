@@ -470,7 +470,7 @@
       completed: '已完成',
       cancelled: '已取消'
     }
-    return labels[status] || status || '-'
+    return Object.hasOwn(labels, status) ? labels[status] : '状态待核对'
   }
 
   function sum(...values: Array<number | string | null | undefined>): number | string {

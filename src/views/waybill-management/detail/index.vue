@@ -441,7 +441,8 @@
       completed: '已完成',
       cancelled: '已取消'
     }
-    return labels[eventType || ''] || labels[status] || status || '-'
+    if (eventType && Object.hasOwn(labels, eventType)) return labels[eventType]
+    return Object.hasOwn(labels, status) ? labels[status] : '节点待核对'
   }
 
   function countEvidence(data: Api.Tms.Waybill.WaybillDetailRecord): number {

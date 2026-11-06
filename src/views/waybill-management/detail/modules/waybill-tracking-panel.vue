@@ -154,7 +154,9 @@
       const tone = getNodeTone(event.eventType)
       return {
         id: event.id,
-        label: eventLabelMap[event.eventType] || event.eventType || '运输节点',
+        label: Object.hasOwn(eventLabelMap, event.eventType)
+          ? eventLabelMap[event.eventType]
+          : '运输节点待核对',
         time: event.eventTime,
         operator: event.operatorName || event.createBy || '系统记录',
         sourceLabel: source === 'driver' ? '司机端' : source === 'web' ? 'Web 端' : '系统',

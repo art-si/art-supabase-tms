@@ -65,6 +65,7 @@
   import { fetchDeliveryStatusCounts } from '@tms/api'
   import { useUserStore } from '@/store/modules/user'
   import { mergeFieldAccessMaps } from '@/utils/field-permission'
+  import { getDictionaryDisplayLabel } from '@/utils/form/option'
   import ReceiptArchiveDialog from './modules/sign-dialog.vue'
   import ReceiptExceptionWorkOrderDrawer from './modules/receipt-exception-work-order-drawer.vue'
   import BusinessWorkspaceHeader, {
@@ -115,6 +116,10 @@
   const statusCountRequestId = ref(0)
   const fieldAccess = ref<Api.Tms.Order.OrderFieldAccessMap>({})
   const paymentMethodOptions = computed(() => getDictMap.value.tmsOrderPaymentMethod ?? [])
+  const deliveryStatusFallbackLabels: Record<string, string> = {
+    signed: '已签收',
+    completed: '已完成'
+  }
 
   const table: UnwrapNestedRefs<TableGroup> = reactive<TableGroup>({
     searchQuery: createInitialDeliverySearch(),
@@ -127,7 +132,7 @@
         ...deliveryOrderStatuses.map((value) => {
           const item = statusDict.find((option) => option.value === value)
           return {
-            label: `${item?.label || item?.name || value} (${table.statusCounts[value] ?? 0})`,
+            label: `${getDictionaryDisplayLabel(item, value, { unknownText: deliveryStatusFallbackLabels[value] })} (${table.statusCounts[value] ?? 0})`,
             value
           }
         })

@@ -75,6 +75,7 @@
   import { useUserStore } from '@/store/modules/user'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { createDateTimeFormatter } from '@/utils/ui/format'
+  import { getDictionaryDisplayLabel } from '@/utils/form/option'
   import { formatCompactNumberValue } from '@/utils/ui/format'
   import BusinessWorkspaceHeader from '@/components/business/business-workspace-header/index.vue'
   import BusinessTableWorkspaceActions from '@/components/business/business-table-workspace-actions/index.vue'
@@ -659,7 +660,7 @@
   const getLabel = (options: Api.DataCenter.DictListItem[], value?: string | null): string => {
     if (!value) return ''
     const item = options.find((option) => option.value === value || option.label === value)
-    return item?.label || item?.name || value
+    return getDictionaryDisplayLabel(item, value)
   }
 
   const formatDateTime = createDateTimeFormatter({

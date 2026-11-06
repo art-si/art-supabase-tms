@@ -70,6 +70,7 @@
   import ArtDescriptions from '@/components/core/base/art-descriptions/index.vue'
   import type { ArtDescriptionItem } from '@/components/core/base/art-descriptions/types'
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
+  import { getDictionaryDisplayLabel } from '@/utils/form/option'
 
   defineOptions({ name: 'TmsAiOrderResultPanel' })
 
@@ -187,7 +188,13 @@
     items?: Api.Tms.Order.AiOrderOption[]
   ): string {
     if (!value) return ''
-    return items?.find((item) => item.value === value)?.label || value
+    return getDictionaryDisplayLabel(
+      items?.find((item) => item.value === value),
+      value,
+      {
+        emptyText: ''
+      }
+    )
   }
 
   function booleanLabel(value: boolean | null | undefined): string {

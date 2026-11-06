@@ -114,7 +114,7 @@
                   <p>{{ signal.detail }}</p>
                   <div class="transport-advisor__evidence">
                     <span v-for="item in signal.evidence" :key="item">
-                      <i />{{ formatEvidence(item) }}
+                      <i />{{ formatTransportAnomalyEvidence(item) }}
                     </span>
                   </div>
                 </article>
@@ -182,7 +182,7 @@
   import type { ArtDrawerExpose } from '@/components/core/drawers/art-drawer/types'
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
   import { analyzeTransportAnomalyByAi } from '@tms/api'
-  import { formatWithDayjs } from '@/utils/time'
+  import { formatTransportAnomalyEvidence } from './transport-anomaly-evidence'
 
   defineOptions({ name: 'TmsTransportAnomalyAdvisorDrawer' })
 
@@ -293,25 +293,6 @@
   }
 
   const formatTime = createDateTimeFormatter({ format: 'YYYY-MM-DD HH:mm:ss', emptyText: '-' })
-
-  function formatEvidence(value: string): string {
-    const statusLabels: Record<string, string> = {
-      transporting: '运输中',
-      pending: '待发运',
-      completed: '已完成',
-      cancelled: '已取消'
-    }
-    return value
-      .replace(
-        /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/g,
-        (date) => formatWithDayjs(date, 'YYYY-MM-DD HH:mm') || date
-      )
-      .replace(
-        /\b(transporting|pending|completed|cancelled)\b/gi,
-        (status) => statusLabels[status.toLowerCase()] || status
-      )
-      .replace(/：\s+/g, '：')
-  }
 
   defineExpose({ handleOpen })
 </script>

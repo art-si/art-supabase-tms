@@ -758,6 +758,7 @@
 
 <script setup lang="tsx">
   import { normalizeNullableNumber } from '@/utils/form/normalize'
+  import { getDictionaryDisplayLabel } from '@/utils/form/option'
   import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
   import { normalizeCoordinatePair } from '@/utils/geo'
 
@@ -2772,7 +2773,11 @@
         detailUrl,
         copies: count,
         label: (dictCode, value) =>
-          userStore.getDictItemByValue(dictCode, value ?? undefined)?.label || value || ''
+          getDictionaryDisplayLabel(
+            userStore.getDictItemByValue(dictCode, value ?? undefined),
+            value,
+            { emptyText: '' }
+          )
       }
     )
   }

@@ -73,6 +73,7 @@
   import MasterDataDeleteGuard, {
     type MasterDataDeleteGuardOpenOptions
   } from '@/components/business/master-data-delete-guard/index.vue'
+  import { formatReferenceStatus } from '@/components/business/master-data-delete-guard/record-meta'
 
   defineOptions({ name: 'TmsStation' })
 
@@ -435,7 +436,10 @@
     const resources = rows
       .filter((row) => row.id)
       .map((row) => ({ id: String(row.id), label: row.stationName }))
-    if (!resources.length) return true
+    if (!resources.length) {
+      ElMessage.error('未找到可校验的站点，请刷新列表后重试删除')
+      return true
+    }
     if (!deleteGuardRef.value) {
       ElMessage.error('关联校验尚未就绪，请刷新页面后重试删除')
       return true
@@ -468,7 +472,9 @@
       fetchDependencies: async (ids) =>
         (await fetchStationDeleteDependencies(ids)).map((record) => ({
           ...record,
-          recordStatus: statusLabels.get(record.recordStatus ?? '') || record.recordStatus
+          recordStatus: record.recordStatus
+            ? statusLabels.get(record.recordStatus) || formatReferenceStatus(record.recordStatus)
+            : ''
         }))
     })
   }

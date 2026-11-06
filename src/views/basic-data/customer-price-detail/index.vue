@@ -122,6 +122,7 @@
 <script setup lang="ts">
   import { formatAuditActorName } from '@/utils/business/audit-actor-display'
   import { formatCoordinateValue } from '@/utils/ui/coordinates'
+  import { getDictionaryDisplayLabel } from '@/utils/form/option'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import ArtDescriptions from '@/components/core/base/art-descriptions/index.vue'
   import type { ArtDescriptionItem } from '@/components/core/base/art-descriptions/types'
@@ -434,7 +435,7 @@
     const item = getDictMap.value[code]?.find(
       (option) => option.value === value || option.label === value
     )
-    return item?.label || item?.name || value
+    return getDictionaryDisplayLabel(item, value)
   }
   function createMoneyItems(
     entries: Array<[keyof CustomerPrice, string]>

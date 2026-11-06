@@ -323,8 +323,16 @@
               @retry="loadAbnormalFreight"
             >
               <div class="mb-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-[var(--art-gray-700)]">
-                <span>已批准自有承担：<strong>{{ formatSensitiveNumberWithAffix(order.ownAbnormalCost ?? 0, { prefix: '¥' }) }}</strong></span>
-                <span>已批准承运商扣应付：<strong>{{ formatSensitiveNumberWithAffix(order.carrierDeductionFee ?? 0, { prefix: '¥' }) }}</strong></span>
+                <span
+                  >已批准自有承担：<strong>{{
+                    formatSensitiveNumberWithAffix(order.ownAbnormalCost ?? 0, { prefix: '¥' })
+                  }}</strong></span
+                >
+                <span
+                  >已批准承运商扣应付：<strong>{{
+                    formatSensitiveNumberWithAffix(order.carrierDeductionFee ?? 0, { prefix: '¥' })
+                  }}</strong></span
+                >
               </div>
               <ArtTable
                 :data="abnormalDocuments"
@@ -835,7 +843,7 @@
       resolved: '待结案',
       closed: '已结案'
     }
-    return labels[status] || status
+    return Object.hasOwn(labels, status) ? labels[status] : '状态待核对'
   }
 
   async function loadOrder(): Promise<void> {
