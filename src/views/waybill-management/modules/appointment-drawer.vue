@@ -456,8 +456,15 @@
     ]
   }
   function toEditable(record: AppointmentRecord): EditableEntry {
+    // 未完结的旧预约可补齐同车牌缺失规格；已记录的值及历史完结记录保持原快照。
+    const snapshot =
+      record.status !== 'completed' && record.plateNo === dispatchSnapshot.value?.plateNo
+        ? dispatchSnapshot.value
+        : null
     return {
       ...record,
+      loadCapacityTon: record.loadCapacityTon ?? snapshot?.loadCapacityTon ?? null,
+      vehicleLengthM: record.vehicleLengthM ?? snapshot?.vehicleLengthM ?? null,
       localKey: record.id,
       driverPhone: record.driverPhone || '',
       scheduledAt: toLocal(record.scheduledAt),
