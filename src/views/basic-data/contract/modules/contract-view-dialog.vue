@@ -74,7 +74,10 @@
           </ElTabPane>
           <ElTabPane label="审批流程" name="workflow">
             <ArtSectionCard preserve-content-structure>
-              <WorkflowBusinessHistory business-type="tms_contract" :business-id="detail.data.id" />
+              <WorkflowBusinessHistory
+                business-type="tms_contract"
+                :business-id="detail.data.id || contractId"
+              />
             </ArtSectionCard>
           </ElTabPane>
         </ElTabs>
@@ -101,7 +104,6 @@
   import { formatSensitiveNumberWithAffix } from '@/utils/field-permission'
   import { getDictionaryDisplayLabel } from '@/utils/form/option'
   import { useUserStore } from '@/store/modules/user'
-  import { storeToRefs } from 'pinia'
 
   defineOptions({ name: 'TmsContractViewDialog' })
 
@@ -109,18 +111,17 @@
   type ContractTransportDetail = Api.Tms.BasicData.ContractTransportDetail
 
   const userStore = useUserStore()
-  const { getDictMap } = storeToRefs(userStore)
   const dialogRef = ref<ArtDialogExpose<string>>()
   const activeTab = ref('basic')
   const contractId = ref('')
   const page = reactive<{ loading: boolean; error: Error | null }>({ loading: false, error: null })
   const detail = reactive<{ data?: Contract }>({ data: undefined })
   const descriptionData = computed(() => detail.data ?? {})
-  const statusLabel = computed(
-    () =>
-      getDictionaryDisplayLabel(getDictMap.value.tmsContractStatus, detail.data?.contractStatus) ||
-      detail.data?.contractStatus ||
-      '--'
+  const statusLabel = computed(() =>
+    getDictionaryDisplayLabel(
+      userStore.getDictDisplayItemByValue('tmsContractStatus', detail.data?.contractStatus),
+      detail.data?.contractStatus
+    )
   )
   const basicItems: ArtDescriptionItem<Partial<Contract>>[] = [
     { key: 'contractNo', label: '合同编号', field: 'contractNo', copyable: true },

@@ -830,7 +830,11 @@ function getMoreActions(context: WaybillListContext, row: WaybillRecord): Button
       auth: 'TmsWaybill:Arrive'
     })
   }
-  if (context.canUnloading && row.waybillStatus === 'unloading') {
+  if (
+    context.canUnloading &&
+    row.waybillStatus === 'unloading' &&
+    row.driverWaybillUnloadingStatus !== 'completed'
+  ) {
     actions.push({
       key: 'unloading-operation',
       label: '卸货',
