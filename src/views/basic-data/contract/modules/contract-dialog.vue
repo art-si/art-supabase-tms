@@ -67,7 +67,6 @@
           保存
         </ElButton>
         <ElButton
-          v-if="!viewOnly"
           v-if="
             !form.data.id ||
             form.data.contractStatus === 'draft' ||
