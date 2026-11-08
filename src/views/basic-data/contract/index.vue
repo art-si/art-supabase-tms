@@ -61,7 +61,6 @@
   import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
   import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
   import { ElMessage, ElSegmented, ElTag } from 'element-plus'
-  import { RouterLink } from 'vue-router'
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
   import type {
     ArtTableQueryExpose,
@@ -413,13 +412,14 @@
       width: 165,
       formatter: (row) =>
         row.id ? (
-          <RouterLink
+          <button
             class="tms-contract__code-link"
-            to={`/tms/basic-data/contract-detail/${row.id}`}
+            type="button"
             title={`查看合同 ${row.contractNo || row.contractName} 详情`}
+            onClick={() => openDialog(row)}
           >
             {row.contractNo || '-'}
-          </RouterLink>
+          </button>
         ) : (
           row.contractNo || '-'
         )
@@ -849,7 +849,7 @@
 
   const openDetail = (row: Contract): void => {
     if (!row.id) return
-    void router.push(`/tms/basic-data/contract-detail/${row.id}`)
+    void dialogRef.value?.handleOpen(row, { viewOnly: true })
   }
 
   const getMoreActions = (row: Contract): ButtonMoreItem[] => [
@@ -986,6 +986,10 @@
   .tms-contract {
     :deep(.tms-contract__code-link) {
       display: inline-block;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
       max-width: 100%;
       overflow: hidden;
       text-overflow: ellipsis;

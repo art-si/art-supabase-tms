@@ -124,11 +124,7 @@
           label={row.contractNo}
           description={row.contractName}
           title={`查看运输合同 ${row.contractNo}`}
-          to={
-            hasAuth('TmsContract:View')
-              ? `/tms/basic-data/contract-detail/${row.contractId}`
-              : undefined
-          }
+          to={hasAuth('TmsContract:View') ? '/tms/basic-data/contract' : undefined}
           compact
         />
       )

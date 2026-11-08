@@ -181,11 +181,7 @@
                   v-else-if="contract"
                   :label="contract.contractNo || contract.contractName"
                   :description="contract.contractName"
-                  :to="
-                    hasAuth('TmsContract:View')
-                      ? `/tms/basic-data/contract-detail/${contract.id}`
-                      : undefined
-                  "
+                  :to="hasAuth('TmsContract:View') ? '/tms/basic-data/contract' : undefined"
                 />
                 <p v-else class="m-0 text-[var(--art-gray-600)]">这张订单未关联客户合同。</p>
                 <template v-if="canLoadQuote">

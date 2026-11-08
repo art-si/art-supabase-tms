@@ -6,6 +6,7 @@
         v-model:active-tab="activeTab"
         v-model="form.data"
         :items="form.items"
+        :disabled="viewOnly"
         :rules="form.rules"
         :span="8"
         :gutter="20"
@@ -35,7 +36,7 @@
                   <ArtUploadFile
                     title="上传附件"
                     :resource-tenant-id="form.data.tenantId || ''"
-                    :disabled="!canEditSensitiveField('attachments')"
+                    :disabled="viewOnly || !canEditSensitiveField('attachments')"
                     :show-file-list="false"
                     :show-tip="false"
                     inline
@@ -59,12 +60,14 @@
       <div class="contract-dialog__footer">
         <ElButton :disabled="loading" @click="api.handleClose()">取消</ElButton>
         <ElButton
+          v-if="!viewOnly"
           :loading="loading && submitMode === 'save'"
           @click="handleFooterConfirm(api, 'save')"
         >
           保存
         </ElButton>
         <ElButton
+          v-if="!viewOnly"
           v-if="
             !form.data.id ||
             form.data.contractStatus === 'draft' ||
@@ -169,6 +172,7 @@
   const { getDictMap } = storeToRefs(userStore)
   const { defaultWriteTenantId } = useTenantScopeFormPolicy()
   const activeTab = ref('baseSection')
+  const viewOnly = ref(false)
   const dialogRef = ref<ArtDialogExpose<Contract | undefined>>()
   const formRef = ref<FormExpose>()
   const transportDetailsRef = ref<InstanceType<typeof ContractTransportDetails>>()
@@ -186,7 +190,9 @@
   const transportDetailsPricingAccess = computed(() =>
     getFieldAccess(form.data.fieldAccess, 'transportDetailsPricing', sensitiveFieldFallback.value)
   )
-  const canEditTransportDetails = computed(() => canEditSensitiveField('transportDetailsPricing'))
+  const canEditTransportDetails = computed(
+    () => !viewOnly.value && canEditSensitiveField('transportDetailsPricing')
+  )
 
   const billingMethodOptions = computed(() => getDictMap.value.tmsContractBillingMethod ?? [])
   const contractCategoryOptions = computed(() => getDictMap.value.tmsContractCategory ?? [])
@@ -941,9 +947,10 @@
 
   const handleOpen = async (
     row?: Contract,
-    options?: { customerId?: string; customerTenantId?: string }
+    options?: { customerId?: string; customerTenantId?: string; viewOnly?: boolean }
   ): Promise<void> => {
     activeTab.value = 'baseSection'
+    viewOnly.value = options?.viewOnly ?? false
     contextCustomerId.value = options?.customerId
     contextCustomerTenantId.value = options?.customerTenantId
     const targetTenantId =
@@ -960,7 +967,7 @@
       form.data.customerId = contextCustomerId.value
     }
     await dialogRef.value?.handleOpen(row, {
-      title: row?.id ? '编辑合同' : '新增合同',
+      title: viewOnly.value ? '查看合同' : row?.id ? '编辑合同' : '新增合同',
       subtitle: '维护合同相对方、履约条款、运输明细和附件',
       contentMaxHeight: '78vh',
       loading: true,
