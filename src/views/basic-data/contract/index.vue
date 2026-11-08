@@ -51,6 +51,7 @@
     </ArtTableQuery>
 
     <ContractDialog ref="dialogRef" @success="handleSaveSuccess" />
+    <ContractViewDialog ref="viewDialogRef" />
     <ContractTerminateDialog ref="terminateDialogRef" @success="tableQueryRef?.refreshUpdate()" />
     <MasterDataDeleteGuard ref="deleteGuardRef" />
   </div>
@@ -92,6 +93,7 @@
     type ContractDetailListRow
   } from '@tms/api'
   import ContractDialog from './modules/contract-dialog.vue'
+  import ContractViewDialog from './modules/contract-view-dialog.vue'
   import ContractTerminateDialog from './modules/contract-terminate-dialog.vue'
   import BusinessWorkspaceHeader from '@/components/business/business-workspace-header/index.vue'
   import BusinessTableWorkspaceActions from '@/components/business/business-table-workspace-actions/index.vue'
@@ -135,11 +137,14 @@
     ) => Promise<void>
   }
 
+  interface ContractViewDialogExpose {
+    open: (id: string) => Promise<void>
+  }
+
   interface TableGroup {
     searchQuery: SearchParams
   }
 
-  const router = useRouter()
   const { confirmAction } = useArtFeedback()
   const route = useRoute()
   const deleteContext = useMasterDataDeleteProcessingContext()
@@ -147,6 +152,7 @@
   const { getDictMap } = storeToRefs(userStore)
   const tableQueryRef = ref<ArtTableQueryExpose>()
   const dialogRef = ref<ContractDialogExpose>()
+  const viewDialogRef = ref<ContractViewDialogExpose>()
   const terminateDialogRef = ref<InstanceType<typeof ContractTerminateDialog>>()
   const listFieldAccess = ref<ContractFieldAccessMap>({})
   const currentRows = ref<Contract[]>([])
@@ -849,7 +855,7 @@
 
   const openDetail = (row: Contract): void => {
     if (!row.id) return
-    void dialogRef.value?.handleOpen(row, { viewOnly: true })
+    void viewDialogRef.value?.open(row.id)
   }
 
   const getMoreActions = (row: Contract): ButtonMoreItem[] => [
