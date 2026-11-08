@@ -40,7 +40,7 @@
         </ArtEntitySummary>
         <ElTabs v-model="activeTab" class="carrier-detail-dialog__tabs">
           <ElTabPane label="基础信息" name="basic">
-            <ArtSectionCard preserve-content-structure title="基础信息">
+            <ArtSectionCard preserve-content-structure>
               <ArtDescriptions
                 :label-width="132"
                 :data="descriptionData"
@@ -82,7 +82,7 @@
             </ArtSectionCard>
           </ElTabPane>
           <ElTabPane label="联系人信息" name="contact">
-            <ArtSectionCard preserve-content-structure title="联系人信息">
+            <ArtSectionCard preserve-content-structure>
               <ArtDescriptions
                 :label-width="132"
                 :data="descriptionData"
@@ -92,7 +92,7 @@
             </ArtSectionCard>
           </ElTabPane>
           <ElTabPane label="财务信息" name="finance">
-            <ArtSectionCard preserve-content-structure title="财务信息">
+            <ArtSectionCard preserve-content-structure>
               <ArtDescriptions
                 :label-width="132"
                 :data="descriptionData"
@@ -102,7 +102,7 @@
             </ArtSectionCard>
           </ElTabPane>
           <ElTabPane label="合同信息" name="contract">
-            <ArtSectionCard preserve-content-structure title="合同信息">
+            <ArtSectionCard preserve-content-structure>
               <ArtDescriptions
                 :label-width="132"
                 :data="descriptionData"

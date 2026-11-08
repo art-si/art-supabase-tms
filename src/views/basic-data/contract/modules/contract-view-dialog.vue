@@ -28,22 +28,22 @@
 
         <ElTabs v-model="activeTab" class="contract-view-dialog__tabs">
           <ElTabPane label="基础信息" name="basic">
-            <ArtSectionCard preserve-content-structure title="基础信息">
+            <ArtSectionCard preserve-content-structure>
               <ArtDescriptions :data="descriptionData" :items="basicItems" :columns="3" />
             </ArtSectionCard>
           </ElTabPane>
           <ElTabPane label="计费与履约" name="fulfillment">
-            <ArtSectionCard preserve-content-structure title="计费与履约">
+            <ArtSectionCard preserve-content-structure>
               <ArtDescriptions :data="descriptionData" :items="fulfillmentItems" :columns="3" />
             </ArtSectionCard>
           </ElTabPane>
           <ElTabPane label="运输与合同约定" name="terms">
-            <ArtSectionCard preserve-content-structure title="运输与合同约定">
+            <ArtSectionCard preserve-content-structure>
               <ArtDescriptions :data="descriptionData" :items="termsItems" :columns="2" />
             </ArtSectionCard>
           </ElTabPane>
           <ElTabPane label="运输明细" name="details">
-            <ArtSectionCard preserve-content-structure title="运输明细">
+            <ArtSectionCard preserve-content-structure>
               <ArtTable
                 :data="detail.data.transportDetails || []"
                 :columns="transportDetailColumns"
@@ -55,7 +55,7 @@
             </ArtSectionCard>
           </ElTabPane>
           <ElTabPane label="合同附件" name="attachments">
-            <ArtSectionCard preserve-content-structure title="合同附件">
+            <ArtSectionCard preserve-content-structure>
               <div v-if="detail.data.attachments?.length" class="contract-view-dialog__attachments">
                 <ArtAttachmentLink
                   v-for="attachment in detail.data.attachments"
@@ -73,7 +73,7 @@
             </ArtSectionCard>
           </ElTabPane>
           <ElTabPane label="审批流程" name="workflow">
-            <ArtSectionCard preserve-content-structure title="审批流程">
+            <ArtSectionCard preserve-content-structure>
               <WorkflowBusinessHistory business-type="tms_contract" :business-id="detail.data.id" />
             </ArtSectionCard>
           </ElTabPane>
@@ -122,8 +122,6 @@
       detail.data?.contractStatus ||
       '--'
   )
-  const dictLabel = (code: string, value: unknown): string =>
-    getDictionaryDisplayLabel(getDictMap.value[code], value) || String(value || '--')
   const basicItems: ArtDescriptionItem<Partial<Contract>>[] = [
     { key: 'contractNo', label: '合同编号', field: 'contractNo', copyable: true },
     { key: 'paperContractNo', label: '纸质合同编号', field: 'paperContractNo' },
@@ -132,17 +130,23 @@
     {
       key: 'contractCategory',
       label: '合同类别',
-      value: () => dictLabel('tmsContractCategory', detail.data?.contractCategory)
+      field: 'contractCategory',
+      dictCode: 'tmsContractCategory',
+      dictDisplay: 'text'
     },
     {
       key: 'businessContractType',
       label: '业务合同分类',
-      value: () => dictLabel('tmsContractBusinessType', detail.data?.businessContractType)
+      field: 'businessContractType',
+      dictCode: 'tmsContractBusinessType',
+      dictDisplay: 'text'
     },
     {
       key: 'transportMode',
       label: '运输方式',
-      value: () => dictLabel('tmsContractTransportMode', detail.data?.transportMode)
+      field: 'transportMode',
+      dictCode: 'tmsContractTransportMode',
+      dictDisplay: 'text'
     },
     {
       key: 'partyName',
@@ -160,12 +164,16 @@
     {
       key: 'billingMethod',
       label: '计费方式',
-      value: () => dictLabel('tmsContractBillingMethod', detail.data?.billingMethod)
+      field: 'billingMethod',
+      dictCode: 'tmsContractBillingMethod',
+      dictDisplay: 'text'
     },
     {
       key: 'billingUnit',
       label: '计费单位',
-      value: () => dictLabel('tmsCargoUnit', detail.data?.billingUnit)
+      field: 'billingUnit',
+      dictCode: 'tmsCargoUnit',
+      dictDisplay: 'text'
     },
     {
       key: 'contractAmount',
@@ -220,6 +228,17 @@
     }
   ]
 
+  onMounted(() => {
+    void Promise.all([
+      userStore.ensureDictLoaded('tmsContractStatus'),
+      userStore.ensureDictLoaded('tmsContractCategory'),
+      userStore.ensureDictLoaded('tmsContractBusinessType'),
+      userStore.ensureDictLoaded('tmsContractTransportMode'),
+      userStore.ensureDictLoaded('tmsContractBillingMethod'),
+      userStore.ensureDictLoaded('tmsCargoUnit')
+    ])
+  })
+
   async function loadPage(): Promise<void> {
     if (!contractId.value) return
     page.loading = true
@@ -250,3 +269,20 @@
 
   defineExpose({ open })
 </script>
+
+<style scoped lang="scss">
+  .contract-view-dialog {
+    &__tabs {
+      margin-top: 18px;
+
+      :deep(.el-tabs__header) {
+        margin-bottom: 16px;
+      }
+    }
+
+    &__attachments {
+      display: grid;
+      gap: 8px;
+    }
+  }
+</style>
