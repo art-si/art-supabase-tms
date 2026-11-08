@@ -30,7 +30,7 @@
       </div>
     </div>
     <ElTabs v-model="activeTab" class="driver-dialog__tabs">
-      <ElTabPane v-for="tab in tabs" :key="tab.key" :name="tab.key" :label="tab.label" />
+      <ElTabPane v-for="tab in availableTabs" :key="tab.key" :name="tab.key" :label="tab.label" />
     </ElTabs>
     <section v-if="activeTab === 'certificates'" class="driver-dialog__records">
       <div class="driver-dialog__record-heading">
@@ -271,6 +271,8 @@
 </template>
 
 <script setup lang="ts">
+  import { getDriverFormFieldPermission, sanitizeDriverFormFields } from './driver-dialog-model'
+  import { normalizeNullableText } from '@/utils/form/normalize'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { focusFirstInvalidFormField } from '@/utils/form/validation'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
@@ -801,7 +803,8 @@
       idCardNo: 'edit',
       homeAddress: 'edit',
       emergencyContact: 'edit',
-      identityDocuments: 'edit'
+      identityDocuments: 'edit',
+      financialAccount: 'edit'
     },
     isRecordOwner: true
   })
@@ -1043,6 +1046,10 @@
   const canEditDriverField = (field: Api.Tms.BasicData.DriverFieldKey): boolean =>
     canEditField(form.value.fieldAccess, field)
 
+  const availableTabs = computed(() =>
+    tabs.filter((tab) => tab.key !== 'finance' || canViewDriverField('financialAccount'))
+  )
+
   const canViewIdentityDocuments = computed(() =>
     isReadableFieldAccess(getFieldAccess(form.value.fieldAccess, 'identityDocuments'))
   )
@@ -1081,16 +1088,20 @@
         ]
       : [],
     gender: [{ required: true, message: '请选择性别', trigger: 'change' }],
-    birthDate: [{ required: true, message: '请选择出生年月', trigger: 'change' }],
-    licenseClasses: [
-      { required: true, type: 'array', min: 1, message: '请选择准驾车型', trigger: 'change' }
-    ],
-    licenseExpireDate: form.value.licenseLongTerm
-      ? []
-      : [{ required: true, message: '请选择驾照有效期', trigger: 'change' }],
-    idCardValidTo: form.value.idCardLongTerm
-      ? []
-      : [{ required: true, message: '请选择身份证有效期', trigger: 'change' }],
+    birthDate: canEditDriverField('idCardNo')
+      ? [{ required: true, message: '请选择出生年月', trigger: 'change' }]
+      : [],
+    licenseClasses: canEditDriverField('identityDocuments')
+      ? [{ required: true, type: 'array', min: 1, message: '请选择准驾车型', trigger: 'change' }]
+      : [],
+    licenseExpireDate:
+      !canViewIdentityDocuments.value || form.value.licenseLongTerm
+        ? []
+        : [{ required: true, message: '请选择驾照有效期', trigger: 'change' }],
+    idCardValidTo:
+      !canEditDriverField('idCardNo') || form.value.idCardLongTerm
+        ? []
+        : [{ required: true, message: '请选择身份证有效期', trigger: 'change' }],
     emergencyContactPhone: canEditDriverField('emergencyContact')
       ? [
           {
@@ -1572,9 +1583,13 @@
         fields.includes(item.key) &&
         (item.key !== 'carrierId' || form.value.driverOwnership === 'carrier')
     )
-    return viewOnly.value
-      ? items.map((item) => ({ ...item, props: { ...item.props, disabled: true } }))
-      : items
+    return items.map((item) => {
+      const permission = getDriverFormFieldPermission(item.key)
+      if (permission && !canViewDriverField(permission)) return { ...item, hidden: true }
+      return viewOnly.value || (permission && !canEditDriverField(permission))
+        ? { ...item, props: { ...item.props, disabled: true } }
+        : item
+    })
   })
 
   watch(
@@ -1676,36 +1691,16 @@
     for (const key of imageKeys) {
       const value = rawPayload[key]
       if (!value) {
-        if (hiddenLegacyImages.has(key)) rawPayload[key] = originalImageReferences[key] || ''
+        rawPayload[key] = normalizeNullableText(
+          hiddenLegacyImages.has(key) ? originalImageReferences[key] : value
+        )
       } else if (!isPrivateAttachmentPath(value)) {
         rawPayload[key] = privateAttachmentPathFromSignedUrl(value, privateBucket)
       }
     }
-    if (rawPayload.id && !canEditField(rawPayload.fieldAccess, 'contactPhone')) {
-      delete rawPayload.phone
-    }
-    if (rawPayload.id && !canEditField(rawPayload.fieldAccess, 'idCardNo')) {
-      delete rawPayload.idCardNo
-    }
-    if (rawPayload.id && !canEditField(rawPayload.fieldAccess, 'homeAddress')) {
-      delete rawPayload.homeAddress
-    }
-    if (rawPayload.id && !canEditField(rawPayload.fieldAccess, 'emergencyContact')) {
-      delete rawPayload.emergencyContactName
-      delete rawPayload.emergencyContactPhone
-    }
-    if (rawPayload.id && !canEditField(rawPayload.fieldAccess, 'identityDocuments')) {
-      delete rawPayload.idCardFrontUrl
-      delete rawPayload.idCardBackUrl
-      delete rawPayload.driverLicenseFrontUrl
-      delete rawPayload.driverLicenseBackUrl
-      delete rawPayload.portraitUrl
-      delete rawPayload.licenseBackExtraUrl
-      delete rawPayload.qualificationFrontUrl
-      delete rawPayload.qualificationAssessmentUrl
-    }
+    const writablePayload = sanitizeDriverFormFields(rawPayload)
 
-    const payload = omit(rawPayload, [
+    const payload = omit(writablePayload, [
       'tenantId',
       'createdByUserId',
       'createBy',
@@ -1731,12 +1726,8 @@
       ...payload,
       ...(form.value.id ? {} : { tenantId: form.value.tenantId }),
       carrierId: form.value.driverOwnership === 'carrier' ? form.value.carrierId || null : null,
-      profile: pick(rawPayload, profileKeys),
-      licenseExpireDate: payload.licenseExpireDate || null,
-      idCardFrontUrl: payload.idCardFrontUrl || null,
-      idCardBackUrl: payload.idCardBackUrl || null,
-      driverLicenseFrontUrl: payload.driverLicenseFrontUrl || null,
-      driverLicenseBackUrl: payload.driverLicenseBackUrl || null
+      profile: pick(writablePayload, profileKeys),
+      licenseExpireDate: normalizeNullableText(payload.licenseExpireDate)
     }
   }
 
@@ -1744,7 +1735,7 @@
     const session = formSession.value
     try {
       const previousTab = activeTab.value
-      for (const tab of tabs) {
+      for (const tab of availableTabs.value) {
         if (tab.key === 'certificates' || tab.key === 'commission') continue
         activeTab.value = tab.key
         await nextTick()

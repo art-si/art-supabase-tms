@@ -1,11 +1,11 @@
 <template>
-  <ArtDialog ref="dialogRef" size="md">
+  <ArtDialog ref="dialogRef" size="lg">
     <ElAlert
       class="mb-4"
       type="info"
       show-icon
       :closable="false"
-      title="先登记手机号，再补齐司机证件资料；扫码注册与微信资料回填将在服务接入后开放。"
+      title="立即添加只登记邀请，不会创建司机档案；补充认证资料后才会进入司机资料主表。"
     />
     <div v-if="targetInvitation" class="driver-invite__target">
       <div class="driver-invite__target-header">
@@ -38,17 +38,33 @@
       label-width="100px"
     />
     <div v-if="!targetInvitation" class="driver-invite__recent">
-      <strong>最近邀请</strong>
+      <div class="driver-invite__recent-heading">
+        <strong>邀请记录</strong>
+        <span>待补充档案的邀请不会出现在司机资料主表，可从这里继续查看。</span>
+      </div>
       <span v-if="loading">加载中…</span>
       <div v-else-if="error" class="driver-invite__recent-row">
         <span>邀请记录加载失败</span
         ><ElButton link type="primary" @click="loadRecent">重试</ElButton>
       </div>
       <span v-else-if="!recent.length">暂无邀请记录</span>
-      <div v-for="item in recent" :key="item.id" class="driver-invite__recent-row">
-        <span>{{ item.phone || '手机号已隐藏' }} · {{ item.requestedByName || '邀请人未知' }}</span>
-        <span>{{ item.status === 'profile_created' ? '档案已建立' : '待补充档案' }}</span>
-      </div>
+      <button
+        v-for="item in recent"
+        :key="item.id"
+        type="button"
+        class="driver-invite__recent-row"
+        @click="open(item.id)"
+      >
+        <span class="min-w-0 truncate"
+          >{{ item.phone || '手机号已隐藏' }} · {{ item.requestedByName || '邀请人未知' }}</span
+        >
+        <ElTag
+          size="small"
+          :type="item.status === 'profile_created' ? 'success' : 'warning'"
+          effect="light"
+          >{{ item.status === 'profile_created' ? '档案已建立' : '待补充档案' }}</ElTag
+        >
+      </button>
     </div>
     <template #footer="{ loading: submitLoading, api }">
       <template v-if="targetInvitation"
@@ -88,6 +104,7 @@
   } from '@tms/api'
 
   const emit = defineEmits<{
+    (event: 'success', data: DriverInvitation): void
     (
       event: 'profile',
       data: { phone: string; driverOwnership: string; carrierId: string | null }
@@ -184,9 +201,10 @@
           carrierId: form.value.driverOwnership === 'carrier' ? form.value.carrierId || null : null
         }
         try {
-          await createDriverInvitation(payload)
+          const result = await createDriverInvitation(payload)
+          if (result.data) emit('success', result.data)
           if (submitMode.value === 'profile') emit('profile', payload)
-          return true
+          return Boolean(result.data)
         } catch (cause) {
           notifyFriendlyError(cause, '邀请登记失败，请核对手机号后重试')
           return false
@@ -199,12 +217,32 @@
 
 <style scoped lang="scss">
   .driver-invite {
+    :deep(.el-alert) {
+      border-radius: var(--art-surface-radius);
+    }
+
+    :deep(.art-form) {
+      padding: 4px 2px 0;
+    }
+
     &__recent {
       display: grid;
-      gap: 8px;
+      gap: 10px;
       margin-top: 16px;
+      padding: 14px;
+      background: var(--art-gray-100);
+      border-radius: var(--art-surface-radius);
       font-size: 12px;
       color: var(--art-gray-700);
+    }
+
+    &__recent-heading {
+      display: grid;
+      gap: 3px;
+    }
+
+    &__recent-heading span {
+      color: var(--art-gray-600);
     }
 
     &__recent strong {
@@ -214,13 +252,31 @@
 
     &__recent-row {
       display: flex;
+      width: 100%;
+      padding: 8px 0;
+      color: var(--art-gray-800);
+      text-align: left;
+      cursor: pointer;
+      background: transparent;
+      border: 0;
+      border-bottom: 1px solid var(--art-gray-200);
       gap: 12px;
       justify-content: space-between;
+
+      &:last-child {
+        border-bottom: 0;
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--theme-color);
+        outline-offset: 2px;
+      }
     }
 
     &__target {
       display: grid;
       gap: 12px;
+      padding: 4px 2px;
       font-size: 13px;
       color: var(--art-gray-800);
 
@@ -229,6 +285,9 @@
         flex-wrap: wrap;
         gap: 8px;
         align-items: center;
+        padding: 14px 16px;
+        background: var(--art-gray-100);
+        border-radius: var(--art-surface-radius);
       }
 
       strong {
@@ -238,6 +297,7 @@
 
       dl {
         display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 10px;
         padding: 12px;
         margin: 0;
@@ -262,7 +322,18 @@
 
       p {
         margin: 0;
+        padding: 0 4px;
         color: var(--art-gray-700);
+      }
+    }
+
+    @media (width <= 680px) {
+      &__target dl {
+        grid-template-columns: 1fr;
+      }
+
+      &__recent-row {
+        align-items: flex-start;
       }
     }
   }

@@ -99,6 +99,7 @@
         v-for="(part, index) in parts"
         :key="part.key"
         :order-id="source?.id"
+        :order-tenant-id="source?.tenantId"
         :vehicle-id="part.vehicleId"
         :driver-id="part.driverId"
         :label="`执行批次 ${index + 1}`"
@@ -111,6 +112,7 @@
 </template>
 
 <script setup lang="ts">
+  import { vehicleDriverColumns } from '@/components/business/vehicle-driver-select/columns'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import type {
@@ -123,10 +125,7 @@
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import DispatchAdvisoryNotice from './dispatch-advisory-notice.vue'
   import { notifyDispatchAdvisories } from './dispatch-advisory-feedback'
-  import {
-    dispatchResourceColumns,
-    fetchDispatchResourceOptions
-  } from './dispatch-resource-options'
+  import { fetchDispatchResourceOptions } from './dispatch-resource-options'
   import { ElMessage } from 'element-plus'
   import {
     fetchCustomerAddressOptions,
@@ -226,7 +225,7 @@
           labelKey: 'plateNo',
           descriptionKey: 'companyName',
           apiFn: (params: DataSelectFetchParams) => fetchPartResources(part, 'vehicle', params),
-          columns: dispatchResourceColumns('vehicle', part.dispatchMode === 'individual_driver'),
+          columns: vehicleDriverColumns('vehicle', part.dispatchMode === 'individual_driver'),
           dialogWidth: 'xl',
           showTableHeader: true,
           searchPlaceholder: '搜索车牌、司机、公司或承运商',
@@ -261,7 +260,7 @@
           showTableHeader: true,
           searchPlaceholder: '搜索司机、车牌、公司或承运商',
           apiFn: (params: DataSelectFetchParams) => fetchPartResources(part, 'driver', params),
-          columns: dispatchResourceColumns('driver', part.dispatchMode === 'individual_driver'),
+          columns: vehicleDriverColumns('driver', part.dispatchMode === 'individual_driver'),
           showPagination: true,
           onConfirm: (_value: unknown, rows: DataSelectRecord[]) => handlePartDriver(part, rows),
           onClear: () => handlePartDriver(part, [])

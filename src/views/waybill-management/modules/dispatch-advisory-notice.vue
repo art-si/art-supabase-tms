@@ -1,6 +1,17 @@
 <template>
-  <div v-if="loading || error || warnings.length" class="grid gap-3" aria-live="polite">
+  <div class="grid gap-3" aria-live="polite">
+    <div v-if="orderId && (vehicleId || driverId)" class="flex justify-end">
+      <ElButton
+        v-auth="'TmsPendingWaybillList:ResourcePreflight'"
+        type="primary"
+        plain
+        @click="openPreflight"
+      >
+        <ArtSvgIcon icon="ri:shield-check-line" />调度资源综合核验
+      </ElButton>
+    </div>
     <ElAlert
+      v-if="loading || error || warnings.length"
       type="warning"
       :closable="false"
       show-icon
@@ -9,14 +20,28 @@
       :description="description"
     />
   </div>
+  <DispatchPreflightDrawer ref="preflightRef" />
 </template>
 
 <script setup lang="ts">
   import { fetchDispatchAdvisories, type DispatchAdvisory } from '@tms/api'
+  import DispatchPreflightDrawer from './dispatch-preflight-drawer.vue'
+
+  const preflightRef = ref<InstanceType<typeof DispatchPreflightDrawer>>()
+  function openPreflight(): void {
+    if (!props.orderId || (!props.vehicleId && !props.driverId)) return
+    void preflightRef.value?.handleOpen({
+      orderId: props.orderId,
+      tenantId: props.orderTenantId,
+      vehicleId: props.vehicleId,
+      driverId: props.driverId
+    })
+  }
 
   defineOptions({ name: 'TmsDispatchAdvisoryNotice' })
   const props = defineProps<{
     orderId?: string
+    orderTenantId?: string | null
     vehicleId?: string | null
     driverId?: string | null
     label?: string

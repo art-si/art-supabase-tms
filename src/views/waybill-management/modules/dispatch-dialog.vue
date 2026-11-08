@@ -127,6 +127,7 @@
 
       <DispatchAdvisoryNotice
         :order-id="dialog.rows[0]?.id"
+        :order-tenant-id="dialog.rows[0]?.tenantId"
         :vehicle-id="form.data.dispatchVehicleId"
         :driver-id="form.data.dispatchDriverId"
       />
@@ -259,6 +260,7 @@
 </template>
 
 <script setup lang="ts">
+  import { vehicleDriverColumns } from '@/components/business/vehicle-driver-select/columns'
   import { h } from 'vue'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
@@ -283,10 +285,7 @@
   import TmsDataSourceEmptyActions from '../../components/tms-data-source-empty-actions.vue'
   import DispatchAdvisoryNotice from './dispatch-advisory-notice.vue'
   import { notifyDispatchAdvisories } from './dispatch-advisory-feedback'
-  import {
-    dispatchResourceColumns,
-    fetchDispatchResourceOptions
-  } from './dispatch-resource-options'
+  import { fetchDispatchResourceOptions } from './dispatch-resource-options'
   import type {
     DataSelectColumn,
     DataSelectFetchParams,
@@ -631,14 +630,14 @@
       { prop: 'contactName', label: '联系人', minWidth: 110 },
       { prop: 'contactPhone', label: '联系电话', minWidth: 135 }
     ]),
-    driverColumns: computed<DataSelectColumn[]>(() => dispatchResourceColumns('driver')),
+    driverColumns: computed<DataSelectColumn[]>(() => vehicleDriverColumns('driver')),
     individualColumns: computed<DataSelectColumn[]>(() => [
-      ...dispatchResourceColumns('driver', true),
+      ...vehicleDriverColumns('driver', true),
       { prop: 'agreementStartsOn', label: '协议开始时间', minWidth: 125 },
       { prop: 'agreementEndsOn', label: '协议结束时间', minWidth: 125 }
     ]),
     vehicleColumns: computed<DataSelectColumn[]>(() =>
-      dispatchResourceColumns('vehicle', form.data.dispatchMode === 'individual_driver')
+      vehicleDriverColumns('vehicle', form.data.dispatchMode === 'individual_driver')
     )
   })
   const selectedDriverRows = computed<DataSelectRecord[]>({

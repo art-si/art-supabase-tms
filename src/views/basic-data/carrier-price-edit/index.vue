@@ -221,6 +221,9 @@
 </template>
 
 <script setup lang="tsx">
+  import { vehicleDriverSelectProps } from '@/components/business/vehicle-driver-select/columns'
+  import { fetchVehicleDriverChoices } from '@/api/vehicle-driver-select'
+  import type { DataSelectFetchParams } from '@/components/core/forms/art-data-select/types'
   import { normalizeAgreementOrderConfig } from '../modules/agreement-order-config'
 
   import OrderConfig from '../../order-open/modules/order-config.vue'
@@ -248,8 +251,6 @@
     editCarrierPrice,
     fetchCarrierOptions,
     fetchCarrierPriceDetail,
-    fetchDriverOptions,
-    fetchTmsVehicleOptions,
     type TmsVehicleOption
   } from '@tms/api'
   import { useUserStore } from '@/store/modules/user'
@@ -513,24 +514,23 @@
       {
         label: '司机姓名',
         key: 'driverId',
-        type: 'select',
+        type: 'dataSelect',
         span: 12,
-        api: fetchDriverOptions,
-        resultField: 'data',
-        labelField: 'driverName',
-        valueField: 'id',
-        beforeFetch: (params) => ({ ...params, carrierId: form.data.carrierId || undefined }),
-        shouldFetch: () => Boolean(form.data.carrierId),
-        afterFetch: syncDriverOptions,
         props: {
-          clearable: true,
-          filterable: true,
+          ...vehicleDriverSelectProps('driver'),
+          apiFn: (params: DataSelectFetchParams) =>
+            fetchVehicleDriverChoices<DriverOption>('carrier_driver', params, {
+              carrierId: form.data.carrierId,
+              tenantId: resourceTenantId.value
+            }),
+          selectedData: form.driverOptions.filter((row) => row.id === form.data.driverId),
           disabled: !form.data.carrierId || !canEditSensitiveField('contactPhones'),
           placeholder: form.data.carrierId ? '请选择司机' : '请先选择承运商',
-          onVisibleChange: (visible: boolean) => {
-            if (visible && form.data.carrierId) void baseFormRef.value?.reloadOptions('driverId')
-          },
-          onChange: handleDriverChange
+          onChange: (_value: unknown, rows: DriverOption[]) => {
+            form.driverOptions = rows
+            form.data.driver = rows[0] ?? null
+            handleDriverChange(rows[0]?.id)
+          }
         }
       },
       ...(canViewSensitiveField('contactPhones')
@@ -547,24 +547,23 @@
       {
         label: '车牌号',
         key: 'vehicleId',
-        type: 'select',
+        type: 'dataSelect',
         span: 12,
-        api: fetchTmsVehicleOptions,
-        resultField: 'data',
-        labelField: 'plateNo',
-        valueField: 'id',
-        beforeFetch: (params) => ({ ...params, carrierId: form.data.carrierId || undefined }),
-        shouldFetch: () => Boolean(form.data.carrierId),
-        afterFetch: syncVehicleOptions,
         props: {
-          clearable: true,
-          filterable: true,
+          ...vehicleDriverSelectProps('vehicle'),
+          apiFn: (params: DataSelectFetchParams) =>
+            fetchVehicleDriverChoices<VehicleOption>('carrier_vehicle', params, {
+              carrierId: form.data.carrierId,
+              tenantId: resourceTenantId.value
+            }),
+          selectedData: form.vehicleOptions.filter((row) => row.id === form.data.vehicleId),
           disabled: !form.data.carrierId,
           placeholder: form.data.carrierId ? '请选择车辆' : '请先选择承运商',
-          onVisibleChange: (visible: boolean) => {
-            if (visible && form.data.carrierId) void baseFormRef.value?.reloadOptions('vehicleId')
-          },
-          onChange: handleVehicleChange
+          onChange: (_value: unknown, rows: VehicleOption[]) => {
+            form.vehicleOptions = rows
+            form.data.vehicle = rows[0] ?? null
+            handleVehicleChange(rows[0]?.id)
+          }
         }
       }
     ]),
@@ -877,18 +876,6 @@
 
   function syncCarrierOptions(result: unknown): unknown {
     form.carrierOptions = getResponseData<CarrierOption>(result)
-    cacheSelectedOptions()
-    return result
-  }
-
-  function syncDriverOptions(result: unknown): unknown {
-    form.driverOptions = getResponseData<DriverOption>(result)
-    cacheSelectedOptions()
-    return result
-  }
-
-  function syncVehicleOptions(result: unknown): unknown {
-    form.vehicleOptions = getResponseData<VehicleOption>(result)
     cacheSelectedOptions()
     return result
   }

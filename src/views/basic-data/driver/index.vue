@@ -40,7 +40,11 @@
     />
 
     <DriverDialog ref="dialogRef" @success="handleSaveSuccess" />
-    <DriverInviteDialog ref="inviteRef" @profile="handleInviteProfile" />
+    <DriverInviteDialog
+      ref="inviteRef"
+      @success="handleInviteSuccess"
+      @profile="handleInviteProfile"
+    />
     <MasterDataDeleteGuard ref="deleteGuardRef" @cleared="handleDeleteGuardCleared" />
   </div>
 </template>
@@ -77,6 +81,7 @@
     fetchDriverList,
     importDrivers
   } from '@tms/api'
+  import type { DriverInvitation } from '@tms/api'
   import DriverDialog from './modules/driver-dialog.vue'
   import DriverInviteDialog from './modules/driver-invite-dialog.vue'
   import MasterDataDeleteGuard, {
@@ -655,6 +660,11 @@
     const result = await fetchDriverDetail(driverId)
     if (result.data)
       await dialogRef.value?.handleOpen(result.data, undefined, 'commission', commissionRuleId)
+  }
+
+  const handleInviteSuccess = (invitation: DriverInvitation): void => {
+    void tableQueryRef.value?.getData()
+    void nextTick().then(() => inviteRef.value?.open(invitation.id))
   }
 
   const handleInviteProfile = (initial: {

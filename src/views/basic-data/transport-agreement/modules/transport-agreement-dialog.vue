@@ -57,6 +57,10 @@
 </template>
 
 <script setup lang="ts">
+  import { vehicleDriverSelectProps } from '@/components/business/vehicle-driver-select/columns'
+  import { fetchVehicleDriverChoices } from '@/api/vehicle-driver-select'
+  import type { DataSelectFetchParams } from '@/components/core/forms/art-data-select/types'
+  import type { TmsVehicleOption } from '@tms/api'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { normalizeNullableText } from '@/utils/form/normalize'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
@@ -73,10 +77,8 @@
     fetchCustomerOptions,
     editTransportAgreement,
     fetchBasicRecordCarrierOptions,
-    fetchTransportAgreementDriverOptions,
     fetchTransportAgreementDriverEvidence,
     fetchTransportAgreementDetail,
-    fetchTmsVehicleOptions,
     type TransportAgreementInput,
     type TransportAgreementRecord
   } from '@tms/api'
@@ -146,6 +148,8 @@
     partyBRepresentative: null
   })
   const form = ref<AgreementForm>(initialForm())
+  const selectedVehicles = ref<TmsVehicleOption[]>([])
+  const selectedDrivers = ref<Api.Tms.BasicData.DriverOption[]>([])
 
   watch(
     () => form.value.tenantId,
@@ -206,9 +210,8 @@
         roadPermitImages: []
       })
       if (!id || !form.value.carrierId) return
-      const { data } = await fetchTmsVehicleOptions({ carrierId: form.value.carrierId })
+      const vehicle = selectedVehicles.value.find((item) => item.id === id)
       if (version !== vehicleLoadVersion.value) return
-      const vehicle = (data ?? []).find((item) => item.id === id)
       form.value.plateNo = vehicle?.plateNo ?? ''
       form.value.vehicleType = vehicle?.vehicleType ?? ''
       form.value.vehicleLengthText = '保存后按车辆档案读取'
@@ -297,37 +300,49 @@
     {
       label: '车牌号',
       key: 'vehicleId',
-      type: 'select',
-      api: () => fetchTmsVehicleOptions({ carrierId: form.value.carrierId }),
-      resultField: 'data',
-      labelField: 'plateNo',
-      valueField: 'id',
+      type: 'dataSelect',
       props: {
-        filterable: true,
-        clearable: true,
+        ...vehicleDriverSelectProps('vehicle'),
+        apiFn: (params: DataSelectFetchParams) =>
+          fetchVehicleDriverChoices<TmsVehicleOption>('carrier_vehicle', params, {
+            carrierId: form.value.carrierId,
+            tenantId: form.value.tenantId
+          }),
+        selectedData: selectedVehicles.value.some((row) => row.id === form.value.vehicleId)
+          ? selectedVehicles.value.filter((row) => row.id === form.value.vehicleId)
+          : form.value.vehicleId
+            ? [{ id: form.value.vehicleId, plateNo: form.value.plateNo }]
+            : [],
         disabled: !form.value.carrierId,
-        placeholder: form.value.carrierId ? '从车辆档案选择' : '请先选择承运方'
+        placeholder: form.value.carrierId ? '从车辆档案选择' : '请先选择承运方',
+        onChange: (_value: unknown, rows: TmsVehicleOption[]) => {
+          selectedVehicles.value = rows
+        }
       }
     },
     {
       label: '乙方代表人',
       key: 'driverId',
-      type: 'select',
+      type: 'dataSelect',
       span: 12,
-      api: () =>
-        fetchTransportAgreementDriverOptions({
-          carrierId: form.value.carrierId,
-          vehicleId: form.value.vehicleId || undefined
-        }),
-      immediate: false,
-      resultField: 'data',
-      labelField: 'driverName',
-      valueField: 'id',
       props: {
-        filterable: true,
-        clearable: true,
+        ...vehicleDriverSelectProps('driver'),
+        apiFn: (params: DataSelectFetchParams) =>
+          fetchVehicleDriverChoices<Api.Tms.BasicData.DriverOption>('agreement_driver', params, {
+            carrierId: form.value.carrierId,
+            vehicleId: form.value.vehicleId,
+            tenantId: form.value.tenantId
+          }),
+        selectedData: selectedDrivers.value.some((row) => row.id === form.value.driverId)
+          ? selectedDrivers.value.filter((row) => row.id === form.value.driverId)
+          : form.value.driverId
+            ? [{ id: form.value.driverId, driverName: form.value.driverName }]
+            : [],
         disabled: !form.value.carrierId,
-        placeholder: form.value.carrierId ? '从司机管理选择（选填）' : '请先选择承运方'
+        placeholder: form.value.carrierId ? '从司机管理选择（选填）' : '请先选择承运方',
+        onChange: (_value: unknown, rows: Api.Tms.BasicData.DriverOption[]) => {
+          selectedDrivers.value = rows
+        }
       }
     },
     {

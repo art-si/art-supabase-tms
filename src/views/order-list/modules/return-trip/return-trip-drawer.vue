@@ -286,6 +286,7 @@
 </template>
 
 <script setup lang="ts">
+  import { vehicleDriverColumns } from '@/components/business/vehicle-driver-select/columns'
   import { ElMessage } from 'element-plus'
   import { cloneDeep } from 'lodash-es'
   import { formatCurrencyValue } from '@/utils/ui/format'
@@ -302,7 +303,6 @@
   import ArtIconButton from '@/components/core/widget/art-icon-button/index.vue'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import type {
-    DataSelectColumn,
     DataSelectFetchParams,
     DataSelectRecord
   } from '@/components/core/forms/art-data-select/types'
@@ -451,15 +451,8 @@
       }
     }
   ])
-  const driverColumns: DataSelectColumn[] = [
-    { prop: 'driverName', label: '司机姓名', minWidth: 120 },
-    { prop: 'phone', label: '联系电话', minWidth: 130 },
-    { prop: 'plateNo', label: '关联车牌', minWidth: 130, formatter: (row) => row.plateNo || '—' }
-  ]
-  const vehicleColumns: DataSelectColumn[] = [
-    { prop: 'plateNo', label: '车牌号', minWidth: 130 },
-    { prop: 'vehicleType', label: '车型', minWidth: 130 }
-  ]
+  const driverColumns = vehicleDriverColumns('driver')
+  const vehicleColumns = vehicleDriverColumns('vehicle')
   const assignmentItems = computed<FormItem[]>(() => [
     {
       key: 'dispatchDriverId',
@@ -477,6 +470,8 @@
         selectedData: selectedDrivers.value,
         'onUpdate:selectedData': (value: DataSelectRecord[]) => (selectedDrivers.value = value),
         title: '选择返程司机',
+        dialogWidth: 'xl',
+        showTableHeader: true,
         placeholder: '请选择返程司机',
         searchPlaceholder: '请输入司机姓名',
         rowKey: 'id',
@@ -511,6 +506,8 @@
         selectedData: selectedVehicles.value,
         'onUpdate:selectedData': (value: DataSelectRecord[]) => (selectedVehicles.value = value),
         title: '选择返程车辆',
+        dialogWidth: 'xl',
+        showTableHeader: true,
         placeholder: '请选择返程车辆',
         searchPlaceholder: '请输入车牌号或车型',
         rowKey: 'id',

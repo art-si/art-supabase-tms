@@ -114,7 +114,9 @@ const DRIVER_PAYLOAD_KEYS = [
 
 const normalizeDriverProfileWrite = (profile: DriverProfile): DriverProfile => ({
   ...profile,
-  qualificationType: normalizeNullableText(profile.qualificationType)
+  ...(profile.qualificationType !== undefined
+    ? { qualificationType: normalizeNullableText(profile.qualificationType) }
+    : {})
 })
 
 export async function fetchDriverEmployeeOptions(

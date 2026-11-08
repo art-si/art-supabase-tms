@@ -20,6 +20,7 @@
 </template>
 
 <script setup lang="ts">
+  import { vehicleDriverColumns } from '@/components/business/vehicle-driver-select/columns'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import dayjs from 'dayjs'
@@ -27,10 +28,7 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import type {
-    DataSelectColumn,
-    DataSelectFetchParams
-  } from '@/components/core/forms/art-data-select/types'
+  import type { DataSelectFetchParams } from '@/components/core/forms/art-data-select/types'
   import { normalizeNullableText } from '@/utils/form/normalize'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
   import {
@@ -80,25 +78,7 @@
   })
   const form = ref<BlacklistForm>(initialForm())
 
-  const columns: DataSelectColumn<BlacklistDriverCandidate>[] = [
-    { prop: 'driverName', label: '姓名', minWidth: 120 },
-    { prop: 'phone', label: '手机号码', minWidth: 150 },
-    {
-      prop: 'driverOwnership',
-      label: '司机归属',
-      minWidth: 125,
-      dict: { code: 'tmsDriverOwnership', display: 'text' }
-    },
-    {
-      prop: 'driverType',
-      label: '司机类型',
-      minWidth: 125,
-      dict: { code: 'tmsDriverType', display: 'text' }
-    },
-    { prop: 'carrierName', label: '所属承运商', minWidth: 160 },
-    { prop: 'companyName', label: '所属公司', minWidth: 160 },
-    { prop: 'plateNo', label: '车牌号', minWidth: 130 }
-  ]
+  const columns = vehicleDriverColumns('driver')
   const fetchDrivers = async (params: DataSelectFetchParams) => {
     const result = await fetchBlacklistDriverCandidates({
       from: (params.page - 1) * params.pageSize,
@@ -150,6 +130,7 @@
         emptyText: '没有可选司机',
         emptyDescription: '请先在司机管理中维护司机；已在黑名单中的司机不会重复显示。',
         dialogWidth: 'xl',
+        showTableHeader: true,
         showSelectedPanel: false,
         clearable: false,
         onChange: selectDriver

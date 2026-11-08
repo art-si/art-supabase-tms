@@ -15,7 +15,12 @@ declare global {
           'contactPhone' | 'addressDetail' | 'taxNo' | 'bankAccount' | 'attachments'
         type CarrierFieldAccessMap = Partial<Record<CarrierFieldKey, FieldAccessLevel>>
         type DriverFieldKey =
-          'contactPhone' | 'idCardNo' | 'homeAddress' | 'emergencyContact' | 'identityDocuments'
+          | 'contactPhone'
+          | 'idCardNo'
+          | 'homeAddress'
+          | 'emergencyContact'
+          | 'identityDocuments'
+          | 'financialAccount'
         type DriverFieldAccessMap = Partial<Record<DriverFieldKey, FieldAccessLevel>>
         type SensitiveNumber = number | string | null
         type CarrierPriceFieldKey =

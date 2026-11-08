@@ -113,6 +113,9 @@
 </template>
 
 <script setup lang="tsx">
+  import { vehicleDriverSelectProps } from '@/components/business/vehicle-driver-select/columns'
+  import { fetchVehicleDriverChoices } from '@/api/vehicle-driver-select'
+  import type { DataSelectFetchParams } from '@/components/core/forms/art-data-select/types'
   import dayjs from 'dayjs'
   import { uniqBy } from 'lodash-es'
   import { storeToRefs } from 'pinia'
@@ -236,22 +239,20 @@
     {
       label: '车牌号',
       key: 'vehicleId',
-      type: 'select',
+      type: 'dataSelect',
       span: 24,
       description: '留空适用于该车型的所有车辆；选定车辆后自动带入车型。',
       props: {
-        options: vehicleOptions.value
-          .filter((item): item is TmsVehicleOption & { id: string } => Boolean(item.id))
-          .map((item) => ({ value: item.id, label: item.plateNo })),
-        filterable: true,
-        clearable: true,
+        ...vehicleDriverSelectProps('vehicle'),
+        apiFn: (params: DataSelectFetchParams) =>
+          fetchVehicleDriverChoices<TmsVehicleOption>('commission_vehicle', params, {
+            tenantId: props.tenantId
+          }),
+        selectedData: vehicleOptions.value.filter((row) => row.id === form.value.vehicleId),
         placeholder: '请选择车牌号（可留空）',
-        onChange: (value: string | null) => {
-          if (!value) return
-          const profileId = vehicleOptions.value.find(
-            (item) => item.id === value
-          )?.vehicleTypeProfileId
-          form.value.vehicleTypeProfileId = profileId ?? null
+        onChange: (_value: unknown, rows: TmsVehicleOption[]) => {
+          vehicleOptions.value = uniqBy([...rows, ...vehicleOptions.value], 'id')
+          if (rows[0]) form.value.vehicleTypeProfileId = rows[0].vehicleTypeProfileId ?? null
         }
       }
     },

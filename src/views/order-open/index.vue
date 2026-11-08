@@ -344,36 +344,6 @@
               </div>
             </div></template
           >
-          <div
-            class="my-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--el-border-color-light)] bg-[var(--el-fill-color-lighter)] px-4 py-3"
-          >
-            <div class="min-w-0">
-              <strong class="text-sm text-[var(--el-text-color-primary)]">关联客户合同</strong>
-              <p class="mt-1 text-xs text-[var(--el-text-color-secondary)]">
-                {{
-                  contractSummary
-                    ? `${contractSummary.contractNo} · ${contractSummary.contractName}`
-                    : form.data.contractId
-                      ? '已关联合同，摘要暂不可用；可重新选择或移除'
-                      : '可选一份与发货客户一致的有效合同'
-                }}
-              </p>
-            </div>
-            <div class="flex items-center gap-2">
-              <ElButton v-if="form.data.contractId" size="small" @click="clearOrderContract"
-                >移除关联</ElButton
-              >
-              <ElButton
-                size="small"
-                type="primary"
-                plain
-                :disabled="!form.data.shippingCustomerId"
-                @click="openOrderContractSelector"
-              >
-                {{ form.data.contractId ? '更换合同' : '选择合同' }}
-              </ElButton>
-            </div>
-          </div>
           <ArtTable
             :data="form.cargoItems"
             :columns="form.cargoColumns"
@@ -1967,7 +1937,11 @@
 
   async function openContractDetailSelector(): Promise<void> {
     if (!form.data.contractId) {
-      ElMessage.warning('请先选择一份客户合同')
+      if (!form.data.shippingCustomerId) {
+        ElMessage.warning('请先选择发货客户')
+        return
+      }
+      await openOrderContractSelector()
       return
     }
     await loadContractDetailSelector()
@@ -2001,6 +1975,10 @@
       customerId: contract.customerId,
       contractStatus: 'approved'
     }
+    void nextTick(async () => {
+      await loadContractDetailSelector()
+      await contractDetailSelectorRef.value?.open(contract.id)
+    })
   }
 
   function handleContractDetailSelectorConfirm(selectedDetails: ContractDetail[]): void {

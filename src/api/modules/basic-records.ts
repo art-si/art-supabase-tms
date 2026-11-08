@@ -1,3 +1,4 @@
+import { prepareVehicleDriverPortraits } from '@/api/vehicle-driver-select'
 import { useSupabase } from '@/hooks/core/useSupabase'
 import { useTenantScopeStore } from '@/store/modules/tenant-scope'
 import { useUserStore } from '@/store/modules/user'
@@ -383,6 +384,7 @@ export async function fetchBlacklistDriverCandidates(params: {
       }),
     { showErrorMessage: true }
   )
+  await prepareVehicleDriverPortraits(result.data?.records ?? [])
   return { data: result.data?.records ?? [], total: result.data?.total ?? 0, error: result.error }
 }
 
