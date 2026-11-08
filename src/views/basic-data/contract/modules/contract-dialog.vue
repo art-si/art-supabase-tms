@@ -53,6 +53,15 @@
             />
           </ArtSectionCard>
         </template>
+        <template #workflowHistory>
+          <ArtSectionCard
+            v-if="form.data.id"
+            class="contract-dialog__section"
+            preserve-content-structure
+          >
+            <WorkflowBusinessHistory business-type="tms_contract" :business-id="form.data.id" />
+          </ArtSectionCard>
+        </template>
       </ArtForm>
     </div>
 
@@ -92,6 +101,7 @@
   import { normalizeNullableText } from '@/utils/form/normalize'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
+  import WorkflowBusinessHistory from '@/components/business/workflow-business-history/index.vue'
   import { notifyFriendlyError, useArtFeedback } from '@/hooks/core/useArtFeedback'
   import { useAuth } from '@/hooks/core/useAuth'
   import { useDraftAttachmentRemoval } from '@/hooks/core/useDraftAttachmentRemoval'
@@ -622,7 +632,9 @@
         type: 'tab',
         hidden: !canViewSensitiveField('attachments')
       },
-      { key: 'contractAttachments', label: '', type: 'slot', span: 24 }
+      { key: 'contractAttachments', label: '', type: 'slot', span: 24 },
+      { key: 'workflowHistorySection', label: '审批流程', type: 'tab', hidden: !form.data.id },
+      { key: 'workflowHistory', label: '', type: 'slot', span: 24 }
     ]),
     rules: {
       contractNo: [
