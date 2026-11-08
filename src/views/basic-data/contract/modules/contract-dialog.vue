@@ -1,6 +1,6 @@
 <template>
   <ArtDialog ref="dialogRef" size="xl">
-    <div class="contract-dialog">
+    <div class="contract-dialog" :class="{ 'contract-dialog--view': viewOnly }">
       <ArtForm
         ref="formRef"
         v-model:active-tab="activeTab"
@@ -58,7 +58,9 @@
 
     <template #footer="{ loading, api }">
       <div class="contract-dialog__footer">
-        <ElButton :disabled="loading" @click="api.handleClose()">取消</ElButton>
+        <ElButton :disabled="loading" @click="api.handleClose()">
+          {{ viewOnly ? '关闭' : '取消' }}
+        </ElButton>
         <ElButton
           v-if="!viewOnly"
           :loading="loading && submitMode === 'save'"
@@ -68,9 +70,10 @@
         </ElButton>
         <ElButton
           v-if="
-            !form.data.id ||
-            form.data.contractStatus === 'draft' ||
-            form.data.contractStatus === 'rejected'
+            !viewOnly &&
+            (!form.data.id ||
+              form.data.contractStatus === 'draft' ||
+              form.data.contractStatus === 'rejected')
           "
           v-auth="'TmsContract:Submit'"
           type="primary"
@@ -967,7 +970,9 @@
     }
     await dialogRef.value?.handleOpen(row, {
       title: viewOnly.value ? '查看合同' : row?.id ? '编辑合同' : '新增合同',
-      subtitle: '维护合同相对方、履约条款、运输明细和附件',
+      subtitle: viewOnly.value
+        ? '查看合同相对方、履约条款、运输明细和附件'
+        : '维护合同相对方、履约条款、运输明细和附件',
       contentMaxHeight: '78vh',
       loading: true,
       onOpen: async (_data, api) => {
@@ -1062,6 +1067,34 @@
     flex-direction: column;
     gap: 12px;
     min-width: 0;
+
+    &--view {
+      :deep(.el-input__wrapper),
+      :deep(.el-textarea__inner),
+      :deep(.el-select .el-input__wrapper),
+      :deep(.el-date-editor .el-input__wrapper),
+      :deep(.el-input-number .el-input__wrapper) {
+        background: transparent;
+        box-shadow: none;
+        border-radius: 0;
+        padding-right: 0;
+        padding-left: 0;
+      }
+
+      :deep(.el-input.is-disabled .el-input__inner),
+      :deep(.el-textarea.is-disabled .el-textarea__inner),
+      :deep(.el-select .el-input.is-disabled .el-input__inner),
+      :deep(.el-date-editor .el-input__inner),
+      :deep(.el-input-number .el-input__inner) {
+        color: var(--el-text-color-primary);
+        -webkit-text-fill-color: var(--el-text-color-primary);
+      }
+
+      :deep(.el-radio.is-disabled .el-radio__label),
+      :deep(.el-checkbox.is-disabled .el-checkbox__label) {
+        color: var(--el-text-color-primary);
+      }
+    }
 
     &__section {
       min-width: 0;
