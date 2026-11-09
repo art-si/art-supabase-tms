@@ -11,13 +11,15 @@ export interface OrderQuoteExpenseItem {
 
 export async function fetchOrderQuoteExpenseItems(tenantId: string) {
   return await responseHandle<OrderQuoteExpenseItem[]>(
-    () => supabase.from('tms_expense_item')
-      .select('id, item_code, item_name')
-      .eq('tenant_id', tenantId)
-      .eq('is_enabled', true)
-      .eq('is_selectable', true)
-      .order('sort', { ascending: true })
-      .order('item_code', { ascending: true }),
+    () =>
+      supabase
+        .from('tms_expense_item')
+        .select('id, item_code, item_name')
+        .eq('tenant_id', tenantId)
+        .eq('is_enabled', true)
+        .eq('is_selectable', true)
+        .order('sort', { ascending: true })
+        .order('item_code', { ascending: true }),
     { showErrorMessage: false, breakReturn: true, errorMessage: '费用项目加载失败，请重试' }
   )
 }
