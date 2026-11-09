@@ -23,9 +23,35 @@ export interface ReturnOrderResult {
   waybillNo: string
 }
 
+export type WaybillDispatchType = 'forward_load' | 'return_load' | 'return_empty'
+
+export interface EmptyReturnTripInput {
+  originStation: string
+  destinationStation: string
+  plannedDepartureTime?: string | null
+  plannedArrivalTime?: string | null
+  remark?: string | null
+}
+
+export async function createEmptyReturnTrip(
+  forwardWaybillId: string,
+  input: EmptyReturnTripInput
+): Promise<{ waybillId: string; waybillNo: string }> {
+  const result = await responseHandle<{ waybillId: string; waybillNo: string }>(
+    () =>
+      supabase.rpc('tms_create_empty_return_secure', {
+        p_source_waybill_id: forwardWaybillId,
+        p_payload: keysToSnakeDeep(input)
+      }),
+    { showMessage: true, breakReturn: true }
+  )
+  if (result.error || !result.data) throw result.error ?? new Error('空载返程创建失败，请稍后重试')
+  return result.data
+}
+
 export async function createReturnOrder(
   sourceOrderId: string,
-  sourceWaybillId: string | null,
+  sourceWaybillId: string,
   order: Api.Tms.Order.OrderRecord
 ): Promise<ReturnOrderResult> {
   const result = await responseHandle<ReturnOrderResult>(
@@ -61,6 +87,9 @@ export interface ReturnTripInput {
 export interface ReturnTripSummary {
   waybillId: string
   waybillNo: string
+  forwardWaybillId?: string
+  forwardWaybillNo?: string
+  returns?: ReturnSegmentSummary[]
   forwardOriginStation: string | null
   forwardDestinationStation: string | null
   returnOriginStation: string | null
@@ -70,6 +99,9 @@ export interface ReturnTripSummary {
   forwardRevenue?: number | string | null
   returnRevenue?: number | string | null
   tripPlannedRevenue?: number | string | null
+  tripActualRevenue?: number | string | null
+  tripActualCost?: number | string | null
+  tripActualGrossProfit?: number | string | null
   returnDirectPlannedExpense?: number | string | null
   sharedApprovedToll?: number | string | null
   returnAllocatedToll?: number | string | null
@@ -86,10 +118,35 @@ export interface ReturnTripSummary {
   accountingStatus: 'planned_only'
 }
 
+export interface ReturnSegmentSummary {
+  waybillId: string
+  waybillNo: string
+  legId: string | null
+  dispatchType: Exclude<WaybillDispatchType, 'forward_load'>
+  sequence: number
+  returnCustomerName: string | null
+  originStation: string | null
+  destinationStation: string | null
+  plannedRevenue: number | string | null
+  directPlannedExpense: number | string | null
+  allocatedSharedToll: number | string | null
+  plannedCommission: number | string | null
+  projectedGrossProfit: number | string | null
+  projectedMargin: number | string | null
+  actualRevenue: number | string | null
+  actualCost: number | string | null
+  actualGrossProfit: number | string | null
+  accountingStatus: ReturnTripSummary['actualAccountingStatus']
+}
+
 export interface ReturnProfitReportRow {
   legId: string
   waybillId: string
   waybillNo: string
+  forwardWaybillId?: string
+  forwardWaybillNo?: string
+  dispatchType?: Exclude<WaybillDispatchType, 'forward_load'>
+  sequence?: number
   waybillStatus: string
   tenantId: string
   tenantName: string

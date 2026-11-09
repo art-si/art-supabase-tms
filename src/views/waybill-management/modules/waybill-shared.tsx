@@ -178,7 +178,20 @@ const createWaybillExcelColumns = (context: WaybillListContext): ArtTableQueryEx
     key: context.mode === 'pending' ? 'orderNo' : 'waybillNo',
     title: context.mode === 'pending' ? '原始运单号' : '调度运单号'
   },
-  ...(context.mode === 'loaded' ? [{ key: 'sourceOrderNos', title: '原始运单号' }] : []),
+  ...(context.mode === 'loaded'
+    ? [
+        {
+          key: 'sourceOrderNos',
+          title: '原始运单号',
+          formatter: (value: unknown, row: Record<string, unknown>) =>
+            formatArtValue(
+              row.dispatchType === 'return_load' || row.dispatchType === 'return_empty'
+                ? row.forwardWaybillNo
+                : value
+            )
+        }
+      ]
+    : []),
   { key: 'shippingContactName', title: '发货人' },
   { key: 'shippingCustomerName', title: '发货单位' },
   ...(canViewField(context.fieldAccess.value, 'shipperContact')
@@ -595,10 +608,11 @@ export const createWaybillColumns = (
       prop: 'waybillNo',
       label: context.mode === 'pending' ? '原始运单号' : '调度运单号',
       fixed: 'left',
-      width: 140,
+      width: context.mode === 'pending' ? 200 : 190,
       formatter: (row) => (
         <div class="flex min-w-0 items-center gap-1.5">
           <ElLink
+            class="min-w-0 overflow-hidden"
             type="primary"
             underline="never"
             href={resolveDetailHref(context, row)}
@@ -613,11 +627,16 @@ export const createWaybillColumns = (
               }
             }}
           >
-            {context.mode === 'pending' ? row.orderNo : row.waybillNo || row.orderNo}
+            <span
+              class="block min-w-0 truncate"
+              title={context.mode === 'pending' ? row.orderNo : row.waybillNo || row.orderNo}
+            >
+              {context.mode === 'pending' ? row.orderNo : row.waybillNo || row.orderNo}
+            </span>
           </ElLink>
-          {row.hasReturnTrip && (
-            <ElTag size="small" type="warning">
-              返程
+          {context.mode === 'pending' && row.hasReturnTrip && (
+            <ElTag class="shrink-0" size="small" type="warning">
+              含返程
             </ElTag>
           )}
         </div>
@@ -642,9 +661,9 @@ export const createWaybillColumns = (
         minWidth: 130,
         showOverflowTooltip: true,
         formatter: (row) => {
-          return row.hasReturnTrip
-            ? '返程配货'
-            : { single: '正向货配载', merge: '合单', split: '拆单' }[row.executionKind ?? 'single']
+          if (row.dispatchType === 'return_empty') return '返程空载'
+          if (row.dispatchType === 'return_load') return '返程配载'
+          return { single: '正向配载', merge: '合单', split: '拆单' }[row.executionKind ?? 'single']
         }
       },
       {
@@ -960,6 +979,19 @@ function isModifiedLinkClick(event: MouseEvent): boolean {
 }
 
 function renderSourceOrders(context: WaybillListContext, row: WaybillRecord) {
+  if (row.dispatchType?.startsWith('return_') && row.forwardWaybillNo) {
+    const href = row.forwardWaybillId
+      ? context.router.resolve({ name: 'TmsWaybillDetail', params: { id: row.forwardWaybillId } })
+          .href
+      : undefined
+    return href ? (
+      <ElLink type="primary" underline="never" href={href}>
+        {row.forwardWaybillNo}
+      </ElLink>
+    ) : (
+      <span>{row.forwardWaybillNo}</span>
+    )
+  }
   const refs = row.sourceOrderRefs?.length
     ? row.sourceOrderRefs
     : (row.sourceOrderNos?.length ? row.sourceOrderNos : [row.orderNo]).map((orderNo) => ({

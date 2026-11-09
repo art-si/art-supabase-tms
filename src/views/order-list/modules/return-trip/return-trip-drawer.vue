@@ -4,7 +4,7 @@
     size="min(96vw, 1040px)"
     header-icon="ri:arrow-go-back-line"
     :on-confirm="submit"
-    :confirm-text="step === 2 ? '创建返程运输单' : '下一步'"
+    :confirm-text="mode === 'empty' ? '生成返程空载运单' : step === 2 ? '创建返程运输单' : '下一步'"
     :confirm-loading="saving"
   >
     <div class="return-trip-drawer space-y-4 pb-4">
@@ -12,7 +12,7 @@
         <strong>{{ source?.orderNo }}</strong>
         <p class="mt-0.5!">{{ source?.originStation }} → {{ source?.destinationStation }}</p>
       </ArtEntitySummary>
-      <nav class="flex flex-wrap gap-2" aria-label="返程开单步骤">
+      <nav v-if="mode === 'load'" class="flex flex-wrap gap-2" aria-label="返程开单步骤">
         <button
           v-for="(label, index) in steps"
           :key="label"
@@ -43,10 +43,17 @@
         @retry="loadOptions"
       />
       <template v-else>
+        <ElAlert
+          v-if="!candidates.length"
+          type="warning"
+          title="暂无可用的正向调度运单，请先完成正向配载后重试。"
+          :closable="false"
+          show-icon
+        />
         <ArtSectionCard
-          v-show="step === 0"
-          title="收发信息"
-          subtitle="返程始发地与原单目的地一致；请核对本次联系人及地址。"
+          v-if="mode === 'empty'"
+          title="返程空载"
+          subtitle="从正向调度运单直接生成空载返程；系统自动编制下一段 R 序号。"
           preserve-content-structure
         >
           <ArtForm
@@ -57,224 +64,258 @@
             :gutter="12"
             label-position="top"
           />
-          <div
-            v-if="selectedSource"
-            class="mb-3 rounded-[var(--art-control-radius)] border border-[var(--el-border-color-light)] bg-[var(--el-fill-color-light)] px-3 py-2 text-sm text-[var(--el-text-color-regular)]"
-          >
-            将沿用调度单 <strong>{{ selectedSource.waybillNo }}</strong>
-            <span v-if="selectedSource.driverName || selectedSource.plateNo">
-              · {{ selectedSource.driverName || '司机待核对' }} /
-              {{ selectedSource.plateNo || '车辆待核对' }}
-            </span>
-          </div>
-          <div class="mb-2 flex flex-wrap items-center gap-4 px-4 text-sm">
-            <div v-for="endpoint in addressEndpoints" :key="endpoint.mode" class="art-icon-label">
-              <span>{{ endpoint.label }}地址</span>
-              <ArtButtonMore
-                :list="addressActions"
-                trigger="click"
-                @click="handleAddressAction(endpoint.mode, $event.key)"
-              >
-                <template #trigger>
-                  <ArtIconButton
-                    icon="ri:map-pin-2-line"
-                    :label="`${endpoint.label}地址操作`"
-                    :title="`${endpoint.label}地址操作`"
-                  />
-                </template>
-              </ArtButtonMore>
-            </div>
-          </div>
           <ArtForm
-            ref="contactFormRef"
-            v-model="form"
-            :items="contactItems"
+            ref="emptyFormRef"
+            v-model="emptyReturn"
+            :items="emptyReturnItems"
             class="return-trip-drawer__form"
             :span="12"
             :gutter="12"
             label-position="top"
-          >
-            <template #shippingAddressPicker>
-              <ArtAddressPicker
-                v-model:region-path="form.shippingRegionPath"
-                v-model:address-detail="form.shippingAddressDetail"
-                v-model:longitude="form.shippingLongitude"
-                v-model:latitude="form.shippingLatitude"
-                :region-api="fetchRegionOptions"
-                detail-label="发货地址"
-                :detail-span="24"
-                label-width="auto"
-                hide-region-selector
-                show-coordinate-hint
-              />
-            </template>
-            <template #receivingAddressPicker>
-              <ArtAddressPicker
-                v-model:region-path="form.receivingRegionPath"
-                v-model:address-detail="form.receivingAddressDetail"
-                v-model:longitude="form.receivingLongitude"
-                v-model:latitude="form.receivingLatitude"
-                :region-api="fetchRegionOptions"
-                detail-label="收货地址"
-                :detail-span="24"
-                label-width="auto"
-                hide-region-selector
-                show-coordinate-hint
-              />
-            </template>
-          </ArtForm>
-          <div v-if="form.transferStationIds?.length" class="flex flex-wrap gap-2 px-4 pb-2">
-            <div
-              v-for="(stationId, index) in form.transferStationIds"
-              :key="stationId"
-              class="art-icon-label rounded-[var(--art-control-radius)] border border-[var(--el-border-color-light)] bg-[var(--el-fill-color-light)] px-2 py-1 text-sm"
-            >
-              <span class="font-semibold">{{ index + 1 }}.</span>
-              <span>{{ stationName(stationId) }}</span>
-              <ElButton link :disabled="index === 0" @click="moveWaypoint(index, -1)"
-                >上移</ElButton
-              >
-              <ElButton
-                link
-                :disabled="index === (form.transferStationIds?.length ?? 0) - 1"
-                @click="moveWaypoint(index, 1)"
-                >下移</ElButton
-              >
-              <ArtIconButton
-                icon="ri:close-line"
-                :label="`移除途经点 ${index + 1}`"
-                @click="removeWaypoint(index)"
-              />
-            </div>
-          </div>
-          <div class="flex flex-wrap items-center gap-2 px-4 pb-3">
-            <ElButton
-              plain
-              :disabled="(form.transferStationIds?.length ?? 0) >= 3"
-              @click="addWaypoint"
-            >
-              <ArtSvgIcon icon="ri:add-line" />添加途经点（{{
-                form.transferStationIds?.length ?? 0
-              }}/3）
-            </ElButton>
-            <ElButton
-              v-if="canEstimateDistance"
-              link
-              :loading="distanceLoading"
-              @click="calculateDistance"
-            >
-              重新估算路线
-            </ElButton>
-            <span class="text-xs text-[var(--el-text-color-secondary)]" role="status">{{
-              distanceStatus
-            }}</span>
-          </div>
-        </ArtSectionCard>
-        <ArtSectionCard
-          v-show="step === 1"
-          title="配置信息"
-          subtitle="核对返程车型、计费规则与交接设置。"
-          preserve-content-structure
-        >
-          <OrderConfig
-            ref="configRef"
-            v-model="form.orderConfig"
-            :can-edit-attachments="true"
-            :resource-tenant-id="source?.tenantId || workspaceTenantId"
           />
+          <p v-if="selectedSource" class="px-4 text-sm text-[var(--el-text-color-secondary)]">
+            原始运单：<strong class="text-[var(--el-text-color-primary)]">{{
+              selectedSource.waybillNo
+            }}</strong>
+            · 系统会从本趟下一段 R 序号继续编号。
+          </p>
         </ArtSectionCard>
-        <ArtSectionCard
-          v-show="step === 2"
-          title="货物信息"
-          subtitle="返程货物和运费独立归属新订单。"
-          preserve-content-structure
-        >
-          <div class="mb-3 flex flex-wrap items-center gap-2">
-            <ElButton plain @click="cargoSelectorRef?.open()">
-              <ArtSvgIcon icon="ri:checkbox-multiple-line" />选择货物
-            </ElButton>
-            <ElButton plain @click="addCargo"> <ArtSvgIcon icon="ri:add-line" />添加货物 </ElButton>
-            <ElButton
-              plain
-              :disabled="!form.contractId"
-              @click="contractDetailSelectorRef?.open(form.contractId || '')"
-            >
-              <ArtSvgIcon icon="ri:file-list-3-line" />批量选合同明细
-            </ElButton>
-            <ElButton
-              plain
-              :disabled="!form.shippingCustomerId"
-              @click="contractSelectorRef?.open(form.shippingCustomerId || '')"
-              ><ArtSvgIcon icon="ri:file-list-3-line" />选择客户合同</ElButton
-            >
-            <span v-if="form.contractId" class="text-sm text-[var(--el-text-color-secondary)]">{{
-              contractLabel
-            }}</span>
-          </div>
-          <div
-            v-for="(item, index) in form.cargoItems"
-            :key="index"
-            class="mb-3 rounded-[var(--art-control-radius)] border border-[var(--el-border-color-light)] p-3"
+        <template v-else>
+          <ArtSectionCard
+            v-show="step === 0"
+            title="收发信息"
+            subtitle="返程始发地与原单目的地一致；请核对本次联系人及地址。"
+            preserve-content-structure
           >
-            <div class="mb-2 flex items-center justify-between"
-              ><strong>货物 {{ index + 1 }}</strong
-              ><ElButton link type="danger" @click="removeCargo(index)">移除</ElButton></div
-            >
             <ArtForm
-              v-model="form.cargoItems[index]"
-              :items="cargoItems"
+              v-model="sourceChoice"
+              :items="sourceItems"
               class="return-trip-drawer__form"
-              :span="8"
+              :span="12"
               :gutter="12"
               label-position="top"
             />
-          </div>
-          <ElTabs v-model="settlementTab">
-            <ElTabPane label="应收信息" name="receivable">
+            <div
+              v-if="selectedSource"
+              class="mb-3 rounded-[var(--art-control-radius)] border border-[var(--el-border-color-light)] bg-[var(--el-fill-color-light)] px-3 py-2 text-sm text-[var(--el-text-color-regular)]"
+            >
+              将沿用调度单 <strong>{{ selectedSource.waybillNo }}</strong>
+              <span v-if="selectedSource.driverName || selectedSource.plateNo">
+                · {{ selectedSource.driverName || '司机待核对' }} /
+                {{ selectedSource.plateNo || '车辆待核对' }}
+              </span>
+            </div>
+            <div class="mb-2 flex flex-wrap items-center gap-4 px-4 text-sm">
+              <div v-for="endpoint in addressEndpoints" :key="endpoint.mode" class="art-icon-label">
+                <span>{{ endpoint.label }}地址</span>
+                <ArtButtonMore
+                  :list="addressActions"
+                  trigger="click"
+                  @click="handleAddressAction(endpoint.mode, $event.key)"
+                >
+                  <template #trigger>
+                    <ArtIconButton
+                      icon="ri:map-pin-2-line"
+                      :label="`${endpoint.label}地址操作`"
+                      :title="`${endpoint.label}地址操作`"
+                    />
+                  </template>
+                </ArtButtonMore>
+              </div>
+            </div>
+            <ArtForm
+              ref="contactFormRef"
+              v-model="form"
+              :items="contactItems"
+              class="return-trip-drawer__form"
+              :span="12"
+              :gutter="12"
+              label-position="top"
+            >
+              <template #shippingAddressPicker>
+                <ArtAddressPicker
+                  v-model:region-path="form.shippingRegionPath"
+                  v-model:address-detail="form.shippingAddressDetail"
+                  v-model:longitude="form.shippingLongitude"
+                  v-model:latitude="form.shippingLatitude"
+                  :region-api="fetchRegionOptions"
+                  detail-label="发货地址"
+                  :detail-span="24"
+                  label-width="auto"
+                  hide-region-selector
+                  show-coordinate-hint
+                />
+              </template>
+              <template #receivingAddressPicker>
+                <ArtAddressPicker
+                  v-model:region-path="form.receivingRegionPath"
+                  v-model:address-detail="form.receivingAddressDetail"
+                  v-model:longitude="form.receivingLongitude"
+                  v-model:latitude="form.receivingLatitude"
+                  :region-api="fetchRegionOptions"
+                  detail-label="收货地址"
+                  :detail-span="24"
+                  label-width="auto"
+                  hide-region-selector
+                  show-coordinate-hint
+                />
+              </template>
+            </ArtForm>
+            <div v-if="form.transferStationIds?.length" class="flex flex-wrap gap-2 px-4 pb-2">
+              <div
+                v-for="(stationId, index) in form.transferStationIds"
+                :key="stationId"
+                class="art-icon-label rounded-[var(--art-control-radius)] border border-[var(--el-border-color-light)] bg-[var(--el-fill-color-light)] px-2 py-1 text-sm"
+              >
+                <span class="font-semibold">{{ index + 1 }}.</span>
+                <span>{{ stationName(stationId) }}</span>
+                <ElButton link :disabled="index === 0" @click="moveWaypoint(index, -1)"
+                  >上移</ElButton
+                >
+                <ElButton
+                  link
+                  :disabled="index === (form.transferStationIds?.length ?? 0) - 1"
+                  @click="moveWaypoint(index, 1)"
+                  >下移</ElButton
+                >
+                <ArtIconButton
+                  icon="ri:close-line"
+                  :label="`移除途经点 ${index + 1}`"
+                  @click="removeWaypoint(index)"
+                />
+              </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 px-4 pb-3">
+              <ElButton
+                plain
+                :disabled="(form.transferStationIds?.length ?? 0) >= 3"
+                @click="addWaypoint"
+              >
+                <ArtSvgIcon icon="ri:add-line" />添加途经点（{{
+                  form.transferStationIds?.length ?? 0
+                }}/3）
+              </ElButton>
+              <ElButton
+                v-if="canEstimateDistance"
+                link
+                :loading="distanceLoading"
+                @click="calculateDistance"
+              >
+                重新估算路线
+              </ElButton>
+              <span class="text-xs text-[var(--el-text-color-secondary)]" role="status">{{
+                distanceStatus
+              }}</span>
+            </div>
+          </ArtSectionCard>
+          <ArtSectionCard
+            v-show="step === 1"
+            title="配置信息"
+            subtitle="核对返程车型、计费规则与交接设置。"
+            preserve-content-structure
+          >
+            <OrderConfig
+              ref="configRef"
+              v-model="form.orderConfig"
+              :can-edit-attachments="true"
+              :resource-tenant-id="source?.tenantId || workspaceTenantId"
+            />
+          </ArtSectionCard>
+          <ArtSectionCard
+            v-show="step === 2"
+            title="货物信息"
+            subtitle="返程货物和运费独立归属新订单。"
+            preserve-content-structure
+          >
+            <div class="mb-3 flex flex-wrap items-center gap-2">
+              <ElButton plain @click="cargoSelectorRef?.open()">
+                <ArtSvgIcon icon="ri:checkbox-multiple-line" />选择货物
+              </ElButton>
+              <ElButton plain @click="addCargo">
+                <ArtSvgIcon icon="ri:add-line" />添加货物
+              </ElButton>
+              <ElButton
+                plain
+                :disabled="!form.contractId"
+                @click="contractDetailSelectorRef?.open(form.contractId || '')"
+              >
+                <ArtSvgIcon icon="ri:file-list-3-line" />批量选合同明细
+              </ElButton>
+              <ElButton
+                plain
+                :disabled="!form.shippingCustomerId"
+                @click="contractSelectorRef?.open(form.shippingCustomerId || '')"
+                ><ArtSvgIcon icon="ri:file-list-3-line" />选择客户合同</ElButton
+              >
+              <span v-if="form.contractId" class="text-sm text-[var(--el-text-color-secondary)]">{{
+                contractLabel
+              }}</span>
+            </div>
+            <div
+              v-for="(item, index) in form.cargoItems"
+              :key="index"
+              class="mb-3 rounded-[var(--art-control-radius)] border border-[var(--el-border-color-light)] p-3"
+            >
+              <div class="mb-2 flex items-center justify-between"
+                ><strong>货物 {{ index + 1 }}</strong
+                ><ElButton link type="danger" @click="removeCargo(index)">移除</ElButton></div
+              >
               <ArtForm
-                v-model="form"
-                :items="feeItems"
+                v-model="form.cargoItems[index]"
+                :items="cargoItems"
                 class="return-trip-drawer__form"
                 :span="8"
                 :gutter="12"
                 label-position="top"
               />
-              <p class="px-4 pb-3 text-right text-sm">
-                应收运费合计
-                <strong class="ml-2 text-lg text-[var(--el-color-primary)]"
-                  >￥{{ receivableTotal }}</strong
-                >
-                <span class="ml-4 text-[var(--el-text-color-secondary)]"
-                  >款项分配：￥{{ paymentTotal }}</span
-                >
-              </p>
-            </ElTabPane>
-            <ElTabPane label="应付信息" name="payable">
-              <OrderSupplement
-                ref="payableRef"
-                v-model="form.orderConfig"
-                section="payable"
-                :can-view-amounts="true"
-                :can-edit-amounts="true"
-                :can-view-proof="true"
-                :can-edit-proof="true"
-                :resource-tenant-id="source?.tenantId || workspaceTenantId"
-              />
-            </ElTabPane>
-            <ElTabPane label="装卸货信息" name="loading">
-              <OrderSupplement
-                ref="loadingRef"
-                v-model="form.orderConfig"
-                section="loading"
-                :can-view-amounts="true"
-                :can-edit-amounts="true"
-                :can-view-proof="true"
-                :can-edit-proof="true"
-                :resource-tenant-id="source?.tenantId || workspaceTenantId"
-              />
-            </ElTabPane>
-          </ElTabs>
-        </ArtSectionCard>
+            </div>
+            <ElTabs v-model="settlementTab">
+              <ElTabPane label="应收信息" name="receivable">
+                <ArtForm
+                  v-model="form"
+                  :items="feeItems"
+                  class="return-trip-drawer__form"
+                  :span="8"
+                  :gutter="12"
+                  label-position="top"
+                />
+                <p class="px-4 pb-3 text-right text-sm">
+                  应收运费合计
+                  <strong class="ml-2 text-lg text-[var(--el-color-primary)]"
+                    >￥{{ receivableTotal }}</strong
+                  >
+                  <span class="ml-4 text-[var(--el-text-color-secondary)]"
+                    >款项分配：￥{{ paymentTotal }}</span
+                  >
+                </p>
+              </ElTabPane>
+              <ElTabPane label="应付信息" name="payable">
+                <OrderSupplement
+                  ref="payableRef"
+                  v-model="form.orderConfig"
+                  section="payable"
+                  :can-view-amounts="true"
+                  :can-edit-amounts="true"
+                  :can-view-proof="true"
+                  :can-edit-proof="true"
+                  :resource-tenant-id="source?.tenantId || workspaceTenantId"
+                />
+              </ElTabPane>
+              <ElTabPane label="装卸货信息" name="loading">
+                <OrderSupplement
+                  ref="loadingRef"
+                  v-model="form.orderConfig"
+                  section="loading"
+                  :can-view-amounts="true"
+                  :can-edit-amounts="true"
+                  :can-view-proof="true"
+                  :can-edit-proof="true"
+                  :resource-tenant-id="source?.tenantId || workspaceTenantId"
+                />
+              </ElTabPane>
+            </ElTabs>
+          </ArtSectionCard>
+        </template>
       </template>
     </div>
     <CargoSelector ref="cargoSelectorRef" @confirm="selectCargo" />
@@ -286,7 +327,6 @@
 </template>
 
 <script setup lang="ts">
-  import { vehicleDriverColumns } from '@/components/business/vehicle-driver-select/columns'
   import { ElMessage } from 'element-plus'
   import { cloneDeep } from 'lodash-es'
   import { formatCurrencyValue } from '@/utils/ui/format'
@@ -301,11 +341,6 @@
   import ArtButtonMore from '@/components/core/forms/art-button-more/index.vue'
   import { useAuth } from '@/hooks/core/useAuth'
   import ArtIconButton from '@/components/core/widget/art-icon-button/index.vue'
-  import { buildSupabasePageRange } from '@/utils/supabase/pagination'
-  import type {
-    DataSelectFetchParams,
-    DataSelectRecord
-  } from '@/components/core/forms/art-data-select/types'
   import ArtDrawer from '@/components/core/drawers/art-drawer/index.vue'
   import type { ArtDrawerExpose } from '@/components/core/drawers/art-drawer/types'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
@@ -313,19 +348,16 @@
   import ArtSvgIcon from '@/components/core/base/art-svg-icon/index.vue'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
+  import { normalizeNullableText } from '@/utils/form/normalize'
   import { resolveTenantWorkspaceId } from '@/utils/tenant-scope-context'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import { useUserStore } from '@/store/modules/user'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
-  import {
-    fetchDispatchCandidates,
-    type DispatchDriverCandidate,
-    type DispatchVehicleCandidate
-  } from '@tms/api'
   import { fetchCustomerDefaultAddress, fetchCustomerOptions } from '@tms/api/modules/customer'
   import { fetchStationOptions } from '@tms/api/modules/station'
   import {
     createReturnOrder,
+    createEmptyReturnTrip,
     fetchReturnTripCandidates,
     type ReturnTripCandidate
   } from '@tms/api/modules/return-trip'
@@ -375,6 +407,7 @@
   const emit = defineEmits<{ success: [] }>()
   const drawerRef = ref<ArtDrawerExpose>()
   const contactFormRef = ref<InstanceType<typeof ArtForm>>()
+  const emptyFormRef = ref<InstanceType<typeof ArtForm>>()
   const configRef = ref<InstanceType<typeof OrderConfig>>()
   const payableRef = ref<InstanceType<typeof OrderSupplement>>()
   const loadingRef = ref<InstanceType<typeof OrderSupplement>>()
@@ -403,6 +436,29 @@
     }
   ]
   const source = ref<OrderRecord>()
+  const mode = ref<'load' | 'empty'>('load')
+  const emptyReturn = reactive({ originStation: '', destinationStation: '', remark: '' })
+  const emptyReturnItems: FormItem[] = [
+    {
+      key: 'originStation',
+      label: '返程始发地',
+      type: 'input',
+      formItemProps: { rules: [{ required: true, whitespace: true, message: '请填写返程始发地' }] }
+    },
+    {
+      key: 'destinationStation',
+      label: '返程目的地',
+      type: 'input',
+      formItemProps: { rules: [{ required: true, whitespace: true, message: '请填写返程目的地' }] }
+    },
+    {
+      key: 'remark',
+      label: '备注',
+      type: 'input',
+      span: 24,
+      props: { type: 'textarea', rows: 2, maxlength: 500 }
+    }
+  ]
   const form = ref<ReturnForm>(createReturnForm())
   const paymentMethodOptions = useDictionaryOptions('tmsOrderPaymentMethod')
   const cargoUnitOptions = useDictionaryOptions('tmsCargoUnit')
@@ -412,11 +468,6 @@
   const selectedSource = computed(() =>
     candidates.value.find((candidate) => candidate.id === sourceChoice.waybillId)
   )
-  const selectedDrivers = ref<DataSelectRecord[]>([])
-  const selectedVehicles = ref<DataSelectRecord[]>([])
-  const linkedVehicleMessage = ref('')
-  const linkedVehicleLoading = ref(false)
-  let linkedVehicleRequestId = 0
   const customers = ref<Api.Tms.BasicData.CustomerOption[]>([])
   const transferStations = ref<StationOption[]>([])
   const showWaypointSelect = ref(false)
@@ -427,8 +478,11 @@
   const step = ref(0)
   const settlementTab = ref('receivable')
   const steps = ['收发信息', '配置信息', '货物信息']
-  watch(step, (value) =>
-    drawerRef.value?.setOptions({ confirmText: value === 2 ? '创建返程运输单' : '下一步' })
+  watch([step, mode], ([value, currentMode]) =>
+    drawerRef.value?.setOptions({
+      confirmText:
+        currentMode === 'empty' ? '生成返程空载运单' : value === 2 ? '创建返程运输单' : '下一步'
+    })
   )
   const saving = ref(false)
   const loadError = ref('')
@@ -442,90 +496,15 @@
       label: '正向调度单',
       type: 'select',
       span: 12,
-      description: '选择后沿用原司机与车辆；无正向调度单时请在下方指定。',
+      description: '所有返程统一关联这张正向调度运单，系统自动递增 R 序号。',
+      formItemProps: { rules: [{ required: true, message: '请选择正向调度运单' }] },
       props: {
-        clearable: true,
         options: candidates.value.map((row) => ({ label: row.waybillNo, value: row.id })),
-        placeholder: '无正向调度单时留空',
-        onChange: handleSourceChange
-      }
-    }
-  ])
-  const driverColumns = vehicleDriverColumns('driver')
-  const vehicleColumns = vehicleDriverColumns('vehicle')
-  const assignmentItems = computed<FormItem[]>(() => [
-    {
-      key: 'dispatchDriverId',
-      label: '返程司机',
-      type: 'dataSelect',
-      span: 12,
-      description: '选择当前可执行返程任务的司机。',
-      formItemProps: { rules: [{ required: true, message: '请选择返程司机' }] },
-      props: {
-        mode: 'table',
-        multiple: false,
-        modelValue: form.value.dispatchDriverId || undefined,
-        'onUpdate:modelValue': (value: unknown) =>
-          (form.value.dispatchDriverId = String(value || '')),
-        selectedData: selectedDrivers.value,
-        'onUpdate:selectedData': (value: DataSelectRecord[]) => (selectedDrivers.value = value),
-        title: '选择返程司机',
-        dialogWidth: 'xl',
-        showTableHeader: true,
-        placeholder: '请选择返程司机',
-        searchPlaceholder: '请输入司机姓名',
-        rowKey: 'id',
-        labelKey: 'driverName',
-        descriptionKey: 'phone',
-        emptyText: '暂无可用司机',
-        emptyDescription: '请检查司机状态、证件及任务占用后重试。',
-        apiFn: fetchDriverSelectData,
-        columns: driverColumns,
-        showPagination: true,
-        onConfirm: handleDriverConfirm,
-        onClear: handleDriverClear,
-        showSelectedPanel: false
-      }
-    },
-    {
-      key: 'dispatchVehicleId',
-      label: '返程车辆',
-      type: 'dataSelect',
-      span: 12,
-      description: linkedVehicleLoading.value
-        ? '正在核对司机关联车辆…'
-        : linkedVehicleMessage.value || '可自动带入司机关联车辆，也可手动选择。',
-      formItemProps: { rules: [{ required: true, message: '请选择返程车辆' }] },
-      props: {
-        mode: 'table',
-        multiple: false,
-        disabled: linkedVehicleLoading.value,
-        modelValue: form.value.dispatchVehicleId || undefined,
-        'onUpdate:modelValue': (value: unknown) =>
-          (form.value.dispatchVehicleId = String(value || '')),
-        selectedData: selectedVehicles.value,
-        'onUpdate:selectedData': (value: DataSelectRecord[]) => (selectedVehicles.value = value),
-        title: '选择返程车辆',
-        dialogWidth: 'xl',
-        showTableHeader: true,
-        placeholder: '请选择返程车辆',
-        searchPlaceholder: '请输入车牌号或车型',
-        rowKey: 'id',
-        labelKey: 'plateNo',
-        descriptionKey: 'vehicleType',
-        emptyText: '暂无可用车辆',
-        emptyDescription: '请检查车辆审核和运营状态后重试。',
-        apiFn: fetchVehicleSelectData,
-        columns: vehicleColumns,
-        showPagination: true,
-        onConfirm: handleVehicleConfirm,
-        onClear: handleVehicleClear,
-        showSelectedPanel: false
+        placeholder: '请选择正向调度运单'
       }
     }
   ])
   const contactItems = computed<FormItem[]>(() => [
-    ...(!selectedSource.value ? assignmentItems.value : []),
     { key: 'originStation', label: '始发地', type: 'input', props: { disabled: true } },
     {
       key: 'destinationStation',
@@ -889,92 +868,20 @@
       if (requestId === distanceRequestId) distanceLoading.value = false
     }
   }
-  function clearAssignment(): void {
-    ++linkedVehicleRequestId
-    linkedVehicleLoading.value = false
-    linkedVehicleMessage.value = ''
-    form.value.dispatchDriverId = null
-    form.value.dispatchVehicleId = null
-    selectedDrivers.value = []
-    selectedVehicles.value = []
-    contactFormRef.value?.clearValidate()
-  }
-  function handleSourceChange(): void {
-    clearAssignment()
-  }
-  function candidateParams(params: DataSelectFetchParams) {
-    const tenantId = source.value?.tenantId || workspaceTenantId.value
-    if (!tenantId) throw new Error('原运输单缺少所属租户，请刷新列表后重试')
-    const { from, to } = buildSupabasePageRange({ current: params.page, size: params.pageSize })
-    return { tenantId, keyword: params.keyword, from, to }
-  }
-  async function fetchDriverSelectData(params: DataSelectFetchParams) {
-    return await fetchDispatchCandidates<DispatchDriverCandidate>({
-      ...candidateParams(params),
-      kind: 'driver'
-    })
-  }
-  async function fetchVehicleSelectData(params: DataSelectFetchParams) {
-    return await fetchDispatchCandidates<DispatchVehicleCandidate>({
-      ...candidateParams(params),
-      kind: 'return_vehicle'
-    })
-  }
-  function handleDriverConfirm(_value: unknown, rows: DataSelectRecord[]): void {
-    const driver = rows[0] as DispatchDriverCandidate | undefined
-    ++linkedVehicleRequestId
-    linkedVehicleLoading.value = false
-    linkedVehicleMessage.value = ''
-    selectedDrivers.value = driver ? [driver as DataSelectRecord] : []
-    form.value.dispatchDriverId = driver?.id ?? null
-    form.value.dispatchVehicleId = null
-    selectedVehicles.value = []
-    if (driver?.vehicleId) void resolveLinkedVehicle(driver, linkedVehicleRequestId)
-    else if (driver) linkedVehicleMessage.value = '司机档案未关联可用车辆，请手动选择。'
-  }
-  function handleDriverClear(): void {
-    clearAssignment()
-  }
-  async function resolveLinkedVehicle(
-    driver: DispatchDriverCandidate,
-    requestId: number
-  ): Promise<void> {
-    linkedVehicleLoading.value = true
-    try {
-      const result = await fetchDispatchCandidates<DispatchVehicleCandidate>({
-        ...candidateParams({ page: 1, pageSize: 10, keyword: driver.vehicleId || '', filters: {} }),
-        kind: 'return_vehicle'
-      })
-      if (requestId !== linkedVehicleRequestId || form.value.dispatchDriverId !== driver.id) return
-      if (result.error) throw result.error
-      const vehicle = result.data.find((candidate) => candidate.id === driver.vehicleId)
-      if (vehicle) {
-        form.value.dispatchVehicleId = vehicle.id
-        selectedVehicles.value = [vehicle as DataSelectRecord]
-      } else {
-        linkedVehicleMessage.value = '关联车辆当前不可用，请手动选择可用车辆。'
-      }
-    } catch {
-      if (requestId !== linkedVehicleRequestId || form.value.dispatchDriverId !== driver.id) return
-      linkedVehicleMessage.value = '关联车辆加载失败，请手动选择或重选司机后重试。'
-    } finally {
-      if (requestId === linkedVehicleRequestId) linkedVehicleLoading.value = false
-    }
-  }
-  function handleVehicleConfirm(_value: unknown, rows: DataSelectRecord[]): void {
-    const vehicle = rows[0] as DispatchVehicleCandidate | undefined
-    form.value.dispatchVehicleId = vehicle?.id ?? null
-    selectedVehicles.value = vehicle ? [vehicle as DataSelectRecord] : []
-    linkedVehicleMessage.value = ''
-  }
-  function handleVehicleClear(): void {
-    form.value.dispatchVehicleId = null
-    selectedVehicles.value = []
-  }
-  async function handleOpen(row: OrderRecord): Promise<void> {
+  async function handleOpen(row: OrderRecord, nextMode: 'load' | 'empty' = 'load'): Promise<void> {
     if (!row.id) return
+    if (row.returnSourceOrderId) {
+      ElMessage.warning('请从正向运输单新增返程，所有返程将关联同一张正向调度运单')
+      return
+    }
     ++optionsRequestId
     source.value = row
+    mode.value = nextMode
+    Object.assign(emptyReturn, {
+      originStation: row.destinationStation || '',
+      destinationStation: row.originStation || '',
+      remark: ''
+    })
     step.value = 0
     settlementTab.value = 'receivable'
     contractLabel.value = ''
@@ -1020,10 +927,12 @@
       },
       cargoItems: [createInitialCargoItem()]
     }
-    clearAssignment()
     await drawerRef.value?.handleOpen(null, {
-      title: '新增返程运输单',
-      subtitle: '收发信息 · 配置信息 · 货物信息'
+      title: nextMode === 'empty' ? '新增返程空载' : '新增返程运输单',
+      subtitle:
+        nextMode === 'empty'
+          ? '选择正向调度运单，直接生成返程空载调度运单'
+          : '收发信息 · 配置信息 · 货物信息'
     })
     await loadOptions()
   }
@@ -1049,7 +958,6 @@
       customers.value = customerResult.data ?? []
       transferStations.value = stationResult.data ?? []
       sourceChoice.waybillId = candidates.value[0]?.id || ''
-      clearAssignment()
     } catch {
       if (requestId === optionsRequestId) loadError.value = '请检查网络或权限后重试。'
     } finally {
@@ -1119,17 +1027,36 @@
   )
   async function submit(): Promise<boolean> {
     if (saving.value || loadError.value || !source.value?.id) return false
+    if (!selectedSource.value) {
+      ElMessage.warning(
+        candidates.value.length
+          ? '请先选择正向调度运单'
+          : '暂无可用的正向调度运单，请先完成正向配载后重试'
+      )
+      return false
+    }
+    if (mode.value === 'empty') {
+      if (!(await validateArtFormForSubmit(emptyFormRef.value))) return false
+      saving.value = true
+      try {
+        await createEmptyReturnTrip(selectedSource.value.id, {
+          originStation: emptyReturn.originStation.trim(),
+          destinationStation: emptyReturn.destinationStation.trim(),
+          remark: normalizeNullableText(emptyReturn.remark)
+        })
+        emit('success')
+        return true
+      } catch {
+        return false
+      } finally {
+        saving.value = false
+      }
+    }
     if (step.value === 0) {
       if (!(await validateArtFormForSubmit(contactFormRef.value))) return false
       if (!form.value.shippingAddressDetail?.trim() || !form.value.receivingAddressDetail?.trim()) {
         ElMessage.warning('请填写返程发货和收货地址')
         return false
-      }
-      if (!selectedSource.value) {
-        if (!form.value.dispatchDriverId || !form.value.dispatchVehicleId) {
-          ElMessage.warning('请选择返程司机和车辆')
-          return false
-        }
       }
       step.value = 1
       return false
@@ -1145,11 +1072,6 @@
       )
     ) {
       ElMessage.warning('请至少填写一项有名称和数量的返程货物')
-      return false
-    }
-    if (!selectedSource.value && (!form.value.dispatchDriverId || !form.value.dispatchVehicleId)) {
-      ElMessage.warning('请选择返程司机和车辆')
-      step.value = 0
       return false
     }
     if (!(await payableRef.value?.validate())) {
@@ -1170,11 +1092,9 @@
           transfer: form.value.transferStation || undefined
         }
       })
-      if (selectedSource.value) {
-        payload.dispatchDriverId = null
-        payload.dispatchVehicleId = null
-      }
-      await createReturnOrder(source.value.id, selectedSource.value?.id || null, payload)
+      payload.dispatchDriverId = null
+      payload.dispatchVehicleId = null
+      await createReturnOrder(source.value.id, selectedSource.value.id, payload)
       emit('success')
       return true
     } catch {

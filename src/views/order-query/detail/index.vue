@@ -432,14 +432,14 @@
       : '订单运输主线'
   )
   const dispatchKindLabel = computed(() => {
-    if (order.value?.returnSourceOrderId) return '返程配货'
+    if (order.value?.returnSourceOrderId) return '返程配载'
     const kind = trackedWaybill.value?.executionKind
     return kind === 'merge'
       ? '合单'
       : kind === 'split'
         ? '拆单'
         : kind === 'single'
-          ? '正向货配载'
+          ? '正向配载'
           : '待调度'
   })
   const trackedWaybill = computed(() => trackedRelations.value.find((item) => item.waybillId))
@@ -629,9 +629,8 @@
       formatter: (row) =>
         row.executionKind
           ? `${
-              { single: '正向货配载', merge: '合单', split: '拆单' }[row.executionKind] ??
-              '其他调度'
-            }${row.hasReturnLeg ? ' · 含返程配货' : ''}`
+              { single: '正向配载', merge: '合单', split: '拆单' }[row.executionKind] ?? '其他调度'
+            }${row.hasReturnLeg ? ' · 含返程' : ''}`
           : '—'
     },
     {

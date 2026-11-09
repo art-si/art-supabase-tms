@@ -1317,6 +1317,10 @@ declare global {
           | 'completed'
           | 'cancelled'
         interface WaybillRecord extends Api.Tms.Order.OrderRecord {
+          dispatchType?: 'forward_load' | 'return_load' | 'return_empty'
+          returnSequence?: number | null
+          forwardWaybillId?: string | null
+          forwardWaybillNo?: string | null
           sourceOrderId?: string | null
           sourceOrderRefs?: Array<{ id: string; orderNo: string }>
           sourceOrderNos?: string[]
@@ -1539,6 +1543,10 @@ declare global {
           id: string
           tenantId: string
           waybillNo: string
+          dispatchType?: 'forward_load' | 'return_load' | 'return_empty'
+          returnSequence?: number | null
+          forwardWaybillId?: string | null
+          forwardWaybillNo?: string | null
           executionKind?: 'single' | 'merge' | 'split'
           status: WaybillStatus | string
           orderId?: string | null

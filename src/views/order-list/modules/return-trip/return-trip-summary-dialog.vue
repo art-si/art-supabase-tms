@@ -63,6 +63,49 @@
               size="compact"
             />
           </ArtSectionCard>
+          <ArtSectionCard
+            v-if="summary?.returns?.length"
+            class="mt-4"
+            title="返程调度明细"
+            subtitle="各段返程均关联同一张正向调度单；配载与空载共用返程序号。"
+            preserve-content-structure
+          >
+            <ul class="m-0 list-none divide-y divide-[var(--el-border-color-light)] p-0">
+              <li
+                v-for="segment in summary.returns"
+                :key="segment.waybillId"
+                class="py-3 first:pt-0 last:pb-0"
+              >
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <strong class="break-all text-sm">{{ segment.waybillNo }}</strong>
+                  <ElTag
+                    size="small"
+                    :type="segment.dispatchType === 'return_empty' ? 'info' : 'primary'"
+                  >
+                    {{ segment.dispatchType === 'return_empty' ? '返程空载' : '返程配载' }}
+                  </ElTag>
+                </div>
+                <p class="mb-0 mt-1 text-xs text-[var(--el-text-color-secondary)]">
+                  {{ segment.originStation || '—' }} → {{ segment.destinationStation || '—' }}
+                  <span v-if="segment.returnCustomerName"> · {{ segment.returnCustomerName }}</span>
+                </p>
+                <dl class="mb-0 mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+                  <div
+                    v-for="metric in segmentMetrics(segment)"
+                    :key="metric.label"
+                    class="min-w-0"
+                  >
+                    <dt class="text-xs text-[var(--el-text-color-secondary)]">{{
+                      metric.label
+                    }}</dt>
+                    <dd class="ml-0 mt-1 break-all font-semibold tabular-nums">{{
+                      amount(metric.value)
+                    }}</dd>
+                  </div>
+                </dl>
+              </li>
+            </ul>
+          </ArtSectionCard>
         </ElTabPane>
         <ElTabPane v-if="summary" name="actual" label="已审核财务">
           <ArtSectionCard
@@ -70,6 +113,20 @@
             subtitle="以 FMS 已审核应收与已审核运单费用计算；后续费用入账会改变毛利。"
             preserve-content-structure
           >
+            <div v-if="hasTripActual" class="mb-4 grid gap-3 sm:grid-cols-3">
+              <div
+                v-for="metric in tripActualMetrics"
+                :key="metric.label"
+                class="min-w-0 rounded-[var(--art-control-radius)] bg-[var(--el-fill-color-light)] p-3"
+              >
+                <span class="block text-xs text-[var(--el-text-color-secondary)]">{{
+                  metric.label
+                }}</span>
+                <strong class="mt-1 block break-all text-lg tabular-nums">{{
+                  amount(metric.value)
+                }}</strong>
+              </div>
+            </div>
             <div v-if="hasApprovedActual" class="grid gap-3 sm:grid-cols-3">
               <div
                 v-for="metric in actualMetrics"
@@ -173,6 +230,7 @@
     fetchReturnTripCandidates,
     fetchReturnTripSummary,
     type ReturnTripCandidate,
+    type ReturnSegmentSummary,
     type ReturnTripSummary
   } from '@tms/api/modules/return-trip'
 
@@ -206,6 +264,22 @@
       summary.value?.actualAccountingStatus === 'approved_to_date' ||
       summary.value?.actualAccountingStatus === 'partial_cost'
   )
+  const hasTripActual = computed(
+    () => summary.value?.tripActualRevenue != null && summary.value?.tripActualCost != null
+  )
+  const tripActualMetrics = computed(() => [
+    { label: '本趟已审核收入', value: summary.value?.tripActualRevenue },
+    { label: '本趟已审核成本', value: summary.value?.tripActualCost },
+    { label: '本趟已审核毛利', value: summary.value?.tripActualGrossProfit }
+  ])
+  const segmentMetrics = (segment: ReturnSegmentSummary) => [
+    { label: '预计收入', value: segment.plannedRevenue },
+    { label: '专属预计费用', value: segment.directPlannedExpense },
+    { label: '共用费用分摊', value: segment.allocatedSharedToll },
+    { label: '预计司机提成', value: segment.plannedCommission },
+    { label: '预计毛利', value: segment.projectedGrossProfit },
+    { label: '已审核毛利', value: segment.actualGrossProfit }
+  ]
   const actualMetrics = computed(() => [
     { label: '已审核返程收入', value: summary.value?.returnActualRevenue },
     { label: '已审核返程成本', value: summary.value?.returnActualCost },
@@ -255,15 +329,28 @@
     if (!row.id) return
     order.value = row
     summary.value = undefined
-    candidates.value = (await fetchReturnTripCandidates(String(row.id))).filter(
-      (candidate) => candidate.hasReturnLeg
-    )
-    selectedWaybillId.value = candidates.value[0]?.id ?? ''
+    candidates.value = []
+    selectedWaybillId.value = ''
+    loadError.value = false
+    loading.value = true
+    const orderId = row.id
     await dialogRef.value?.handleOpen(null, {
       title: '返程收益预估',
-      subtitle: '同一主运输任务的正向货、返程货与分摊成本'
+      subtitle: '同一主运输任务的正向货、各段返程与分摊成本',
+      onOpen: async () => {
+        try {
+          const records = await fetchReturnTripCandidates(orderId)
+          if (order.value?.id !== orderId) return
+          candidates.value = records.filter((candidate) => candidate.hasReturnLeg)
+          selectedWaybillId.value = candidates.value[0]?.id ?? ''
+          if (selectedWaybillId.value) await loadSummary()
+        } catch {
+          if (order.value?.id === orderId) loadError.value = true
+        } finally {
+          if (order.value?.id === orderId) loading.value = false
+        }
+      }
     })
-    if (selectedWaybillId.value) await loadSummary()
   }
 
   defineExpose({ handleOpen })

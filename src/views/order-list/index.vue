@@ -168,7 +168,9 @@
   const tableQueryRef = ref<ArtTableQueryExpose>()
   const freightDialogRef = ref<FreightDialogExpose>()
   const quoteDialogRef = ref<{ handleOpen: (row: OrderRecord) => Promise<void> }>()
-  const returnTripDrawerRef = ref<{ handleOpen: (row: OrderRecord) => Promise<void> }>()
+  const returnTripDrawerRef = ref<{
+    handleOpen: (row: OrderRecord, mode?: 'load' | 'empty') => Promise<void>
+  }>()
   const returnTripSummaryDialogRef = ref<{ handleOpen: (row: OrderRecord) => Promise<void> }>()
   const deleteGuardRef = ref<MasterDataDeleteGuardExpose>()
   const statusCountRequestId = ref(0)
@@ -438,9 +440,11 @@
         label: '调度方式',
         minWidth: 120,
         formatter: (row) =>
-          row.executionKind === 'return_trip' || row.hasReturnTrip
-            ? '返程配货'
-            : { single: '正向货配载', merge: '合单', split: '拆单' }[row.executionKind || 'single']
+          row.returnSourceOrderId
+            ? '返程配载'
+            : { single: '正向配载', merge: '合单', split: '拆单', return_trip: '返程配载' }[
+                row.executionKind || 'single'
+              ]
       },
       {
         prop: 'dispatchMode',
@@ -655,14 +659,27 @@
         label: '返程收益预估',
         icon: 'ri:line-chart-line',
         auth: 'TmsOrderList:View',
-        disabled: !row.hasReturnTrip
+        disabled: !row.id
       },
       {
         key: 'returnTrip',
-        label: '新增返程配货',
+        label: '新增返程配载',
         icon: 'ri:arrow-go-back-line',
         auth: 'TmsOrderList:AddReturnTrip',
-        disabled: !row.id || String(row.orderStatus || '') === 'cancelled'
+        disabled:
+          !row.id ||
+          Boolean(row.returnSourceOrderId) ||
+          String(row.orderStatus || '') === 'cancelled'
+      },
+      {
+        key: 'emptyReturn',
+        label: '新增返程空载',
+        icon: 'ri:truck-line',
+        auth: 'TmsOrderList:AddReturnTrip',
+        disabled:
+          !row.id ||
+          Boolean(row.returnSourceOrderId) ||
+          String(row.orderStatus || '') === 'cancelled'
       },
       {
         key: 'waybillExpense',
@@ -709,6 +726,7 @@
       quote: () => openQuote(row),
       returnTripSummary: () => void returnTripSummaryDialogRef.value?.handleOpen(row),
       returnTrip: () => void returnTripDrawerRef.value?.handleOpen(row),
+      emptyReturn: () => void returnTripDrawerRef.value?.handleOpen(row, 'empty'),
       waybillExpense: () => openWaybillExpense(row),
       edit: () => openOrderEdit(row),
       freight: () => openFreight(row),
