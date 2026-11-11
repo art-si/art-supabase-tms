@@ -459,7 +459,12 @@
       },
       { prop: 'dispatchBy', label: '调度操作人', minWidth: 120, showOverflowTooltip: true },
       { prop: 'dispatchDriverName', label: '司机', minWidth: 110, showOverflowTooltip: true },
-      { prop: 'driverOwnership', label: '司机归属', minWidth: 110, showOverflowTooltip: true },
+      {
+        prop: 'driverOwnership',
+        label: '司机归属',
+        minWidth: 110,
+        dict: { code: 'tmsDriverOwnership', display: 'text' }
+      },
       { prop: 'dispatchPlateNo', label: '车牌号', minWidth: 120, showOverflowTooltip: true },
       { prop: 'carrierName', label: '所属承运商', minWidth: 150, showOverflowTooltip: true },
       { prop: 'companyName', label: '所属公司', minWidth: 150, showOverflowTooltip: true },
