@@ -173,12 +173,12 @@
     white-space: pre-wrap;
   }
 
-  :deep(.art-descriptions .el-descriptions__label) {
+  .art-descriptions .el-descriptions__label {
     width: 128px;
     font-weight: 600;
   }
 
-  :deep(.art-table) {
+  .art-table {
     min-width: 0;
   }
 
@@ -239,7 +239,7 @@
       padding: var(--art-space-3);
     }
 
-    :deep(.art-descriptions .el-descriptions__label) {
+    .art-descriptions .el-descriptions__label {
       width: 108px;
     }
   }

@@ -8,8 +8,8 @@ import {
   fetchExecutionSources,
   submitDispatchPlan
 } from '@tms/api/modules/dispatch-execution'
-import { isPlainObject } from 'lodash-es'
 import { buildSupabaseRpcRange, normalizeSupabaseFunctionError } from '@/utils/supabase'
+import { isPlainObjectRecord } from '@/utils/type-guards'
 
 type WaybillRecord = Api.Tms.Waybill.WaybillRecord
 type WaybillSearchParams = Api.Tms.Waybill.WaybillSearchParams
@@ -71,7 +71,7 @@ export async function fetchWaybillDetail(waybillId: string) {
       receiptAttachments: normalizeUrlList(data.receiptAttachments),
       events: (data.events ?? []).map((event) => ({
         ...event,
-        payload: isPlainObject(event.payload) ? event.payload : {}
+        payload: isPlainObjectRecord(event.payload) ? event.payload : {}
       })),
       proofs: data.proofs ?? [],
       cargoOperations: data.cargoOperations ?? [],
@@ -88,7 +88,7 @@ export async function fetchWaybillDetail(waybillId: string) {
 function normalizeWaybillRoutePoints(value: unknown): Api.Tms.Waybill.WaybillRoutePoint[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((item) => {
-    if (!isPlainObject(item)) return []
+    if (!isPlainObjectRecord(item)) return []
     const coordinate = normalizeCoordinatePair(
       item.longitude ?? item.lng,
       item.latitude ?? item.lat
@@ -162,7 +162,7 @@ function normalizeUrlList(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((item) => {
     if (typeof item === 'string') return item.trim() ? [item.trim()] : []
-    if (!isPlainObject(item) || typeof item.url !== 'string') return []
+    if (!isPlainObjectRecord(item) || typeof item.url !== 'string') return []
     const url = item.url.trim()
     return url ? [url] : []
   })

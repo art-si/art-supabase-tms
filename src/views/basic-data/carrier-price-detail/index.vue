@@ -117,6 +117,7 @@
 </template>
 
 <script setup lang="ts">
+  import '../modules/rate-card-detail.scss'
   import { formatAuditActorName } from '@/utils/business/audit-actor-display'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import ArtDescriptions from '@/components/core/base/art-descriptions/index.vue'
@@ -406,5 +407,3 @@
     }))
   }
 </script>
-
-<style scoped lang="scss" src="../modules/rate-card-detail.scss"></style>

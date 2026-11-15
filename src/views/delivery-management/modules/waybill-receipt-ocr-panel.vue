@@ -1,11 +1,13 @@
 <template>
-  <ArtSectionCard class="receipt-ocr" preserve-content-structure>
+  <ArtSectionCard class="receipt-ocr art-ai-ocr-surface" preserve-content-structure>
     <template #header>
       <header class="receipt-ocr__header">
         <div class="receipt-ocr__identity">
-          <span class="receipt-ocr__icon"><ArtSvgIcon icon="ri-file-search-line" /></span>
+          <span class="receipt-ocr__icon art-ai-ocr-surface__icon">
+            <ArtSvgIcon icon="ri-file-search-line" />
+          </span>
           <div>
-            <span class="receipt-ocr__eyebrow">AI 回单核验</span>
+            <span class="receipt-ocr__eyebrow art-ai-ocr-surface__eyebrow">AI 回单核验</span>
             <h3>识别签收信息与异常</h3>
             <p>核对运单号、时间、货量及破损、少货、拒收等风险。</p>
           </div>
@@ -141,6 +143,7 @@
 </template>
 
 <script setup lang="ts">
+  import '@styles/core/ai-ocr-surface.scss'
   import { normalizeNullableText } from '@/utils/form/normalize'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
@@ -351,8 +354,6 @@
   @use '@/assets/styles/core/ai-surface-mixins' as ai;
 
   .receipt-ocr {
-    @include ai.surface;
-
     padding: 16px;
     margin-bottom: 16px;
 
@@ -388,14 +389,6 @@
         font-size: 12px;
         color: var(--el-text-color-secondary);
       }
-    }
-
-    &__icon {
-      @include ai.identity-icon(38px, 19px);
-    }
-
-    &__eyebrow {
-      @include ai.eyebrow;
     }
 
     &__context {

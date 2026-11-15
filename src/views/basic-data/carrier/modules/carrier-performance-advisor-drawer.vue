@@ -10,17 +10,22 @@
       </div>
     </template>
 
-    <div class="carrier-advisor">
+    <div class="carrier-advisor art-ai-advisor">
       <template v-if="assessment">
-        <section class="carrier-advisor__hero art-card-xs" :class="`is-${assessment.riskLevel}`">
-          <header class="carrier-advisor__hero-header">
-            <div class="carrier-advisor__hero-main">
-              <span class="carrier-advisor__hero-icon">
+        <section
+          class="carrier-advisor__hero art-card-xs art-ai-advisor__hero"
+          :class="`is-${assessment.riskLevel}`"
+        >
+          <header class="carrier-advisor__hero-header art-ai-advisor__hero-header">
+            <div class="carrier-advisor__hero-main art-ai-advisor__hero-main">
+              <span class="carrier-advisor__hero-icon art-ai-advisor__hero-icon">
                 <ArtSvgIcon :icon="riskIcon" />
               </span>
               <div>
-                <span class="carrier-advisor__eyebrow"><i />AI PERFORMANCE REVIEW</span>
-                <div class="carrier-advisor__title-row">
+                <span class="carrier-advisor__eyebrow art-ai-advisor__eyebrow"
+                  ><i />AI PERFORMANCE REVIEW</span
+                >
+                <div class="carrier-advisor__title-row art-ai-advisor__title-row">
                   <strong>{{ assessment.companyName }}</strong>
                   <ElTag :type="riskTagType" effect="light">{{ riskLabel }}</ElTag>
                   <ElTag type="info" effect="plain">{{ strategyLabel }}</ElTag>
@@ -33,7 +38,7 @@
             </ElButton>
           </header>
 
-          <div class="carrier-advisor__scores">
+          <div class="carrier-advisor__scores art-ai-advisor__scores">
             <article>
               <header
                 ><span>经营表现</span><strong>{{ assessment.performanceScore }}</strong></header
@@ -74,9 +79,12 @@
               <ArtSvgIcon icon="ri:dashboard-3-line" />经营快照
             </span>
           </ArtSectionTitle>
-          <div class="carrier-advisor__metrics">
+          <div class="carrier-advisor__metrics art-ai-advisor__metrics">
             <article v-for="metric in metricCards" :key="metric.label" class="art-card-xs">
-              <span class="carrier-advisor__metric-icon" :class="metric.tone">
+              <span
+                class="carrier-advisor__metric-icon art-ai-advisor__metric-icon"
+                :class="metric.tone"
+              >
                 <ArtSvgIcon :icon="metric.icon" />
               </span>
               <div>
@@ -98,7 +106,7 @@
             <article
               v-for="signal in assessment.signals"
               :key="signal.type"
-              class="carrier-advisor__signal art-card-xs"
+              class="carrier-advisor__signal art-card-xs art-ai-advisor__signal"
               :class="`is-${signal.severity}`"
             >
               <header>
@@ -139,7 +147,9 @@
             >
               <header>
                 <div>
-                  <span class="carrier-advisor__risk-score">{{ waybill.riskScore }}</span>
+                  <span class="carrier-advisor__risk-score art-ai-advisor__risk-score">{{
+                    waybill.riskScore
+                  }}</span>
                   <div>
                     <strong>{{ waybill.waybillNo }}</strong>
                     <p><ArtSvgIcon icon="ri:route-line" />{{ waybill.route }}</p>
@@ -177,7 +187,7 @@
               <ArtSvgIcon icon="ri:task-line" />建议动作
             </span>
           </ArtSectionTitle>
-          <ol class="carrier-advisor__actions art-card-xs">
+          <ol class="carrier-advisor__actions art-card-xs art-ai-advisor__actions">
             <li v-for="(action, index) in assessment.recommendedActions" :key="action">
               <span>{{ index + 1 }}</span>
               <p>{{ action }}</p>
@@ -191,7 +201,7 @@
               <ArtSvgIcon icon="ri:shield-check-line" />判断边界
             </span>
           </ArtSectionTitle>
-          <div class="carrier-advisor__limitations art-card-xs">
+          <div class="carrier-advisor__limitations art-card-xs art-ai-advisor__limitations">
             <p v-for="item in assessment.limitations" :key="item">
               <ArtSvgIcon icon="ri:checkbox-circle-line" /><span>{{ item }}</span>
             </p>
@@ -230,6 +240,7 @@
 </template>
 
 <script setup lang="ts">
+  import '@styles/core/ai-advisor-layout.scss'
   import {
     formatCnyCurrencyValue as formatMoney,
     formatPercentValue as formatPercent
@@ -451,8 +462,6 @@
 </script>
 
 <style scoped lang="scss">
-  @use '@/assets/styles/core/ai-surface-mixins' as ai;
-
   .carrier-advisor {
     min-width: 0;
 
@@ -487,42 +496,12 @@
     }
 
     &__hero {
-      position: relative;
       padding: 20px;
-      overflow: hidden;
       background:
         radial-gradient(circle at 86% 10%, rgb(59 130 246 / 12%), transparent 28%),
         var(--default-box-color);
-
-      &::before {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 4px;
-        height: 100%;
-        content: '';
-        background: var(--el-color-primary);
-      }
-
-      &.is-critical::before,
-      &.is-high::before {
-        background: var(--el-color-danger);
-      }
-
-      &.is-medium::before {
-        background: var(--el-color-warning);
-      }
-
-      &.is-low::before {
-        background: var(--el-color-success);
-      }
     }
 
-    &__hero-header,
-    &__hero-main,
-    &__title-row,
-    &__signal header,
-    &__signal header > div,
     &__waybills article header,
     &__waybills article header > div,
     &__evidence,
@@ -532,107 +511,26 @@
       align-items: center;
     }
 
-    &__hero-header,
-    &__signal header,
     &__waybills article header {
       justify-content: space-between;
     }
 
-    &__hero-main {
-      gap: 14px;
-      min-width: 0;
-
-      > div {
-        min-width: 0;
-      }
-
-      p {
-        margin: 6px 0 0;
-        color: var(--el-text-color-secondary);
-      }
-    }
-
     &__hero-icon {
-      display: grid;
       flex: 0 0 52px;
-      place-items: center;
       width: 52px;
       height: 52px;
-      color: var(--el-color-primary);
-      background: var(--el-color-primary-light-9);
-      border-radius: var(--custom-radius);
-
-      :deep(svg) {
-        width: 25px;
-        height: 25px;
-      }
     }
 
     &__eyebrow {
-      display: inline-flex;
-      gap: 6px;
-      align-items: center;
       font-size: 10px;
-      font-weight: 700;
-      color: var(--el-color-primary);
-      letter-spacing: 0.13em;
-
-      i {
-        width: 6px;
-        height: 6px;
-        background: var(--el-color-success);
-        border-radius: 50%;
-      }
-    }
-
-    &__title-row {
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 4px;
-
-      > strong {
-        margin-right: 3px;
-        font-size: 19px;
-        color: var(--el-text-color-primary);
-      }
     }
 
     &__scores {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 12px;
-      margin-top: 18px;
-
       article {
-        min-width: 0;
-        padding: 13px 14px;
         background: color-mix(in srgb, var(--default-box-color) 95%, var(--el-color-primary));
-        border-radius: var(--el-border-radius-base);
-
-        header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 9px;
-        }
-
-        span,
-        small {
-          color: var(--el-text-color-secondary);
-        }
-
-        strong {
-          font-size: 20px;
-          color: var(--el-text-color-primary);
-        }
 
         small {
-          display: block;
-          margin-top: 7px;
-          overflow: hidden;
-          text-overflow: ellipsis;
           font-size: 11px;
-          white-space: nowrap;
         }
       }
     }
@@ -649,53 +547,14 @@
     }
 
     &__metrics {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
-
       article {
-        display: flex;
-        gap: 12px;
-        align-items: center;
-        min-width: 0;
-        padding: 14px;
-
-        > div {
-          min-width: 0;
-        }
-
-        span,
-        strong,
         small {
-          display: block;
-        }
-
-        span,
-        small {
-          color: var(--el-text-color-secondary);
-        }
-
-        strong {
-          margin: 3px 0;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          font-size: 16px;
-          color: var(--el-text-color-primary);
-          white-space: nowrap;
-        }
-
-        small {
-          overflow: hidden;
-          text-overflow: ellipsis;
           font-size: 11px;
-          white-space: nowrap;
         }
       }
     }
 
     &__metric-icon {
-      @include ai.metric-icon-badge;
-
       &.is-success {
         color: var(--el-color-success) !important;
         background: var(--el-color-success-light-9);
@@ -719,45 +578,7 @@
     }
 
     &__signal {
-      position: relative;
       min-width: 0;
-      padding: 15px 16px;
-      overflow: hidden;
-
-      &::before {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 3px;
-        height: 100%;
-        content: '';
-        background: var(--el-color-warning);
-      }
-
-      &.is-critical::before,
-      &.is-high::before {
-        background: var(--el-color-danger);
-      }
-
-      header > div {
-        gap: 9px;
-
-        > span {
-          display: grid;
-          place-items: center;
-          width: 30px;
-          height: 30px;
-          color: var(--el-color-danger);
-          background: var(--el-color-danger-light-9);
-          border-radius: var(--el-border-radius-base);
-        }
-      }
-
-      p {
-        margin: 10px 0;
-        line-height: 1.65;
-        color: var(--el-text-color-secondary);
-      }
     }
 
     &__evidence,
@@ -847,10 +668,6 @@
       }
     }
 
-    &__risk-score {
-      @include ai.risk-score-badge;
-    }
-
     &__waybill-meta {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -888,24 +705,8 @@
 
     &__actions {
       padding: 4px 18px;
-      margin: 0;
-      list-style: none;
 
       li {
-        display: grid;
-        grid-template-columns: 30px minmax(0, 1fr);
-        gap: 12px;
-        align-items: center;
-        padding: 13px 0;
-
-        & + li {
-          border-top: 1px dashed var(--el-border-color-lighter);
-        }
-
-        > span {
-          @include ai.numbered-step-marker;
-        }
-
         p {
           margin: 0;
           line-height: 1.6;
@@ -918,22 +719,7 @@
       padding: 12px 16px;
 
       p {
-        display: flex;
-        gap: 8px;
-        align-items: flex-start;
-        margin: 0;
-        line-height: 1.6;
         color: var(--el-text-color-secondary);
-
-        & + p {
-          margin-top: 8px;
-        }
-
-        :deep(svg) {
-          flex: 0 0 auto;
-          margin-top: 3px;
-          color: var(--el-color-primary);
-        }
       }
     }
 
@@ -958,8 +744,8 @@
     }
 
     @media (width <= 760px) {
-      &__scores,
-      &__metrics,
+      --art-ai-advisor-summary-columns: 1fr;
+
       &__signals,
       &__waybills {
         grid-template-columns: 1fr;
@@ -967,16 +753,6 @@
     }
 
     @media (width <= 480px) {
-      &__hero-header,
-      &__hero-main {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
-      &__hero-header :deep(.el-button) {
-        width: 100%;
-      }
-
       &__waybill-meta {
         grid-template-columns: 1fr;
       }

@@ -71,7 +71,7 @@
   import CargoMultipleSelect from '@tms/views/modules/cargo-multiple-select.vue'
   import { mergeContractCargoSelections } from './contract-cargo-selection'
   import { formatSensitiveNumber } from '@/utils/field-permission'
-  import { getDictionaryDisplayLabel } from '@/utils/form/option'
+  import type { DictionarySelectOption } from '@/hooks/core/useDictionaryOptions'
 
   defineOptions({ name: 'ContractTransportDetails' })
 
@@ -88,7 +88,7 @@
 
   interface Props {
     modelValue: ContractTransportDetail[]
-    unitOptions: Api.DataCenter.DictListItem[]
+    unitOptions: DictionarySelectOption[]
     pricingAccess: Api.Tms.BasicData.FieldAccessLevel
     editable: boolean
   }
@@ -221,11 +221,7 @@
           onChange={() => updateDetail(row, { unit: row.unit })}
         >
           {props.unitOptions.map((item) => (
-            <ElOption
-              key={item.value}
-              label={getDictionaryDisplayLabel(item, item.value)}
-              value={item.value}
-            />
+            <ElOption key={item.value} label={item.label} value={item.value} />
           ))}
         </ElSelect>
       )

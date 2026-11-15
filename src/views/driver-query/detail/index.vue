@@ -223,18 +223,13 @@
               <ArtTable
                 :data="relations"
                 :columns="visibleRelationColumns"
-                :pagination="false"
+                :loading="relationsLoading"
+                :loading-overlay="false"
+                :pagination="relationPagination"
+                :pagination-options="{ layout: 'prev, pager, next, total', align: 'right' }"
                 :row-key="relationRowKey"
+                @pagination:current-change="changeRelationPage"
               />
-              <div v-if="relationTotal > relationPageSize" class="mt-4 flex justify-end">
-                <ElPagination
-                  v-model:current-page="relationPage"
-                  :page-size="relationPageSize"
-                  :total="relationTotal"
-                  layout="total, prev, pager, next"
-                  @current-change="loadRelations"
-                />
-              </div>
             </ArtSectionCard>
           </div>
         </ElTabPane>
@@ -395,6 +390,14 @@
   const relationTotal = ref(0)
   const relationPage = ref(1)
   const relationPageSize = 20
+  const relationPagination = computed(
+    () =>
+      relationTotal.value > relationPageSize && {
+        current: relationPage.value,
+        size: relationPageSize,
+        total: relationTotal.value
+      }
+  )
   const relationRowKey = (row: TransportMainlineRelation): string =>
     `${row.orderId}:${row.waybillId || 'pending'}`
   const relationsLoading = ref(false)
@@ -959,6 +962,12 @@
     }
   }
 
+  function changeRelationPage(page: number): void {
+    if (relationPage.value === page) return
+    relationPage.value = page
+    void loadRelations()
+  }
+
   const loadCurrentRelations = async (): Promise<void> => {
     const driverId = driver.value?.id
     if (!driverId) return
@@ -1071,6 +1080,7 @@
       qualificationRequestId++
       trainingRequestId++
       relationPage.value = 1
+      relationTotal.value = 0
       relations.value = []
       relationRequestId++
       safety.violation = newSafetyState()

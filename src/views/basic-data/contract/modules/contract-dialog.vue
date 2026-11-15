@@ -134,6 +134,7 @@
     submitContractForApproval
   } from '@tms/api'
   import { useUserStore } from '@/store/modules/user'
+  import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
   import { getFileExtension } from '@/utils/file'
   import { canEditField, canViewField, getFieldAccess } from '@/utils/field-permission'
   import { usesCarrierParty } from './contract-business-type'
@@ -210,9 +211,9 @@
   const contractCategoryOptions = computed(() => getDictMap.value.tmsContractCategory ?? [])
   const businessTypeOptions = computed(() => getDictMap.value.tmsContractBusinessType ?? [])
   const transportModeOptions = computed(() => getDictMap.value.tmsContractTransportMode ?? [])
-  const cargoUnitOptions = computed(() => getDictMap.value.tmsCargoUnit ?? [])
+  const cargoUnitOptions = useDictionaryOptions('tmsCargoUnit')
   const billingUnitOptions = computed(() =>
-    cargoUnitOptions.value.filter((item) => {
+    cargoUnitOptions.filter((item) => {
       if (form.data.billingMethod === 'by_weight') return ['kg', 'ton'].includes(item.value)
       if (form.data.billingMethod === 'by_volume')
         return ['cubic_meter', 'liter'].includes(item.value)
@@ -1086,11 +1087,11 @@
       :deep(.el-select .el-input__wrapper),
       :deep(.el-date-editor .el-input__wrapper),
       :deep(.el-input-number .el-input__wrapper) {
-        background: transparent;
-        box-shadow: none;
-        border-radius: 0;
         padding-right: 0;
         padding-left: 0;
+        background: transparent;
+        border-radius: 0;
+        box-shadow: none;
       }
 
       :deep(.el-input.is-disabled .el-input__inner),

@@ -120,6 +120,7 @@
 </template>
 
 <script setup lang="ts">
+  import '../modules/rate-card-detail.scss'
   import { formatAuditActorName } from '@/utils/business/audit-actor-display'
   import { formatCoordinateValue } from '@/utils/ui/coordinates'
   import { getDictionaryDisplayLabel } from '@/utils/form/option'
@@ -449,5 +450,3 @@
     }))
   }
 </script>
-
-<style scoped lang="scss" src="../modules/rate-card-detail.scss"></style>

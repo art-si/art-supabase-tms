@@ -992,11 +992,8 @@
   .tms-contract {
     :deep(.tms-contract__code-link) {
       display: inline-block;
-      padding: 0;
-      border: 0;
-      background: transparent;
-      cursor: pointer;
       max-width: 100%;
+      padding: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       font-weight: 600;
@@ -1004,6 +1001,9 @@
       color: var(--el-color-primary);
       white-space: nowrap;
       text-decoration: none;
+      cursor: pointer;
+      background: transparent;
+      border: 0;
 
       &:hover {
         color: var(--el-color-primary-dark-2);

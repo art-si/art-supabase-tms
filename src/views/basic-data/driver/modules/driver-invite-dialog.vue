@@ -228,12 +228,12 @@
     &__recent {
       display: grid;
       gap: 10px;
-      margin-top: 16px;
       padding: 14px;
-      background: var(--art-gray-100);
-      border-radius: var(--art-surface-radius);
+      margin-top: 16px;
       font-size: 12px;
       color: var(--art-gray-700);
+      background: var(--art-gray-100);
+      border-radius: var(--art-surface-radius);
     }
 
     &__recent-heading {
@@ -252,6 +252,8 @@
 
     &__recent-row {
       display: flex;
+      gap: 12px;
+      justify-content: space-between;
       width: 100%;
       padding: 8px 0;
       color: var(--art-gray-800);
@@ -260,8 +262,6 @@
       background: transparent;
       border: 0;
       border-bottom: 1px solid var(--art-gray-200);
-      gap: 12px;
-      justify-content: space-between;
 
       &:last-child {
         border-bottom: 0;
@@ -321,8 +321,8 @@
       }
 
       p {
-        margin: 0;
         padding: 0 4px;
+        margin: 0;
         color: var(--art-gray-700);
       }
     }
