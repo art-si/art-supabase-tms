@@ -67,47 +67,56 @@
                 添加费用
               </ElButton>
             </template>
-            <ArtTable
-              v-if="form.supplementaryItems.length"
-              ref="expenseTableRef"
-              :data="form.supplementaryItems"
-              :columns="expenseColumns"
-              row-key="code"
-              :height="form.supplementaryItems.length > 5 ? 320 : undefined"
-            >
-              <template #code="{ row }">
-                <div class="min-w-0 py-1 leading-5">
-                  <div class="break-words font-medium text-[var(--art-gray-900)]">
-                    {{ expenseLabel(row.code) }}
+            <div v-if="form.supplementaryItems.length" class="quote-dialog__expenses">
+              <ArtTable
+                ref="expenseTableRef"
+                :data="form.supplementaryItems"
+                :columns="expenseColumns"
+                row-key="code"
+                :height="form.supplementaryItems.length > 5 ? 320 : undefined"
+              >
+                <template #code="{ row }">
+                  <div class="min-w-0 py-1 leading-5">
+                    <div class="break-words font-medium text-[var(--art-gray-900)]">
+                      {{ expenseLabel(row.code) }}
+                    </div>
+                    <div class="break-all text-xs text-[var(--art-gray-700)]">
+                      {{ expenseCode(row.code) }}
+                    </div>
                   </div>
-                  <div class="break-all text-xs text-[var(--art-gray-700)]">
-                    {{ expenseCode(row.code) }}
-                  </div>
-                </div>
-              </template>
-              <template #amount="{ row }"
-                ><ElInputNumber
-                  v-model="row.amount"
-                  v-bind="moneyProps"
-                  placeholder="请输入金额"
-                  :aria-label="expenseLabel(row.code) + '金额（元）'"
-              /></template>
-              <template #remark="{ row }"
-                ><ElInput
-                  v-model="row.remark"
-                  maxlength="200"
-                  :aria-label="expenseLabel(row.code) + '备注'"
-                  placeholder="费用说明（选填）"
-              /></template>
-              <template #operation="{ row }"
-                ><ArtIconButton
-                  v-auth="'TmsOrderList:Quote'"
-                  icon="ri:delete-bin-line"
-                  tone="danger"
-                  :label="'移除' + expenseLabel(row.code)"
-                  @click="removeExpenseItem(row.code)"
-              /></template>
-            </ArtTable>
+                </template>
+                <template #amount="{ row }">
+                  <span class="quote-dialog__expense-label" aria-hidden="true">
+                    <span class="art-table__required-marker">*</span>金额（元）
+                  </span>
+                  <ElInputNumber
+                    v-model="row.amount"
+                    v-bind="moneyProps"
+                    placeholder="请输入金额"
+                    :aria-label="expenseLabel(row.code) + '金额（元）'"
+                  />
+                </template>
+                <template #remark="{ row }">
+                  <span class="quote-dialog__expense-label" aria-hidden="true">费用说明</span>
+                  <ElInput
+                    v-model="row.remark"
+                    maxlength="200"
+                    :aria-label="expenseLabel(row.code) + '备注'"
+                    placeholder="费用说明（选填）"
+                  />
+                </template>
+                <template #operation="{ row }">
+                  <ArtIconButton
+                    v-auth="'TmsOrderList:Quote'"
+                    class="quote-dialog__expense-remove"
+                    icon="ri:delete-bin-line"
+                    tone="danger"
+                    :label="'移除' + expenseLabel(row.code)"
+                    @click="removeExpenseItem(row.code)"
+                  />
+                </template>
+              </ArtTable>
+            </div>
             <template #footer>
               <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
                 <span class="text-[var(--art-gray-700)]">
@@ -172,7 +181,7 @@
           v-auth="'TmsOrderList:Quote'"
           :loading="loading && submitMode === 'save'"
           :disabled="loading || reloadLoading || loadError || !order || quoteLocked"
-          @click="handleFooterConfirm(api, 'save')"
+          @click="handleFooterConfirm(api, 'save', $event)"
         >
           保存报价
         </ElButton>
@@ -181,7 +190,7 @@
           type="primary"
           :loading="loading && submitMode === 'submit'"
           :disabled="loading || reloadLoading || loadError || !order || quoteLocked"
-          @click="handleFooterConfirm(api, 'submit')"
+          @click="handleFooterConfirm(api, 'submit', $event)"
         >
           提交报价
         </ElButton>
@@ -343,11 +352,18 @@
     ])
   )
   const expenseColumns: ColumnOption<EditableItem>[] = [
-    { prop: 'code', label: '费用项目', minWidth: 150, useSlot: true },
+    {
+      prop: 'code',
+      label: '费用项目',
+      minWidth: 150,
+      className: 'quote-dialog__expense-name',
+      useSlot: true
+    },
     {
       prop: 'amount',
       label: '金额（元）',
       width: 165,
+      className: 'quote-dialog__expense-amount',
       useSlot: true,
       required: true,
       headerTooltip: '金额须为非负数，最多保留两位小数；计入本次报价总额。',
@@ -357,7 +373,13 @@
           '第 ' + (rowIndex + 1) + ' 项补充费用须为非负数，最多保留两位小数'
       }
     },
-    { prop: 'remark', label: '费用说明', minWidth: 220, useSlot: true },
+    {
+      prop: 'remark',
+      label: '费用说明',
+      minWidth: 220,
+      className: 'quote-dialog__expense-remark',
+      useSlot: true
+    },
     { prop: 'operation', label: '操作', width: 68, fixed: 'right', useSlot: true }
   ]
 
@@ -556,10 +578,10 @@
     }
   }
 
-  function handleFooterConfirm(api: FooterApi, mode: SubmitMode): void {
+  function handleFooterConfirm(api: FooterApi, mode: SubmitMode, event: MouseEvent): void {
     if (api.confirmLoading.value || reloadLoading.value) return
     submitMode.value = mode
-    void api.handleConfirm()
+    void api.handleConfirm(event)
   }
 
   async function handleOpen(row: OrderRecord): Promise<void> {
@@ -603,6 +625,96 @@
 
     :deep(.el-form-item--label-top .el-form-item__label) {
       margin-bottom: var(--art-space-1);
+    }
+  }
+
+  .quote-dialog__expenses {
+    container: quote-expenses / inline-size;
+  }
+
+  .quote-dialog__expense-label {
+    display: none;
+  }
+
+  // 四列不足以并排时改变单元格排布，保留原字段、验证位置和键盘顺序。
+  @container quote-expenses (width < 603px) {
+    .quote-dialog__expenses {
+      :deep(.el-table__header-wrapper),
+      :deep(.el-table__body > colgroup) {
+        display: none;
+      }
+
+      :deep(.el-table__body-wrapper .el-scrollbar__view) {
+        width: 100%;
+      }
+
+      :deep(.el-table__body),
+      :deep(.el-table__body > tbody) {
+        display: block;
+        width: 100% !important;
+      }
+
+      :deep(.el-table__body .el-table__row) {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) var(--art-space-6);
+        gap: var(--art-space-2);
+        padding: var(--art-space-3);
+        border-bottom: 1px solid var(--el-border-color-lighter);
+
+        > .el-table__cell {
+          min-width: 0;
+          padding: 0;
+          border: 0;
+
+          > .cell {
+            // Element Plus assigns the original column width inline for overflow tooltips.
+            width: 100% !important;
+            padding: 0;
+          }
+        }
+
+        > :is(.quote-dialog__expense-name, .quote-dialog__expense-amount) {
+          grid-column: 1 / -1;
+        }
+
+        > .quote-dialog__expense-name .art-table__cell-value {
+          white-space: normal;
+        }
+
+        > .quote-dialog__expense-amount .el-input-number {
+          width: 100%;
+        }
+
+        > .art-table-operation-column {
+          position: static !important;
+          align-self: end;
+
+          &::before {
+            display: none;
+          }
+        }
+
+        .quote-dialog__expense-remove {
+          width: var(--art-space-6);
+          height: var(--art-space-6);
+        }
+
+        &:not(:has(.quote-dialog__expense-remove)) {
+          > .quote-dialog__expense-remark {
+            grid-column: 1 / -1;
+          }
+
+          > .art-table-operation-column {
+            display: none;
+          }
+        }
+      }
+
+      .quote-dialog__expense-label {
+        display: block;
+        margin-bottom: var(--art-space-1);
+        color: var(--el-text-color-regular);
+      }
     }
   }
 </style>

@@ -1,10 +1,7 @@
 <template>
   <div
-    :class="
-      embedded
-        ? 'customer-price flex h-[460px] min-w-0 flex-col'
-        : 'business-workspace-page art-full-height customer-price'
-    "
+    class="customer-price"
+    :class="embedded ? CUSTOMER_RELATED_WORKSPACE_CLASS : 'business-workspace-page art-full-height'"
   >
     <BusinessWorkspaceHeader
       v-if="!embedded"
@@ -38,7 +35,9 @@
       :columns-factory="columnsFactory"
       :header-actions="headerActions"
       :header-actions-placement="embedded ? 'table' : 'workspace'"
-      :search-bar-props="{ span: 6, labelWidth: 86, showExpand: false }"
+      :search-bar-props="
+        embedded ? CUSTOMER_RELATED_FILTER_LAYOUT : { span: 6, labelWidth: 86, showExpand: false }
+      "
       :table-props="{
         tableLayout: 'fixed',
         fit: false,
@@ -57,6 +56,10 @@
   import { normalizePriceRegionSearch } from '../modules/price-form-utils'
   import { formatRateDistanceKm, formatRateEffectivePeriod } from '../modules/rate-card-detail'
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
+  import {
+    CUSTOMER_RELATED_FILTER_LAYOUT,
+    CUSTOMER_RELATED_WORKSPACE_CLASS
+  } from '../customer/modules/related-workspace-layout'
   import type {
     ArtTableQueryExpose,
     ArtTableQueryExcelColumn,
@@ -262,22 +265,23 @@
       }
     },
     {
+      label: '关键词',
+      key: 'keyword',
+      type: 'input',
+      props: { clearable: true, placeholder: '请输入关键词' }
+    },
+    {
       label: '创建日期',
       key: 'createTimeRange',
       type: 'date',
+      span: props.embedded ? 12 : 6,
       props: {
         type: 'daterange',
         valueFormat: 'YYYY-MM-DD',
-        startPlaceholder: '请选择日期',
-        endPlaceholder: '请选择日期',
-        rangeSeparator: '~'
+        startPlaceholder: '开始日期',
+        endPlaceholder: '结束日期',
+        rangeSeparator: '至'
       }
-    },
-    {
-      label: '',
-      key: 'keyword',
-      type: 'input',
-      props: { clearable: true, placeholder: '请输入关键词搜索' }
     }
   ])
 

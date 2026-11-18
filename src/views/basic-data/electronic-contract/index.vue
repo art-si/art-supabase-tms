@@ -1,8 +1,6 @@
 <template>
   <div
-    :class="
-      embedded ? 'flex h-[460px] min-w-0 flex-col' : 'business-workspace-page art-full-height'
-    "
+    :class="embedded ? CUSTOMER_RELATED_WORKSPACE_CLASS : 'business-workspace-page art-full-height'"
   >
     <BusinessWorkspaceHeader
       v-if="!embedded"
@@ -25,7 +23,9 @@
       :columns-factory="columnsFactory"
       :header-actions="headerActions"
       :header-actions-placement="embedded ? 'table' : 'workspace'"
-      :search-bar-props="{ span: 8, labelWidth: 82, showExpand: false }"
+      :search-bar-props="
+        embedded ? CUSTOMER_RELATED_FILTER_LAYOUT : { span: 8, labelWidth: 82, showExpand: false }
+      "
       :table-props="{
         rowKey: 'id',
         emptyText: '暂无电子合同',
@@ -54,7 +54,7 @@
       "
     >
       <template v-if="detail">
-        <ElTabs v-model="activeDetailTab">
+        <ElTabs v-model="activeDetailTab" class="art-card-xs art-overlay-tab-card">
           <ElTabPane name="identity" label="合同摘要">
             <ArtDescriptions :data="detail" :items="detailItems" :columns="3" />
           </ElTabPane>
@@ -115,6 +115,10 @@
   import type { ContractDocument } from '@/components/business/contract-document-preview/types'
   import ContractSigningDialog from '@/components/business/contract-signing-dialog/index.vue'
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
+  import {
+    CUSTOMER_RELATED_FILTER_LAYOUT,
+    CUSTOMER_RELATED_WORKSPACE_CLASS
+  } from '../customer/modules/related-workspace-layout'
   import type {
     ArtTableQueryExpose,
     ArtTableQueryHeaderAction

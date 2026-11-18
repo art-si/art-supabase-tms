@@ -176,7 +176,7 @@
       label: '关键词',
       key: 'keyword',
       type: 'input',
-      props: { clearable: true, placeholder: '地址简称、收发货方、联系人或地址' }
+      props: { clearable: true, placeholder: '地址/收发方/姓名' }
     }
   ])
 

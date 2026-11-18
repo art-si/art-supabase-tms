@@ -1852,7 +1852,9 @@
   }
 
   function formatStationOption(option: Record<string, unknown>): string {
-    return formatNameCodeOption(option, 'stationName', 'regionCode')
+    const nameWithRegion = formatNameCodeOption(option, 'stationName', 'regionCode')
+    const code = typeof option.stationCode === 'string' ? option.stationCode.trim() : ''
+    return code ? `${code} · ${nameWithRegion}` : nameWithRegion
   }
 
   function findStationOption(

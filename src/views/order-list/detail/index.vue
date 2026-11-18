@@ -44,14 +44,26 @@
       </div>
     </section>
 
-    <ElTabs v-model="activeTab" class="order-detail__tabs" aria-label="运单详情分类">
-      <ElTabPane label="运单收发信息" name="contacts">
-        <ArtSectionCard
+    <ElTabs
+      v-model="activeTab"
+      class="order-detail__tabs"
+      :class="{ 'art-card-xs art-overlay-tab-card mb-3': embedded }"
+      aria-label="运单详情分类"
+    >
+      <ElTabPane label="运单收发信息" name="contacts" :class="{ 'space-y-4': embedded }">
+        <component
+          :is="detailSection"
           v-if="detail.relatedWaybills.length"
-          class="order-detail__section order-detail__waybills"
-          preserve-content-structure
+          :class="[detailSectionClass, 'order-detail__waybills']"
+          :preserve-content-structure="!embedded || undefined"
+          :title="embedded ? '关联运单' : undefined"
         >
-          <template #header
+          <template v-if="embedded" #actions>
+            <span class="text-xs text-[var(--el-text-color-secondary)]">
+              共 {{ detail.relatedWaybills.length }} 张执行运单
+            </span>
+          </template>
+          <template v-else #header
             ><div class="order-detail__waybill-heading">
               <ArtSectionTitle title="关联运单" />
               <span>共 {{ detail.relatedWaybills.length }} 张执行运单</span>
@@ -79,9 +91,14 @@
               <ArtSvgIcon icon="ri:arrow-right-s-line" aria-hidden="true" />
             </button>
           </div>
-        </ArtSectionCard>
+        </component>
 
-        <ArtSectionCard class="order-detail__section" preserve-content-structure title="基础信息">
+        <component
+          :is="detailSection"
+          :class="detailSectionClass"
+          :preserve-content-structure="!embedded || undefined"
+          title="基础信息"
+        >
           <ArtDescriptions :data="descriptionData" :items="basicItems" :columns="4" />
 
           <div class="order-detail__contact-card">
@@ -112,13 +129,14 @@
               />
             </div>
           </div>
-        </ArtSectionCard>
+        </component>
       </ElTabPane>
-      <ElTabPane label="配置信息" name="configuration">
-        <ArtSectionCard
+      <ElTabPane label="配置信息" name="configuration" :class="{ 'space-y-4': embedded }">
+        <component
+          :is="detailSection"
           v-if="detail.data?.orderConfig?.loadType"
-          class="order-detail__section"
-          preserve-content-structure
+          :class="detailSectionClass"
+          :preserve-content-structure="!embedded || undefined"
           title="配置信息"
         >
           <ArtDescriptions :data="configurationData" :items="configurationItems" :columns="4" />
@@ -129,17 +147,23 @@
             <strong>业务附件</strong>
             <ArtUploadFile :model-value="configurationData.attachmentUrls" readonly multiple />
           </div>
-        </ArtSectionCard>
+        </component>
         <OrderExecutionSupplement
           :order-id="detail.data?.id"
           section="loading"
           :show-amounts="canViewOrderField('settlementAmounts')"
           :show-proof="canViewOrderField('proofAttachments')"
-          class="order-detail__section"
+          :embedded="embedded"
+          :class="detailSectionClass"
         />
       </ElTabPane>
       <ElTabPane label="货物信息" name="cargo">
-        <ArtSectionCard class="order-detail__section" preserve-content-structure title="货物信息">
+        <component
+          :is="detailSection"
+          :class="detailSectionClass"
+          :preserve-content-structure="!embedded || undefined"
+          title="货物信息"
+        >
           <ArtTable
             :data="detail.cargoItems"
             :columns="detail.cargoColumns"
@@ -160,29 +184,36 @@
               <strong>{{ formatCompactNumberValue(detail.data?.cargoVolumeTotal, 3) }} 方</strong>
             </div>
           </div>
-        </ArtSectionCard>
+        </component>
       </ElTabPane>
-      <ElTabPane label="应收信息" name="receivable">
+      <ElTabPane label="应收信息" name="receivable" :class="{ 'space-y-4': embedded }">
         <div class="order-detail__finance-grid">
-          <ArtSectionCard
+          <component
+            :is="detailSection"
             v-if="canViewOrderField('freightAmounts')"
-            class="order-detail__section"
-            preserve-content-structure
+            :class="detailSectionClass"
+            :preserve-content-structure="!embedded || undefined"
             title="费用信息"
           >
             <ArtDescriptions :data="descriptionData" :items="feeItems" :columns="2" />
-          </ArtSectionCard>
+          </component>
 
-          <ArtSectionCard class="order-detail__section" preserve-content-structure title="付款方式">
+          <component
+            :is="detailSection"
+            :class="detailSectionClass"
+            :preserve-content-structure="!embedded || undefined"
+            title="付款方式"
+          >
             <ArtDescriptions :data="descriptionData" :items="paymentItems" :columns="2" />
-          </ArtSectionCard>
+          </component>
         </div>
         <OrderExecutionSupplement
           :order-id="detail.data?.id"
           section="payable"
           :show-amounts="canViewOrderField('settlementAmounts')"
           :show-proof="canViewOrderField('proofAttachments')"
-          class="order-detail__section"
+          :embedded="embedded"
+          :class="detailSectionClass"
         />
       </ElTabPane>
     </ElTabs>
@@ -206,6 +237,7 @@
 
 <script setup lang="tsx">
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
+  import ArtPageSection from '@/components/core/layouts/art-page-section/index.vue'
   import OrderExecutionSupplement from '../../components/order-execution-supplement/index.vue'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import ArtDescriptions from '@/components/core/base/art-descriptions/index.vue'
@@ -228,6 +260,8 @@
 
   const props = defineProps<{ orderId?: string; embedded?: boolean }>()
   const activeTab = ref('contacts')
+  const detailSection = computed(() => (props.embedded ? ArtPageSection : ArtSectionCard))
+  const detailSectionClass = computed(() => (props.embedded ? 'min-w-0' : 'order-detail__section'))
 
   type OrderRecord = Api.Tms.Order.OrderRecord
   type CargoItem = Api.Tms.Order.CargoItem

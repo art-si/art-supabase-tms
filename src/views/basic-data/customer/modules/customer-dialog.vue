@@ -1,6 +1,12 @@
 <template>
-  <ArtDialog ref="dialogRef" class="tms-customer-dialog" size="xl">
+  <ArtDialog
+    ref="dialogRef"
+    class="tms-customer-dialog"
+    :class="{ 'is-base-tab': activeTab === 'baseSection' }"
+    size="xl"
+  >
     <ArtEntitySummary
+      spaced
       icon="ri:building-line"
       eyebrow="客户主档"
       :title="form.customerName || '新增客户'"
@@ -486,11 +492,6 @@
     emit('success', 'edit')
   }
 
-  const replaceForm = (nextForm: CustomerForm): void => {
-    Object.keys(form.value).forEach((key) => delete form.value[key as keyof CustomerForm])
-    Object.assign(form.value, nextForm)
-  }
-
   const buildSubmitPayload = (data: CustomerForm): Customer => {
     const { regionPath, ...rawData } = data
     const rawPayload = omit(rawData, [
@@ -567,7 +568,7 @@
   }
 
   const resetForm = async (): Promise<void> => {
-    replaceForm(createInitialForm())
+    form.value = createInitialForm()
     await nextTick()
     formRef.value?.clearValidate()
   }
@@ -603,12 +604,12 @@
     const row = data.row
     const isEdit = Boolean(row?.id)
     if (row) {
-      replaceForm({
+      form.value = {
         ...createInitialForm(),
         ...structuredClone(toRaw(row)),
         tags: [...(row.tags ?? [])],
         regionPath: row.region?.split('/').filter(Boolean) ?? []
-      })
+      }
     } else if (data.initialGroupId) {
       const selectedGroup = groups.value.find((group) => group.id === data.initialGroupId)
       if (selectedGroup) {
@@ -651,7 +652,7 @@
 </script>
 
 <style lang="scss">
-  .tms-customer-dialog.is-fullscreen {
+  .tms-customer-dialog.is-fullscreen:not(.is-base-tab) {
     .art-dialog__content > .art-form,
     .art-dialog__content > .art-form > .el-form,
     .art-form__tabs {
@@ -670,39 +671,41 @@
       min-height: 0;
     }
 
-    [data-art-form-tab]:not([data-art-form-tab='baseSection']) {
+    .art-form__tabs
+      > .el-tabs__content
+      > [data-art-form-tab]:not([data-art-form-tab='baseSection']) {
       height: 100%;
 
       > .el-row,
       > .el-row > .el-col,
-      .el-form-item {
+      > .el-row > .el-col > .el-form-item {
         height: 100%;
         min-height: 0;
       }
 
-      .el-form-item {
+      > .el-row > .el-col > .el-form-item {
         display: flex;
         flex-direction: column;
         margin-bottom: 0;
-      }
 
-      .el-form-item__content,
-      .art-form-item__content {
-        display: flex;
-        flex: 1 1 auto;
-        width: 100%;
-        min-height: 0;
-      }
+        > .el-form-item__content,
+        > .el-form-item__content > .art-form-item__content {
+          display: flex;
+          flex: 1 1 auto;
+          width: 100%;
+          min-height: 0;
+        }
 
-      .art-form-item__content {
-        align-self: stretch;
-        height: 100%;
-      }
+        > .el-form-item__content > .art-form-item__content {
+          align-self: stretch;
+          height: 100%;
 
-      .art-form-item__content > * {
-        flex: 1 1 auto;
-        height: 100%;
-        min-height: 0;
+          > * {
+            flex: 1 1 auto;
+            height: 100%;
+            min-height: 0;
+          }
+        }
       }
     }
   }

@@ -31,6 +31,7 @@
   import type { DataSelectFetchParams } from '@/components/core/forms/art-data-select/types'
   import { normalizeNullableText } from '@/utils/form/normalize'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
+  import { withSupabaseTableRange } from '@/utils/supabase/pagination'
   import {
     addDriverBlacklist,
     fetchBlacklistDriverCandidates,
@@ -79,18 +80,8 @@
   const form = ref<BlacklistForm>(initialForm())
 
   const columns = vehicleDriverColumns('driver')
-  const fetchDrivers = async (params: DataSelectFetchParams) => {
-    const result = await fetchBlacklistDriverCandidates({
-      from: (params.page - 1) * params.pageSize,
-      to: params.page * params.pageSize - 1,
-      keyword: params.keyword
-    })
-    return {
-      data: result.data,
-      total: result.total,
-      error: result.error
-    }
-  }
+  const fetchDrivers = (params: DataSelectFetchParams) =>
+    fetchBlacklistDriverCandidates(withSupabaseTableRange(params))
   function selectDriver(_value: unknown, rows: BlacklistDriverCandidate[]): void {
     const driver = rows[0]
     if (!driver) return

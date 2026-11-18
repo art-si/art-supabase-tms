@@ -1,0 +1,1 @@
+import{Ka as e,La as t,fo as n}from"./sys-DyaysAS3.js";import{t as r}from"./art-permission-guard-eHuUHPgC.js";var i=e({name:`Exception403`,__name:`index`,setup(e){return(e,i)=>(n(),t(r,{"force-denied":``,"resource-name":`目标页面`,"show-relogin":``,"viewport-centered":``}))}});export{i as default};

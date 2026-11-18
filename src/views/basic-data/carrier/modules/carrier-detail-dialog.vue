@@ -38,7 +38,10 @@
             </ElTag>
           </template>
         </ArtEntitySummary>
-        <ElTabs v-model="activeTab" class="carrier-detail-dialog__tabs">
+        <ElTabs
+          v-model="activeTab"
+          class="carrier-detail-dialog__tabs art-card-xs art-overlay-tab-card"
+        >
           <ElTabPane label="基础信息" name="basic">
             <ArtSectionCard preserve-content-structure>
               <ArtDescriptions

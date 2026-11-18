@@ -1,0 +1,1 @@
+var e=`flex min-w-0 flex-col md:h-[460px]`,t={span:6,labelWidth:72};export{e as n,t};

@@ -1,8 +1,6 @@
 <template>
   <div
-    :class="
-      embedded ? 'flex h-[460px] min-w-0 flex-col' : 'business-workspace-page art-full-height'
-    "
+    :class="embedded ? CUSTOMER_RELATED_WORKSPACE_CLASS : 'business-workspace-page art-full-height'"
   >
     <BusinessWorkspaceHeader
       v-if="!embedded"
@@ -25,7 +23,7 @@
       :columns-factory="columnsFactory"
       :header-actions="headerActions"
       :header-actions-placement="embedded ? 'table' : 'workspace'"
-      :search-bar-props="{ span: 8, labelWidth: 82, showExpand: true, defaultExpanded: false }"
+      :search-bar-props="embedded ? CUSTOMER_RELATED_FILTER_LAYOUT : { span: 8, labelWidth: 82 }"
       :table-props="{
         rowKey: 'id',
         emptyText: '暂无运输协议',
@@ -47,7 +45,7 @@
       "
     >
       <template v-if="detail">
-        <ElTabs v-model="activeDetailTab">
+        <ElTabs v-model="activeDetailTab" class="art-card-xs art-overlay-tab-card">
           <ElTabPane name="transport" label="运输与协议">
             <ArtDescriptions :data="detail" :items="transportItems" :columns="3" />
             <ArtSectionTitle class="mt-5">协议内容</ArtSectionTitle>
@@ -206,6 +204,10 @@
   import BusinessTableWorkspaceActions from '@/components/business/business-table-workspace-actions/index.vue'
   import BusinessTableRowActions from '@/components/business/business-table-row-actions/index.vue'
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
+  import {
+    CUSTOMER_RELATED_FILTER_LAYOUT,
+    CUSTOMER_RELATED_WORKSPACE_CLASS
+  } from '../customer/modules/related-workspace-layout'
   import type {
     ArtTableQueryExpose,
     ArtTableQueryHeaderAction

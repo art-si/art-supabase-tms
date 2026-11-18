@@ -31,12 +31,15 @@
             </div>
           </div>
         </div>
-        <dl class="waybill-info-panel__facts">
-          <div v-for="item in executionFacts" :key="item.label">
-            <dt>{{ item.label }}</dt>
-            <dd>{{ item.value }}</dd>
-          </div>
-        </dl>
+        <ArtDescriptions
+          class="waybill-info-panel__facts"
+          :data="waybill"
+          :items="executionFacts"
+          :columns="4"
+          :tablet-columns="compactFacts ? 2 : 4"
+          :mobile-columns="narrowFacts ? 1 : 2"
+          direction="vertical"
+        />
       </ArtSectionCard>
 
       <ArtSectionCard
@@ -356,6 +359,9 @@
 </template>
 
 <script setup lang="ts">
+  import { useMediaQuery } from '@vueuse/core'
+  import ArtDescriptions from '@/components/core/base/art-descriptions/index.vue'
+  import type { ArtDescriptionItem } from '@/components/core/base/art-descriptions/types'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
@@ -369,15 +375,18 @@
   const props = defineProps<{ waybill: Api.Tms.Waybill.WaybillDetailRecord }>()
   const emit = defineEmits<{ 'open-order': [orderId?: string] }>()
 
-  const executionFacts = computed(() => [
-    { label: '运单状态', value: statusLabel(props.waybill.status) },
-    { label: '计划装货', value: date(props.waybill.plannedLoadTime) },
-    { label: '实际装货', value: date(props.waybill.loadedAt) },
-    { label: '发车时间', value: date(props.waybill.departedAt) },
-    { label: '到达时间', value: date(props.waybill.arrivedAt) },
-    { label: '实际卸货', value: date(props.waybill.unloadedAt) },
-    { label: '完成时间', value: date(props.waybill.completedAt) },
+  const compactFacts = useMediaQuery('(max-width: 768px)')
+  const narrowFacts = useMediaQuery('(max-width: 520px)')
+  const executionFacts = computed<ArtDescriptionItem<Api.Tms.Waybill.WaybillDetailRecord>[]>(() => [
+    { key: 'status', label: '运单状态', value: statusLabel(props.waybill.status) },
+    { key: 'plannedLoadTime', label: '计划装货', value: date(props.waybill.plannedLoadTime) },
+    { key: 'loadedAt', label: '实际装货', value: date(props.waybill.loadedAt) },
+    { key: 'departedAt', label: '发车时间', value: date(props.waybill.departedAt) },
+    { key: 'arrivedAt', label: '到达时间', value: date(props.waybill.arrivedAt) },
+    { key: 'unloadedAt', label: '实际卸货', value: date(props.waybill.unloadedAt) },
+    { key: 'completedAt', label: '完成时间', value: date(props.waybill.completedAt) },
     {
+      key: 'remainingDistanceKm',
       label: '剩余里程',
       value:
         props.waybill.remainingDistanceKm == null ? '-' : `${props.waybill.remainingDistanceKm} km`
@@ -684,32 +693,9 @@
     }
 
     &__facts {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 0;
       margin: var(--art-space-4) 0 0;
-      border: 1px solid var(--el-border-color-lighter);
-      border-radius: var(--el-border-radius-base);
-
-      > div {
-        display: grid;
-        gap: 5px;
-        min-width: 0;
-        padding: var(--art-space-3);
-        border-right: 1px solid var(--el-border-color-lighter);
-        border-bottom: 1px solid var(--el-border-color-lighter);
-
-        &:nth-child(4n) {
-          border-right: 0;
-        }
-
-        &:nth-last-child(-n + 4) {
-          border-bottom: 0;
-        }
-      }
     }
 
-    &__facts dt,
     &__fee-list dt,
     &__order small,
     &__cargo-summary small,
@@ -717,7 +703,6 @@
       color: var(--el-text-color-secondary);
     }
 
-    &__facts dd,
     &__fee-list dd {
       margin: 0;
       overflow: hidden;
@@ -1054,48 +1039,19 @@
         display: none;
       }
 
-      &__facts,
       &__resource-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      &__facts > div {
-        &:nth-child(2n) {
-          border-right: 0;
-        }
-
-        &:nth-child(odd) {
-          border-right: 1px solid var(--el-border-color-lighter);
-        }
-
-        &:nth-last-child(-n + 4) {
-          border-bottom: 1px solid var(--el-border-color-lighter);
-        }
-
-        &:nth-last-child(-n + 2) {
-          border-bottom: 0;
-        }
       }
     }
   }
 
   @media (width <= 520px) {
     .waybill-info-panel {
-      &__facts,
       &__resource-grid,
       &__fee-list,
       &__order,
       &__cargo-summary {
         grid-template-columns: 1fr;
-      }
-
-      &__facts > div {
-        border-right: 0 !important;
-        border-bottom: 1px solid var(--el-border-color-lighter) !important;
-
-        &:last-child {
-          border-bottom: 0 !important;
-        }
       }
 
       &__cargo-list article {

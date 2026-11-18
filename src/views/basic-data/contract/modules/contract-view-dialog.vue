@@ -26,7 +26,10 @@
           </template>
         </ArtEntitySummary>
 
-        <ElTabs v-model="activeTab" class="contract-view-dialog__tabs">
+        <ElTabs
+          v-model="activeTab"
+          class="contract-view-dialog__tabs art-card-xs art-overlay-tab-card"
+        >
           <ElTabPane label="基础信息" name="basic">
             <ArtSectionCard preserve-content-structure>
               <ArtDescriptions :data="descriptionData" :items="basicItems" :columns="3" />

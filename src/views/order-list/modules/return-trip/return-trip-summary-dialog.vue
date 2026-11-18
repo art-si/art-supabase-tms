@@ -28,7 +28,7 @@
           </ElSelect>
         </template>
       </ArtEntitySummary>
-      <ElTabs v-model="activeTab">
+      <ElTabs v-model="activeTab" class="art-card-xs art-overlay-tab-card">
         <ElTabPane name="forecast" label="预计收益">
           <ArtSectionCard
             title="一趟运输 · 预计收益"

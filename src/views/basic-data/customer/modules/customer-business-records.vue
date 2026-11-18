@@ -28,14 +28,17 @@
   import { navigateToApplication } from '@/utils/application-navigation'
   import { financePaths } from '@/router/business-paths'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
+  import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   defineOptions({ name: 'TmsCustomerBusinessRecords' })
   const props = defineProps<{ kind: 'waybill' | 'statement'; customerId: string }>()
   type Row = Api.Tms.Waybill.WaybillRecord | CustomerStatementLinkRecord
   const router = useRouter()
   const userStore = useUserStore()
   const fetchRows = async (params: { current: number; size: number }) => {
-    const from = Math.max(params.current - 1, 0) * params.size
-    const to = from + params.size - 1
+    const { from, to } = buildSupabasePageRange({
+      current: Math.max(params.current, 1),
+      size: params.size
+    })
     await userStore.ensureDictLoaded(
       props.kind === 'waybill' ? 'tmsWaybillStatus' : 'tmsSettlementStatus'
     )

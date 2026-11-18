@@ -1,5 +1,5 @@
 <template>
-  <ArtDrawer ref="drawerRef" size="min(96vw, 1120px)">
+  <ArtDrawer ref="drawerRef" size="min(96vw, 1120px)" @close="invalidateLoad">
     <div v-if="waybill" class="space-y-4 pb-4">
       <div
         class="grid gap-4 rounded-lg border border-[var(--el-border-color-lighter)] bg-[var(--art-gray-100)] px-4 py-3 text-sm md:grid-cols-3"
@@ -266,6 +266,7 @@
   const loadErrorMessage = ref('')
   const loadFailed = ref(false)
   const selectingEntry = ref<EditableEntry | null>(null)
+  let loadVersion = 0
 
   const title = computed(() => (props.kind === 'pickup' ? '提货预约' : '送货预约'))
   const { deleteGuardRef, deleteRecord } = useRecordDeleteGuard('tms_waybill_appointment', title)
@@ -484,37 +485,50 @@
     return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('')
   }
 
+  function invalidateLoad(): void {
+    loadVersion += 1
+  }
+
   async function load(): Promise<void> {
-    if (!waybill.value?.id) return
+    const waybillId = waybill.value?.id
+    if (!waybillId) return
+    const version = ++loadVersion
+    const kind = props.kind
     form.entries = []
     candidates.value = []
+    dispatchSnapshot.value = null
     loadFailed.value = false
     loadErrorMessage.value = ''
     drawerRef.value?.setLoading(true)
     try {
       const [nextCandidates, records] = await Promise.all([
-        fetchAppointmentCandidates(waybill.value.id),
-        fetchAppointmentWorkspace(props.kind, waybill.value.id)
+        fetchAppointmentCandidates(waybillId),
+        fetchAppointmentWorkspace(kind, waybillId)
       ])
-      candidates.value = nextCandidates
-      dispatchSnapshot.value =
+      if (version !== loadVersion) return
+      const nextSnapshot =
         canAdd.value || (canEdit.value && records.length)
-          ? await fetchAppointmentDispatchSnapshot(props.kind, waybill.value.id)
+          ? await fetchAppointmentDispatchSnapshot(kind, waybillId)
           : null
+      if (version !== loadVersion) return
+      candidates.value = nextCandidates
+      dispatchSnapshot.value = nextSnapshot
       form.entries = records.map(toEditable)
       if (!form.entries.length && canAdd.value) addEntry()
       await nextTick()
-      formRefs.value.forEach((instance) => instance.clearValidate())
+      if (version === loadVersion) formRefs.value.forEach((instance) => instance.clearValidate())
     } catch (error) {
+      if (version !== loadVersion) return
       loadFailed.value = true
       loadErrorMessage.value =
         error instanceof Error && error.message ? error.message : '预约详情加载失败，请重试。'
     } finally {
-      drawerRef.value?.setLoading(false)
+      if (version === loadVersion) drawerRef.value?.setLoading(false)
     }
   }
 
   async function handleOpen(row: Api.Tms.Waybill.WaybillRecord): Promise<void> {
+    invalidateLoad()
     waybill.value = row
     await drawerRef.value?.handleOpen(row, {
       title: `${title.value} · ${row.waybillNo}`,

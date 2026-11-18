@@ -151,6 +151,12 @@
   const selectedVehicles = ref<TmsVehicleOption[]>([])
   const selectedDrivers = ref<Api.Tms.BasicData.DriverOption[]>([])
 
+  function clearDriverRepresentative(driverId: AgreementForm['driverId']): void {
+    if (driverId && form.value.partyBRepresentative === form.value.driverName) {
+      form.value.partyBRepresentative = null
+    }
+  }
+
   watch(
     () => form.value.tenantId,
     async () => {
@@ -170,6 +176,7 @@
       ++driverLoadVersion.value
       driverEvidenceLoading.value = false
       driverEvidenceError.value = false
+      clearDriverRepresentative(form.value.driverId)
       Object.assign(form.value, {
         carrierName: '',
         vehicleId: '',
@@ -198,6 +205,7 @@
       ++driverLoadVersion.value
       driverEvidenceLoading.value = false
       driverEvidenceError.value = false
+      clearDriverRepresentative(form.value.driverId)
       Object.assign(form.value, {
         plateNo: '',
         vehicleType: '',
@@ -220,11 +228,10 @@
   )
   watch(
     () => form.value.driverId,
-    (id) => {
+    (id, previousDriverId) => {
       if (hydrating.value) return
       const version = ++driverLoadVersion.value
-      if (form.value.partyBRepresentative === form.value.driverName)
-        form.value.partyBRepresentative = null
+      clearDriverRepresentative(previousDriverId)
       Object.assign(form.value, {
         driverName: '',
         idCardImages: [],

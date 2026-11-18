@@ -105,7 +105,7 @@
         type="primary"
         :loading="loading"
         :disabled="!context?.operation || !canOperate"
-        @click="api.handleConfirm()"
+        @click="api.handleConfirm"
       >
         提交{{ operationTitle }}信息
       </ElButton>

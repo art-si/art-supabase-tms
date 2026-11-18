@@ -351,6 +351,7 @@
     signPrivateAttachmentPaths
   } from '@/utils/supabase/private-attachment'
   import { formatWithDayjs } from '@/utils/time'
+  import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import {
     fetchDriverQualificationPage,
     fetchDriverSafetyPage,
@@ -942,11 +943,9 @@
     relationsLoading.value = true
     relationsError.value = null
     try {
-      const from = (relationPage.value - 1) * relationPageSize
       const result = await fetchTransportMainlineRelations({
         driverId,
-        from,
-        to: from + relationPageSize - 1
+        ...buildSupabasePageRange({ current: relationPage.value, size: relationPageSize })
       })
       if (current !== relationRequestId || driver.value?.id !== driverId) return
       relations.value = result.data
@@ -975,12 +974,11 @@
     currentRelationsLoading.value = true
     currentRelationsError.value = null
     try {
-      const from = (currentRelationPage.value - 1) * currentRelationPageSize
-      const result = await fetchCurrentDriverMainlineRelations(
-        driverId,
-        from,
-        from + currentRelationPageSize - 1
-      )
+      const { from, to } = buildSupabasePageRange({
+        current: currentRelationPage.value,
+        size: currentRelationPageSize
+      })
+      const result = await fetchCurrentDriverMainlineRelations(driverId, from, to)
       if (current !== currentRelationRequestId || driver.value?.id !== driverId) return
       currentRelations.value = result.data
       currentRelationTotal.value = result.total
@@ -1003,8 +1001,8 @@
     state.loading = true
     state.error = null
     try {
-      const from = (state.page - 1) * safetyPageSize
-      const result = await fetchDriverSafetyPage(driverId, kind, from, from + safetyPageSize - 1)
+      const { from, to } = buildSupabasePageRange({ current: state.page, size: safetyPageSize })
+      const result = await fetchDriverSafetyPage(driverId, kind, from, to)
       if (current !== safetyRequestIds[kind] || driver.value?.id !== driverId) return
       state.records = result.data
       state.total = result.total
@@ -1024,12 +1022,11 @@
     qualification.loading = true
     qualification.error = null
     try {
-      const from = (qualification.page - 1) * qualificationPageSize
-      const result = await fetchDriverQualificationPage(
-        driverId,
-        from,
-        from + qualificationPageSize - 1
-      )
+      const { from, to } = buildSupabasePageRange({
+        current: qualification.page,
+        size: qualificationPageSize
+      })
+      const result = await fetchDriverQualificationPage(driverId, from, to)
       if (current !== qualificationRequestId || driver.value?.id !== driverId) return
       qualification.records = result.data
       qualification.total = result.total

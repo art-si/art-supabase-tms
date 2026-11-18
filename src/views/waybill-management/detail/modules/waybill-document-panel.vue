@@ -90,21 +90,16 @@
             <div v-if="!document.href" class="text-xs text-[var(--el-text-color-regular)]">
               文件地址无效，请重新上传附件
             </div>
-            <dl>
-              <div
-                ><dt>来源</dt><dd>{{ document.source }}</dd></div
-              >
-              <div
-                ><dt>上传人</dt><dd>{{ document.uploader || '-' }}</dd></div
-              >
-              <div
-                ><dt>归档时间</dt><dd>{{ date(document.time) }}</dd></div
-              >
-              <div
-                ><dt>文件大小</dt
-                ><dd>{{ formatSize(document.fileSize, { precision: 1, emptyText: '-' }) }}</dd></div
-              >
-            </dl>
+            <ArtDescriptions
+              :data="document"
+              :items="documentItems"
+              :columns="2"
+              :tablet-columns="2"
+              :mobile-columns="2"
+              :border="false"
+              direction="vertical"
+              empty-text="-"
+            />
             <p v-if="document.remark">{{ document.remark }}</p>
           </div>
         </article>
@@ -143,6 +138,8 @@
 </template>
 
 <script setup lang="ts">
+  import ArtDescriptions from '@/components/core/base/art-descriptions/index.vue'
+  import type { ArtDescriptionItem } from '@/components/core/base/art-descriptions/types'
   import { formatSize } from '@/utils/file/format-size'
   import { getAttachmentNameFromUrl, getFileExtension } from '@/utils/file/attachment'
   import { resolveHttpUrl } from '@/utils/http-url'
@@ -173,6 +170,16 @@
 
   const props = defineProps<{ waybill: Api.Tms.Waybill.WaybillDetailRecord }>()
   const activeCategory = ref<DocumentCategory>('all')
+  const documentItems: ArtDescriptionItem<WaybillDocument>[] = [
+    { key: 'source', label: '来源', field: 'source' },
+    { key: 'uploader', label: '上传人', value: (document) => document.uploader || '-' },
+    { key: 'time', label: '归档时间', value: (document) => date(document.time) },
+    {
+      key: 'fileSize',
+      label: '文件大小',
+      value: (document) => formatSize(document.fileSize, { precision: 1, emptyText: '-' })
+    }
+  ]
 
   const documents = computed<WaybillDocument[]>(() =>
     uniqBy(
@@ -625,33 +632,11 @@
         }
       }
 
-      dl {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: var(--art-space-2);
-        margin: 0;
-      }
-
-      dl > div {
-        display: grid;
-        gap: 2px;
-      }
-
-      dt {
-        color: var(--el-text-color-secondary);
-      }
-
-      dd,
-      p {
-        margin: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
       p {
         padding-top: var(--art-space-2);
+        margin: 0;
         color: var(--el-text-color-secondary);
+        overflow-wrap: anywhere;
         border-top: 1px dashed var(--el-border-color-lighter);
       }
     }

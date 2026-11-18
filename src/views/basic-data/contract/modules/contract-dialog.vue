@@ -73,7 +73,8 @@
         <ElButton
           v-if="!viewOnly"
           :loading="loading && submitMode === 'save'"
-          @click="handleFooterConfirm(api, 'save')"
+          :disabled="loading"
+          @click="handleFooterConfirm(api, 'save', $event)"
         >
           保存
         </ElButton>
@@ -87,7 +88,8 @@
           v-auth="'TmsContract:Submit'"
           type="primary"
           :loading="loading && submitMode === 'submit'"
-          @click="handleFooterConfirm(api, 'submit')"
+          :disabled="loading"
+          @click="handleFooterConfirm(api, 'submit', $event)"
         >
           提交审核
         </ElButton>
@@ -154,7 +156,7 @@
   type CarrierOption = Api.Tms.BasicData.CarrierOption
   type CustomerOption = Api.Tms.BasicData.CustomerOption
   type SubmitMode = 'save' | 'submit'
-  type FooterApi = Pick<ArtDialogExpose<Contract | undefined>, 'handleConfirm'>
+  type FooterApi = Pick<ArtDialogExpose<Contract | undefined>, 'confirmLoading' | 'handleConfirm'>
 
   interface FormExpose {
     validate: () => Promise<boolean>
@@ -898,6 +900,7 @@
   }
 
   const handleSubmit = async (): Promise<boolean> => {
+    const mode = submitMode.value
     if (!form.data.id && form.data.tenantId !== activeWriteTenantId.value) {
       ElMessage.warning('租户范围已变化，请重新选择目标租户后新增合同')
       return false
@@ -920,7 +923,7 @@
         payload.id = response.data?.id
         form.data.id = response.data?.id
       }
-      if (submitMode.value === 'submit') {
+      if (mode === 'submit') {
         try {
           await submitContractForApproval(payload)
         } catch (error) {
@@ -955,9 +958,10 @@
     }
   }
 
-  const handleFooterConfirm = async (api: FooterApi, mode: SubmitMode): Promise<void> => {
+  const handleFooterConfirm = (api: FooterApi, mode: SubmitMode, event: MouseEvent): void => {
+    if (api.confirmLoading.value) return
     submitMode.value = mode
-    await api.handleConfirm()
+    void api.handleConfirm(event)
   }
 
   const handleOpen = async (

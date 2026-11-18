@@ -46,16 +46,16 @@
               </p>
             </div>
           </div>
-          <div v-if="form.waypointStationIds?.length" class="favorite-route-dialog__waypoints">
-            <strong>途经 {{ form.waypointStationIds.length }} 站</strong>
+          <div v-if="waypointRows.length" class="favorite-route-dialog__waypoints">
+            <strong>途经 {{ waypointRows.length }} 站</strong>
             <ol aria-label="途经点顺序">
               <li
-                v-for="(stationId, index) in form.waypointStationIds"
-                :key="stationId"
-                :title="getWaypointStationName(stationId)"
+                v-for="({ station }, index) in waypointRows"
+                :key="index"
+                :title="station ? getWaypointLabel(station) : undefined"
               >
                 <span>{{ index + 1 }}</span>
-                <span>{{ getWaypointStationName(stationId) }}</span>
+                <span>{{ station?.stationName || '待选择站点' }}</span>
               </li>
             </ol>
             <small v-if="form.returnTrip">返程按相反顺序经过这些站点</small>
@@ -80,50 +80,68 @@
         </section>
       </template>
       <template #waypointStationIds>
-        <div class="w-full min-w-0 space-y-2">
+        <div class="favorite-route-dialog__waypoint-list w-full min-w-0 space-y-2">
           <div
-            v-for="(stationId, index) in form.waypointStationIds"
+            v-for="({ id: stationId, station: selectedStation }, index) in waypointRows"
             :key="index"
-            class="flex min-w-0 items-center gap-2"
+            class="favorite-route-dialog__waypoint-row"
           >
-            <span class="w-14 shrink-0 text-xs text-gray-500">第 {{ index + 1 }} 站</span>
+            <span class="favorite-route-dialog__waypoint-index">第 {{ index + 1 }} 站</span>
             <ElSelect
               :model-value="stationId"
               filterable
               clearable
-              class="min-w-0 flex-1"
+              class="favorite-route-dialog__waypoint-select"
+              popper-class="favorite-route-dialog__waypoint-popper"
               placeholder="请选择途经点站点"
               @change="(value: string) => setWaypoint(index, value)"
             >
+              <template #label="{ label }">
+                <span class="favorite-route-dialog__station-label" :title="label">
+                  <span v-if="selectedStation?.stationCode" translate="no">
+                    {{ selectedStation.stationCode }}
+                  </span>
+                  <span>{{ selectedStation?.stationName || label }}</span>
+                </span>
+              </template>
               <ElOption
                 v-for="station in stationOptions"
                 :key="station.id"
-                :label="`${station.stationName}（${station.stationCode}）`"
+                :label="getWaypointLabel(station)"
                 :value="station.id"
                 :disabled="
                   form.waypointStationIds?.includes(station.id) && station.id !== stationId
                 "
-              />
+              >
+                <span
+                  class="favorite-route-dialog__station-label"
+                  :title="getWaypointLabel(station)"
+                >
+                  <span v-if="station.stationCode" translate="no">{{ station.stationCode }}</span>
+                  <span>{{ station.stationName }}</span>
+                </span>
+              </ElOption>
             </ElSelect>
-            <ElButton
-              :disabled="index === 0"
-              :aria-label="`上移第 ${index + 1} 个途经点`"
-              @click="moveWaypoint(index, -1)"
-              >↑</ElButton
-            >
-            <ElButton
-              :disabled="index === (form.waypointStationIds?.length ?? 0) - 1"
-              :aria-label="`下移第 ${index + 1} 个途经点`"
-              @click="moveWaypoint(index, 1)"
-              >↓</ElButton
-            >
-            <ElButton
-              type="danger"
-              link
-              :aria-label="`删除第 ${index + 1} 个途经点`"
-              @click="removeWaypoint(index)"
-              >删除</ElButton
-            >
+            <div class="favorite-route-dialog__waypoint-actions">
+              <ArtIconButton
+                icon="ri:arrow-up-line"
+                :disabled="index === 0"
+                :label="`上移第 ${index + 1} 个途经点`"
+                @click="moveWaypoint(index, -1)"
+              />
+              <ArtIconButton
+                icon="ri:arrow-down-line"
+                :disabled="index === waypointRows.length - 1"
+                :label="`下移第 ${index + 1} 个途经点`"
+                @click="moveWaypoint(index, 1)"
+              />
+              <ArtIconButton
+                icon="ri:delete-bin-line"
+                tone="danger"
+                :label="`删除第 ${index + 1} 个途经点`"
+                @click="removeWaypoint(index)"
+              />
+            </div>
           </div>
           <ElButton
             v-if="(form.waypointStationIds?.length ?? 0) < 3"
@@ -151,6 +169,7 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
+  import ArtIconButton from '@/components/core/widget/art-icon-button/index.vue'
   import { useAmapDrivingEstimate } from '@/hooks/core/useAmapDrivingEstimate'
   import { fetchStationOptions } from '@tms/api'
   import { ElButton, ElOption, ElSelect } from 'element-plus'
@@ -204,8 +223,8 @@
     destination: CustomerAddress[]
   }>({ origin: [], destination: [] })
   const stationOptions = ref<StationOption[]>([])
-  const getWaypointStationName = (stationId: string): string =>
-    stationOptions.value.find((item) => item.id === stationId)?.stationName || '待选择站点'
+  const getWaypointLabel = ({ stationName, stationCode }: StationOption): string =>
+    stationCode ? `${stationName}（${stationCode}）` : stationName
   const estimate = reactive<EstimateGroup>({ status: 'idle' })
   let estimateRequestId = 0
 
@@ -225,6 +244,12 @@
   })
 
   const form = ref<FavoriteRouteForm>(createInitialForm())
+  const waypointRows = computed(() =>
+    (form.value.waypointStationIds ?? []).map((id) => ({
+      id,
+      station: stationOptions.value.find((item) => item.id === id)
+    }))
+  )
   const originAddress = computed(() =>
     addressOptions.origin.find((item) => item.id === form.value.originAddressId)
   )
@@ -681,7 +706,83 @@
 </script>
 
 <style scoped lang="scss">
+  :global(.favorite-route-dialog__waypoint-popper) {
+    max-inline-size: calc(100vw - 2 * var(--art-space-2));
+  }
+
+  :global(.favorite-route-dialog__waypoint-popper .el-select-dropdown) {
+    max-inline-size: 100%;
+  }
+
   .favorite-route-dialog {
+    &__waypoint-list {
+      container: route-waypoints / inline-size;
+    }
+
+    &__waypoint-row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: var(--art-space-2);
+      align-items: center;
+    }
+
+    &__waypoint-index {
+      min-inline-size: 3.5rem;
+      font-size: 12px;
+      color: var(--el-text-color-secondary);
+      white-space: nowrap;
+    }
+
+    &__waypoint-select {
+      width: 100%;
+      min-width: 0;
+    }
+
+    &__waypoint-actions {
+      display: flex;
+      gap: var(--art-space-1);
+      align-items: center;
+      justify-self: end;
+    }
+
+    &__station-label {
+      display: flex;
+      gap: var(--art-space-2);
+      align-items: center;
+      min-width: 0;
+      white-space: nowrap;
+
+      > span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      > [translate='no'] {
+        flex: none;
+        max-inline-size: 45%;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        color: var(--el-text-color-secondary);
+      }
+    }
+
+    @container route-waypoints (width < 360px) {
+      &__waypoint-index {
+        min-inline-size: auto;
+      }
+    }
+
+    @container route-waypoints (width < 290px) {
+      &__waypoint-row {
+        grid-template-columns: auto minmax(0, 1fr);
+      }
+
+      &__waypoint-actions {
+        grid-column: 1 / -1;
+      }
+    }
+
     &__preview {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 80px minmax(0, 1fr);

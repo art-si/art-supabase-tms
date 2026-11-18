@@ -1,5 +1,6 @@
 <template>
-  <ArtSectionCard
+  <component
+    :is="embedded ? ArtPageSection : ArtSectionCard"
     v-if="visible"
     :title="section === 'payable' ? '承运对账回写' : '运输装卸回写'"
     :subtitle="
@@ -7,106 +8,113 @@
         ? '按关联调度运单展示承运对账明细。'
         : '按调度运单展示现场装卸与签收记录。'
     "
-    :loading="loading"
-    :error="error"
-    :empty="loaded && !hasRows"
-    :empty-title="section === 'payable' ? '暂无承运对账' : '暂无装卸签收记录'"
-    :empty-description="
-      section === 'payable'
-        ? '执行运单产生对账后会在这里显示。'
-        : '现场完成装卸或签收后会在这里显示。'
-    "
-    @retry="load"
+    v-bind="embedded ? {} : { ...stateProps, emptyTitle, onRetry: load }"
   >
-    <template v-if="section === 'payable'">
-      <ArtTable
-        :data="data.carrierReconciliation"
-        :columns="reconciliationColumns"
-        :pagination="false"
-        row-key="statementId"
-      />
-    </template>
-    <template v-else>
-      <div class="grid min-w-0 gap-5">
-        <section v-if="operations.length">
-          <ArtSectionTitle :show-line="false">装卸作业</ArtSectionTitle>
-          <ArtTable
-            :data="operations"
-            :columns="operationColumns"
-            :pagination="false"
-            row-key="id"
-          />
-          <div v-if="showProof" class="mt-3 grid min-w-0 gap-3">
-            <div
-              v-for="item in operations"
-              :key="item.id"
-              class="min-w-0 border-t border-[var(--el-border-color-lighter)] pt-3"
-            >
-              <strong class="text-sm"
-                >{{ item.waybillNo }} ·
-                {{ item.operationType === 'loading' ? '装货' : '卸货' }}凭证</strong
+    <DefineContent>
+      <template v-if="section === 'payable'">
+        <ArtTable
+          :data="data.carrierReconciliation"
+          :columns="reconciliationColumns"
+          :pagination="false"
+          row-key="statementId"
+        />
+      </template>
+      <template v-else>
+        <div class="grid min-w-0 gap-5">
+          <section v-if="operations.length">
+            <ArtSectionTitle :show-line="false">装卸作业</ArtSectionTitle>
+            <ArtTable
+              :data="operations"
+              :columns="operationColumns"
+              :pagination="false"
+              row-key="id"
+            />
+            <div v-if="showProof" class="mt-3 grid min-w-0 gap-3">
+              <div
+                v-for="item in operations"
+                :key="item.id"
+                class="min-w-0 border-t border-[var(--el-border-color-lighter)] pt-3"
               >
-              <div class="mt-2 grid gap-3 md:grid-cols-2">
-                <ArtUploadFile
-                  v-if="item.weighbridgeTicketUrls?.length"
-                  :model-value="item.weighbridgeTicketUrls"
-                  readonly
-                  multiple
-                  title="磅单"
-                />
-                <ArtUploadFile
-                  v-if="item.photoUrls?.length"
-                  :model-value="item.photoUrls"
-                  readonly
-                  multiple
-                  title="现场照片"
-                />
+                <strong class="text-sm"
+                  >{{ item.waybillNo }} ·
+                  {{ item.operationType === 'loading' ? '装货' : '卸货' }}凭证</strong
+                >
+                <div class="mt-2 grid gap-3 md:grid-cols-2">
+                  <ArtUploadFile
+                    v-if="item.weighbridgeTicketUrls?.length"
+                    :model-value="item.weighbridgeTicketUrls"
+                    readonly
+                    multiple
+                    title="磅单"
+                  />
+                  <ArtUploadFile
+                    v-if="item.photoUrls?.length"
+                    :model-value="item.photoUrls"
+                    readonly
+                    multiple
+                    title="现场照片"
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        </section>
-        <section v-if="data.signatures.length">
-          <ArtSectionTitle :show-line="false">签收记录</ArtSectionTitle>
-          <ArtTable
-            :data="data.signatures"
-            :columns="signatureColumns"
-            :pagination="false"
-            row-key="waybillId"
-          />
-          <div v-if="showProof" class="mt-3 grid min-w-0 gap-3">
-            <div
-              v-for="item in data.signatures"
-              :key="item.waybillId"
-              class="min-w-0 border-t border-[var(--el-border-color-lighter)] pt-3"
-            >
-              <strong class="text-sm">{{ item.waybillNo }} · 签收凭证</strong>
-              <div class="mt-2 grid gap-3 md:grid-cols-2">
-                <ArtUploadFile
-                  v-if="item.receiptUrls?.length"
-                  :model-value="item.receiptUrls"
-                  readonly
-                  multiple
-                  title="回单"
-                />
-                <ArtUploadFile
-                  v-if="item.signatureUrls?.length"
-                  :model-value="item.signatureUrls"
-                  readonly
-                  multiple
-                  title="签名"
-                />
+          </section>
+          <section v-if="data.signatures.length">
+            <ArtSectionTitle :show-line="false">签收记录</ArtSectionTitle>
+            <ArtTable
+              :data="data.signatures"
+              :columns="signatureColumns"
+              :pagination="false"
+              row-key="waybillId"
+            />
+            <div v-if="showProof" class="mt-3 grid min-w-0 gap-3">
+              <div
+                v-for="item in data.signatures"
+                :key="item.waybillId"
+                class="min-w-0 border-t border-[var(--el-border-color-lighter)] pt-3"
+              >
+                <strong class="text-sm">{{ item.waybillNo }} · 签收凭证</strong>
+                <div class="mt-2 grid gap-3 md:grid-cols-2">
+                  <ArtUploadFile
+                    v-if="item.receiptUrls?.length"
+                    :model-value="item.receiptUrls"
+                    readonly
+                    multiple
+                    title="回单"
+                  />
+                  <ArtUploadFile
+                    v-if="item.signatureUrls?.length"
+                    :model-value="item.signatureUrls"
+                    readonly
+                    multiple
+                    title="签名"
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        </section>
-      </div>
-    </template>
-  </ArtSectionCard>
+          </section>
+        </div>
+      </template>
+    </DefineContent>
+    <ArtAsyncState
+      v-if="embedded"
+      v-bind="stateProps"
+      loading-mode="skeleton"
+      :empty-text="emptyTitle"
+      :min-height="stateProps.loading || stateProps.error || stateProps.empty ? 180 : 0"
+      @retry="load"
+    >
+      <ReuseContent />
+    </ArtAsyncState>
+    <ReuseContent v-else />
+  </component>
 </template>
 
 <script setup lang="ts">
+  import { createReusableTemplate } from '@vueuse/core'
   import type { ColumnOption } from '@/types'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
+  import ArtPageSection from '@/components/core/layouts/art-page-section/index.vue'
+  import ArtAsyncState from '@/components/core/feedback/art-async-state/index.vue'
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
   import ArtTable from '@/components/core/tables/art-table/index.vue'
   import ArtUploadFile from '@/components/core/forms/art-upload-file/index.vue'
@@ -124,7 +132,9 @@
     section: 'payable' | 'loading'
     showAmounts: boolean
     showProof: boolean
+    embedded?: boolean
   }>()
+  const [DefineContent, ReuseContent] = createReusableTemplate()
   const visible = computed(() =>
     props.section === 'payable' ? props.showAmounts : props.showProof
   )
@@ -145,6 +155,18 @@
       ? data.value.carrierReconciliation.length > 0
       : operations.value.length > 0 || data.value.signatures.length > 0
   )
+  const emptyTitle = computed(() =>
+    props.section === 'payable' ? '暂无承运对账' : '暂无装卸签收记录'
+  )
+  const stateProps = computed(() => ({
+    loading: loading.value,
+    error: error.value,
+    empty: loaded.value && !hasRows.value,
+    emptyDescription:
+      props.section === 'payable'
+        ? '执行运单产生对账后会在这里显示。'
+        : '现场完成装卸或签收后会在这里显示。'
+  }))
   const operationColumns: ColumnOption<Operation>[] = [
     { prop: 'waybillNo', label: '调度运单号', minWidth: 180 },
     {

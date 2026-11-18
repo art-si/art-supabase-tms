@@ -70,18 +70,22 @@
       <template v-if="targetInvitation"
         ><ElButton type="primary" @click="api.handleClose()">关闭</ElButton></template
       >
-      <template v-else>
-        <ElButton @click="api.handleClose()">取消</ElButton>
-        <ElButton :loading="submitLoading" @click="confirmInvitation('request', api.handleConfirm)"
+      <div v-else class="flex flex-wrap justify-end gap-2 [&>.el-button]:m-0!">
+        <ElButton :disabled="submitLoading" @click="api.handleClose()">取消</ElButton>
+        <ElButton
+          :loading="submitLoading && submitMode === 'request'"
+          :disabled="submitLoading && submitMode !== 'request'"
+          @click="confirmInvitation('request', api, $event)"
           >立即添加</ElButton
         >
         <ElButton
           type="primary"
-          :loading="submitLoading"
-          @click="confirmInvitation('profile', api.handleConfirm)"
+          :loading="submitLoading && submitMode === 'profile'"
+          :disabled="submitLoading && submitMode !== 'profile'"
+          @click="confirmInvitation('profile', api, $event)"
           >添加并补充认证资料</ElButton
         >
-      </template>
+      </div>
     </template>
   </ArtDialog>
 </template>
@@ -118,10 +122,13 @@
   const targetInvitation = ref<DriverInvitation | null>(null)
   const loading = ref(false)
   const error = ref(false)
-  const submitMode = ref<'request' | 'profile'>('request')
-  const confirmInvitation = (mode: 'request' | 'profile', handleConfirm: () => void): void => {
+  type SubmitMode = 'request' | 'profile'
+  type FooterApi = Pick<ArtDialogExpose, 'confirmLoading' | 'handleConfirm'>
+  const submitMode = ref<SubmitMode>('request')
+  const confirmInvitation = (mode: SubmitMode, api: FooterApi, event: MouseEvent): void => {
+    if (api.confirmLoading.value) return
     submitMode.value = mode
-    handleConfirm()
+    void api.handleConfirm(event)
   }
   const items = computed<FormItem[]>(() => [
     {
@@ -194,6 +201,7 @@
       subtitle: '登记手机号与归属；认证资料可在司机档案中补齐',
       onOpen: targetInvitation.value ? undefined : loadRecent,
       onConfirm: async () => {
+        const mode = submitMode.value
         if (!(await validateArtFormForSubmit(formRef.value))) return false
         const payload = {
           phone: form.value.phone.trim(),
@@ -203,7 +211,7 @@
         try {
           const result = await createDriverInvitation(payload)
           if (result.data) emit('success', result.data)
-          if (submitMode.value === 'profile') emit('profile', payload)
+          if (mode === 'profile') emit('profile', payload)
           return Boolean(result.data)
         } catch (cause) {
           notifyFriendlyError(cause, '邀请登记失败，请核对手机号后重试')

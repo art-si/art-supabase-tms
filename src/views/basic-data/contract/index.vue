@@ -1,5 +1,8 @@
 <template>
-  <div class="tms-contract business-workspace-page art-full-height">
+  <div
+    class="tms-contract"
+    :class="embedded ? CUSTOMER_RELATED_WORKSPACE_CLASS : 'business-workspace-page art-full-height'"
+  >
     <MasterDeleteProcessingNotice
       :table="tableQueryRef"
       v-if="deleteContext.active"
@@ -32,7 +35,7 @@
       :columns-factory="columnsFactory"
       :header-actions="headerActions"
       :header-actions-placement="embedded ? 'table' : 'workspace'"
-      :search-bar-props="{ span: 6, labelWidth: 112, showExpand: true }"
+      :search-bar-props="embedded ? CUSTOMER_RELATED_FILTER_LAYOUT : { span: 6, labelWidth: 112 }"
       :table-props="{
         rowKey: viewMode === 'detail' ? 'detailRowKey' : 'id',
         emptyText: viewMode === 'detail' ? '暂无合同明细' : '暂无运输合同',
@@ -63,6 +66,10 @@
   import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
   import { ElMessage, ElSegmented, ElTag } from 'element-plus'
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
+  import {
+    CUSTOMER_RELATED_FILTER_LAYOUT,
+    CUSTOMER_RELATED_WORKSPACE_CLASS
+  } from '../customer/modules/related-workspace-layout'
   import type {
     ArtTableQueryExpose,
     ArtTableQueryExcelColumn,
@@ -75,6 +82,7 @@
   import { ColumnOption, DialogType } from '@/types'
   import { formatNameCodeOption } from '@/utils/form'
   import { getDictionaryDisplayLabel } from '@/utils/form/option'
+  import { normalizeNullableNumber } from '@/utils/form/normalize'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { formatWithDayjs } from '@/utils/time'
   import { canViewField, formatSensitiveNumber } from '@/utils/field-permission'
@@ -348,6 +356,7 @@
       .join('|')
   )
 
+  const contractSearchDescription = '可按合同名称、编号、纸质编号、助记码、联系人或路线查询'
   const searchItems = computed<SearchFormItem[]>(() => [
     {
       label: '合同状态',
@@ -356,7 +365,7 @@
       props: { options: statusOptions, clearable: true }
     },
     {
-      label: '业务合同分类',
+      label: embedded ? '业务分类' : '业务合同分类',
       key: 'businessContractType',
       type: 'select',
       props: { options: businessTypeOptions.value, clearable: true }
@@ -394,6 +403,7 @@
       label: '创建日期',
       key: 'createTimeRange',
       type: 'date',
+      span: embedded ? 12 : undefined,
       props: {
         type: 'daterange',
         valueFormat: 'YYYY-MM-DD',
@@ -406,7 +416,12 @@
       label: '关键字',
       key: 'keyword',
       type: 'input',
-      props: { clearable: true, placeholder: '名称、编号、纸质编号、助记码、联系人或路线' }
+      props: {
+        clearable: true,
+        placeholder: '名称/编号/路线',
+        title: contractSearchDescription,
+        'aria-description': contractSearchDescription
+      }
     }
   ])
 
@@ -735,17 +750,6 @@
     return String(row[title] ?? row[key] ?? '').trim()
   }
 
-  const parseImportNumber = (
-    row: Record<string, unknown>,
-    key: string,
-    title: string
-  ): number | null => {
-    const rawValue = getImportValue(row, key, title)
-    if (!rawValue) return null
-    const value = Number(rawValue)
-    return Number.isFinite(value) ? value : null
-  }
-
   const toBooleanValue = (value: unknown): boolean => {
     if (typeof value === 'boolean') return value
     const normalized = String(value ?? '').trim()
@@ -810,14 +814,20 @@
           billingMethod:
             billingValueMap.value.get(getImportValue(row, 'billingMethod', '计费方式')) || '',
           billingUnit: getImportValue(row, 'billingUnit', '计费单位') || null,
-          contractAmount: parseImportNumber(row, 'contractAmount', '合同金额'),
-          transportUnitPrice: parseImportNumber(row, 'transportUnitPrice', '运输单价'),
-          roadConsumptionRate: parseImportNumber(row, 'roadConsumptionRate', '路耗标准%'),
-          lossDeductionPrice: parseImportNumber(row, 'lossDeductionPrice', '亏扣价'),
-          agreedTransportQuantity: parseImportNumber(
-            row,
-            'agreedTransportQuantity',
-            '合同约定运输量'
+          contractAmount: normalizeNullableNumber(
+            getImportValue(row, 'contractAmount', '合同金额')
+          ),
+          transportUnitPrice: normalizeNullableNumber(
+            getImportValue(row, 'transportUnitPrice', '运输单价')
+          ),
+          roadConsumptionRate: normalizeNullableNumber(
+            getImportValue(row, 'roadConsumptionRate', '路耗标准%')
+          ),
+          lossDeductionPrice: normalizeNullableNumber(
+            getImportValue(row, 'lossDeductionPrice', '亏扣价')
+          ),
+          agreedTransportQuantity: normalizeNullableNumber(
+            getImportValue(row, 'agreedTransportQuantity', '合同约定运输量')
           ),
           signTime: getImportValue(row, 'signTime', '签订时间'),
           effectiveDate: getImportValue(row, 'effectiveDate', '生效日期') || null,

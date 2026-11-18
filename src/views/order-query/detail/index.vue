@@ -488,11 +488,7 @@
   const basicItems = computed<ArtDescriptionItem<OrderRecord>[]>(() => [
     { key: 'orderNo', label: '订单号', field: 'orderNo', copyable: true },
     { key: 'orderStatus', label: '订单状态', field: 'orderStatus', dictCode: 'tmsOrderStatus' },
-    {
-      key: 'createTime',
-      label: '开单时间',
-      value: (data: OrderRecord) => formatWithDayjs(data.createTime) || '--'
-    },
+    { key: 'createTime', label: '开单时间', field: 'createTime', format: 'datetime' },
     {
       key: 'shippingCustomer',
       label: '发货客户',

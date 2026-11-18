@@ -29,206 +29,214 @@
         >
       </div>
     </div>
-    <ElTabs v-model="activeTab" class="driver-dialog__tabs">
-      <ElTabPane v-for="tab in availableTabs" :key="tab.key" :name="tab.key" :label="tab.label" />
+    <ElTabs v-model="activeTab" class="art-card-xs art-overlay-tab-card">
+      <ElTabPane v-for="tab in availableTabs" :key="tab.key" :name="tab.key" :label="tab.label">
+        <div :id="driverTabContentId(tab.key)" />
+      </ElTabPane>
     </ElTabs>
-    <section v-if="activeTab === 'certificates'" class="driver-dialog__records">
-      <div class="driver-dialog__record-heading">
-        <div><strong>司机证件</strong><p>与车辆证件共用到期预警和责任人处置。</p></div>
-        <ElButton
-          v-if="form.id && canManageCertificates && !viewOnly"
-          type="primary"
-          @click="openCertificateCenter"
-          >管理证件</ElButton
-        >
-      </div>
-      <div v-if="certificateError" class="driver-dialog__record-error">
-        <span>证件记录加载失败，请重试。</span>
-        <ElButton link type="primary" @click="loadCertificates">重新加载</ElButton>
-      </div>
-      <ArtTable
-        v-else-if="form.id && canViewCertificates"
-        :data="certificateRows"
-        :columns="certificateColumns"
-        :loading="certificateLoading"
-        :pagination="false"
-        empty-text="暂无司机证件"
-      />
-      <p v-else class="driver-dialog__record-empty">{{
-        form.id ? '暂无证件查看权限，请联系管理员授权。' : '保存司机档案后可登记和管理证件。'
-      }}</p>
-    </section>
-    <section v-else-if="activeTab === 'commission'" class="driver-dialog__records">
-      <DriverCommissionRules
-        :driver-id="form.id"
-        :tenant-id="form.tenantId"
-        :selected-rule-id="selectedCommissionRuleId"
-        :readonly="viewOnly"
-      />
-    </section>
-    <div
-      v-else
-      class="driver-dialog__workarea"
-      :class="{ 'driver-dialog__workarea--form-only': !imageItems.length }"
-    >
-      <section v-if="imageItems.length" class="driver-dialog__images" aria-label="司机证件影像">
-        <div class="driver-dialog__section-heading">
-          <strong>证件影像</strong><span>选择照片后可上传或查看</span>
-        </div>
-        <div class="driver-dialog__image-options" role="tablist" aria-label="影像类型">
-          <button
-            v-for="image in imageItems"
-            :key="image.key"
-            type="button"
-            role="tab"
-            :aria-selected="activeImage === image.key"
-            :class="{ 'is-active': activeImage === image.key }"
-            @click="activeImage = image.key"
-          >
-            <ArtSvgIcon :icon="form[image.key] ? 'ri:image-2-line' : 'ri:upload-2-line'" />
-            {{ image.label }}
-          </button>
-        </div>
-        <ArtUploadImage
-          v-if="activeImage"
-          v-model="form[activeImage]"
-          :resource-tenant-id="form.tenantId || ''"
-          :title="activeImageLabel"
-          width="100%"
-          :height="196"
-          :limit="1"
-          :file-size="8 * 1024 * 1024"
-          file-type="image/png,image/jpeg,image/webp"
-          :upload-request="uploadDriverDocument"
-          :show-resource-picker="false"
-          :readonly="
-            viewOnly ||
-            !form.tenantId ||
-            !canEditDriverField('identityDocuments') ||
-            !hasAuth('TmsDriver:UploadDocument')
-          "
-        />
-        <ElAlert
-          v-if="activeImage && hiddenLegacyImages.has(activeImage)"
-          type="warning"
-          title="历史影像未在此处展示；请上传到私有存储以替换。"
-          :closable="false"
-        />
-        <div v-if="activeImage !== 'portraitUrl' && !viewOnly" class="driver-dialog__ocr-actions">
+    <!-- The editable tabs reuse one form instance so validation and option state stay intact. -->
+    <Teleport defer :to="`#${driverTabContentId(activeTab)}`">
+      <section v-if="activeTab === 'certificates'" class="driver-dialog__records">
+        <div class="driver-dialog__record-heading">
+          <div><strong>司机证件</strong><p>与车辆证件共用到期预警和责任人处置。</p></div>
           <ElButton
-            v-auth="'TmsDriver:Ocr'"
+            v-if="form.id && canManageCertificates && !viewOnly"
             type="primary"
-            plain
-            :loading="ocrBusy && ocrMode === 'ai'"
-            :disabled="!activeOcrImageUrl || !canRecognizeDocument || ocrBusy"
-            @click="recognizeDocument"
-            >智能识别</ElButton
-          >
-          <ElButton
-            v-auth="'TmsDriver:Ocr'"
-            plain
-            :loading="ocrBusy && ocrMode === 'local'"
-            :disabled="!activeOcrImageUrl || !canRecognizeDocument || ocrBusy"
-            @click="recognizeLocally"
-            >本地离线识别</ElButton
+            @click="openCertificateCenter"
+            >管理证件</ElButton
           >
         </div>
-        <p v-if="ocrBusy" role="status">
-          {{
-            ocrMode === 'local'
-              ? '正在本机提取文字，图片不会发送给模型服务。'
-              : '正在识别证件影像，可能需要几十秒。'
-          }}
-        </p>
-        <div
-          v-if="ocrError && activeImage === ocrErrorSide"
-          class="driver-dialog__ocr-error"
-          role="alert"
-        >
-          <strong>本次识别未完成</strong>
-          <p>{{ ocrError }}</p>
-          <span>可以选择本地离线识别，或直接在右侧表单手工填写。</span>
+        <div v-if="certificateError" class="driver-dialog__record-error">
+          <span>证件记录加载失败，请重试。</span>
+          <ElButton link type="primary" @click="loadCertificates">重新加载</ElButton>
         </div>
-        <p>影像保存在租户私有存储；识别结果需核对，字段也可手工填写。</p>
+        <ArtTable
+          v-else-if="form.id && canViewCertificates"
+          :data="certificateRows"
+          :columns="certificateColumns"
+          :loading="certificateLoading"
+          :pagination="false"
+          empty-text="暂无司机证件"
+        />
+        <p v-else class="driver-dialog__record-empty">{{
+          form.id ? '暂无证件查看权限，请联系管理员授权。' : '保存司机档案后可登记和管理证件。'
+        }}</p>
       </section>
-      <div class="driver-dialog__form-area">
-        <div class="driver-dialog__section-heading"
-          ><strong>{{ activeTabLabel }}</strong
-          ><span>{{ viewOnly ? '已保存的司机档案' : '请核对后保存' }}</span></div
-        >
-        <div v-if="activeTab === 'other' && form.id" class="mb-4 flex flex-wrap items-center gap-3">
-          <ElAlert
-            v-if="certificationError"
-            class="min-w-0 flex-1"
-            type="error"
-            title="认证结果加载失败"
-            description="请重新加载审核状态后再操作。"
-            :closable="false"
-            show-icon
+      <section v-else-if="activeTab === 'commission'" class="driver-dialog__records">
+        <DriverCommissionRules
+          :driver-id="form.id"
+          :tenant-id="form.tenantId"
+          :selected-rule-id="selectedCommissionRuleId"
+          :readonly="viewOnly"
+        />
+      </section>
+      <div
+        v-else
+        class="driver-dialog__workarea"
+        :class="{ 'driver-dialog__workarea--form-only': !imageItems.length }"
+      >
+        <section v-if="imageItems.length" class="driver-dialog__images" aria-label="司机证件影像">
+          <div class="driver-dialog__section-heading">
+            <strong>证件影像</strong><span>选择照片后可上传或查看</span>
+          </div>
+          <div class="driver-dialog__image-options" role="tablist" aria-label="影像类型">
+            <button
+              v-for="image in imageItems"
+              :key="image.key"
+              type="button"
+              role="tab"
+              :aria-selected="activeImage === image.key"
+              :class="{ 'is-active': activeImage === image.key }"
+              @click="activeImage = image.key"
+            >
+              <ArtSvgIcon :icon="form[image.key] ? 'ri:image-2-line' : 'ri:upload-2-line'" />
+              {{ image.label }}
+            </button>
+          </div>
+          <ArtUploadImage
+            v-if="activeImage"
+            v-model="form[activeImage]"
+            :resource-tenant-id="form.tenantId || ''"
+            :title="activeImageLabel"
+            width="100%"
+            :height="196"
+            :limit="1"
+            :file-size="8 * 1024 * 1024"
+            file-type="image/png,image/jpeg,image/webp"
+            :upload-request="uploadDriverDocument"
+            :show-resource-picker="false"
+            :readonly="
+              viewOnly ||
+              !form.tenantId ||
+              !canEditDriverField('identityDocuments') ||
+              !hasAuth('TmsDriver:UploadDocument')
+            "
           />
           <ElAlert
-            v-else
-            class="min-w-0 flex-1"
-            :type="certificationPassed ? 'success' : 'warning'"
-            :title="
-              certificationLoading
-                ? '正在核对认证状态'
-                : certification?.required
-                  ? certificationPassed
-                    ? '司机证件已审核通过'
-                    : '司机证件尚未通过审核'
-                  : '自营司机按现有流程管理'
-            "
-            :description="
-              certification?.reason ||
-              (certification?.required
-                ? '证件状态由审核流程维护；派单限制按租户配置执行。'
-                : '此司机不需要外部司机证件认证。')
-            "
+            v-if="activeImage && hiddenLegacyImages.has(activeImage)"
+            type="warning"
+            title="历史影像未在此处展示；请上传到私有存储以替换。"
             :closable="false"
-            show-icon
           />
-          <ElButton v-if="certificationError" @click="loadCertification">重新加载</ElButton>
-          <ElButton
-            v-if="canViewCertificates"
-            link
-            type="primary"
-            @click="activeTab = 'certificates'"
-            >查看证件材料</ElButton
-          >
-          <div
-            v-if="!certificationError && canReviewCertification && !viewOnly"
-            class="flex shrink-0 items-center gap-2"
-          >
+          <div v-if="activeImage !== 'portraitUrl' && !viewOnly" class="driver-dialog__ocr-actions">
             <ElButton
-              v-auth="'TmsDriver:Audit'"
+              v-auth="'TmsDriver:Ocr'"
               type="primary"
               plain
-              :disabled="certificationLoading || certificationPassed"
-              @click="openReviewDialog('approved')"
-              >审核通过</ElButton
+              :loading="ocrBusy && ocrMode === 'ai'"
+              :disabled="!activeOcrImageUrl || !canRecognizeDocument || ocrBusy"
+              @click="recognizeDocument"
+              >智能识别</ElButton
             >
             <ElButton
-              v-auth="'TmsDriver:Audit'"
-              :disabled="certificationLoading || !hasVerifiedCertificate"
-              @click="openReviewDialog('revoked')"
-              >撤销认证</ElButton
+              v-auth="'TmsDriver:Ocr'"
+              plain
+              :loading="ocrBusy && ocrMode === 'local'"
+              :disabled="!activeOcrImageUrl || !canRecognizeDocument || ocrBusy"
+              @click="recognizeLocally"
+              >本地离线识别</ElButton
             >
           </div>
+          <p v-if="ocrBusy" role="status">
+            {{
+              ocrMode === 'local'
+                ? '正在本机提取文字，图片不会发送给模型服务。'
+                : '正在识别证件影像，可能需要几十秒。'
+            }}
+          </p>
+          <div
+            v-if="ocrError && activeImage === ocrErrorSide"
+            class="driver-dialog__ocr-error"
+            role="alert"
+          >
+            <strong>本次识别未完成</strong>
+            <p>{{ ocrError }}</p>
+            <span>可以选择本地离线识别，或直接在右侧表单手工填写。</span>
+          </div>
+          <p>影像保存在租户私有存储；识别结果需核对，字段也可手工填写。</p>
+        </section>
+        <div class="driver-dialog__form-area">
+          <div class="driver-dialog__section-heading"
+            ><strong>{{ activeTabLabel }}</strong
+            ><span>{{ viewOnly ? '已保存的司机档案' : '请核对后保存' }}</span></div
+          >
+          <div
+            v-if="activeTab === 'other' && form.id"
+            class="mb-4 flex flex-wrap items-center gap-3"
+          >
+            <ElAlert
+              v-if="certificationError"
+              class="min-w-0 flex-1"
+              type="error"
+              title="认证结果加载失败"
+              description="请重新加载审核状态后再操作。"
+              :closable="false"
+              show-icon
+            />
+            <ElAlert
+              v-else
+              class="min-w-0 flex-1"
+              :type="certificationPassed ? 'success' : 'warning'"
+              :title="
+                certificationLoading
+                  ? '正在核对认证状态'
+                  : certification?.required
+                    ? certificationPassed
+                      ? '司机证件已审核通过'
+                      : '司机证件尚未通过审核'
+                    : '自营司机按现有流程管理'
+              "
+              :description="
+                certification?.reason ||
+                (certification?.required
+                  ? '证件状态由审核流程维护；派单限制按租户配置执行。'
+                  : '此司机不需要外部司机证件认证。')
+              "
+              :closable="false"
+              show-icon
+            />
+            <ElButton v-if="certificationError" @click="loadCertification">重新加载</ElButton>
+            <ElButton
+              v-if="canViewCertificates"
+              link
+              type="primary"
+              @click="activeTab = 'certificates'"
+              >查看证件材料</ElButton
+            >
+            <div
+              v-if="!certificationError && canReviewCertification && !viewOnly"
+              class="flex shrink-0 items-center gap-2"
+            >
+              <ElButton
+                v-auth="'TmsDriver:Audit'"
+                type="primary"
+                plain
+                :disabled="certificationLoading || certificationPassed"
+                @click="openReviewDialog('approved')"
+                >审核通过</ElButton
+              >
+              <ElButton
+                v-auth="'TmsDriver:Audit'"
+                :disabled="certificationLoading || !hasVerifiedCertificate"
+                @click="openReviewDialog('revoked')"
+                >撤销认证</ElButton
+              >
+            </div>
+          </div>
+          <ArtForm
+            ref="formRef"
+            v-model="form"
+            :items="visibleItems"
+            :rules="formRules"
+            :span="12"
+            :gutter="16"
+            label-width="116px"
+            tenant-scope-mode="manual"
+          >
+          </ArtForm>
         </div>
-        <ArtForm
-          ref="formRef"
-          v-model="form"
-          :items="visibleItems"
-          :rules="formRules"
-          :span="12"
-          :gutter="16"
-          label-width="116px"
-          tenant-scope-mode="manual"
-        >
-        </ArtForm>
       </div>
-    </div>
+    </Teleport>
   </ArtDialog>
   <ArtDialog ref="certificationDialogRef" size="md" aria-label="司机证件审核">
     <ElAlert
@@ -286,7 +294,7 @@
     ElTag,
     type FormRules
   } from 'element-plus'
-  import { h } from 'vue'
+  import { h, useId } from 'vue'
   import { until } from '@vueuse/core'
   import type { ColumnOption } from '@/types'
   import { omit, pick } from 'lodash-es'
@@ -513,6 +521,8 @@
   const certificateError = ref(false)
   const formRef = ref<InstanceType<typeof ArtForm>>()
   const activeTab = ref<DriverTab>('basic')
+  const driverTabId = useId()
+  const driverTabContentId = (tab: DriverTab) => `driver-tab-${driverTabId}-${tab}`
   const selectedCommissionRuleId = ref('')
   const activeImage = ref<DriverImageKey | ''>('')
   const tabs: { key: DriverTab; label: string }[] = [
@@ -654,7 +664,7 @@
     },
     { immediate: true }
   )
-  const vehicleState = reactive({ loading: false, error: '', requestId: 0 })
+  const vehicleState = reactive({ loading: false, error: '', retryAvailable: false, requestId: 0 })
   const employeeSelection = reactive<EmployeeSelectionGroup>({
     selectedRows: [],
     tenantLabel: '',
@@ -1114,6 +1124,25 @@
     remark: [{ max: 500, message: '备注不能超过 500 个字符', trigger: 'blur' }]
   }))
 
+  function renderAssignedVehicleRefresh() {
+    const message = vehicleState.loading ? '正在加载关联车辆' : vehicleState.error
+    return h('div', { class: 'flex flex-wrap items-center gap-x-2 gap-y-1' }, [
+      message ? h('span', { role: 'status' }, message) : null,
+      h(
+        ElButton,
+        {
+          link: true,
+          type: 'primary',
+          'aria-disabled': vehicleState.loading,
+          onClick: () => {
+            if (!vehicleState.loading) void reloadAssignedVehicles()
+          }
+        },
+        () => '重新读取关联车辆'
+      )
+    ])
+  }
+
   const formItems = computed<FormItem[]>(() => [
     { label: '基础信息', key: 'baseSection', type: 'divider', span: 24 },
     {
@@ -1249,6 +1278,7 @@
         clearable: true,
         placeholder: '公司名称/承运商编码',
         onChange: () => {
+          vehicleState.retryAvailable = false
           form.value.carrierVehiclePlates = []
           void reloadAssignedVehicles()
         }
@@ -1260,15 +1290,17 @@
       type: 'inputTag',
       span: 16,
       hidden: () => !form.value.id,
+      description: vehicleState.retryAvailable ? renderAssignedVehicleRefresh : undefined,
       props: {
         disabled: true,
         tagType: 'primary',
         tagEffect: 'light',
-        placeholder: vehicleState.loading
-          ? '正在加载关联车辆'
-          : vehicleState.error
-            ? '关联车辆加载失败'
-            : '暂无关联车辆'
+        placeholder:
+          vehicleState.retryAvailable && (vehicleState.loading || vehicleState.error)
+            ? '待核对'
+            : vehicleState.loading
+              ? '正在加载关联车辆'
+              : '暂无关联车辆'
       }
     },
     {
@@ -1615,6 +1647,7 @@
     vehicleState.requestId += 1
     vehicleState.loading = false
     vehicleState.error = ''
+    vehicleState.retryAvailable = false
     employeeSelection.selectedRows = []
     employeeSelection.tenantLabel = ''
     replaceForm(createInitialForm())
@@ -1868,7 +1901,9 @@
       await loadCertification()
     }
 
-    if (initialTab) activeTab.value = initialTab
+    if (initialTab && availableTabs.value.some((tab) => tab.key === initialTab)) {
+      activeTab.value = initialTab
+    }
     selectedCommissionRuleId.value = commissionRuleId ?? ''
 
     await dialogRef.value?.handleOpen(row, {
@@ -1901,15 +1936,12 @@
     try {
       const result = await fetchDriverAssignedVehicles({ driverId, carrierId })
       if (requestId !== vehicleState.requestId) return
-      if (result.error) {
-        vehicleState.error = '关联车辆加载失败，请重试'
-        return
-      }
+      if (result.error) throw result.error
       form.value.carrierVehiclePlates = (result.data ?? []).map((vehicle) => vehicle.plateNo)
     } catch {
       if (requestId !== vehicleState.requestId) return
-      form.value.carrierVehiclePlates = []
-      vehicleState.error = '关联车辆加载失败，请重试'
+      vehicleState.error = '关联车辆加载失败'
+      vehicleState.retryAvailable = true
     } finally {
       if (requestId === vehicleState.requestId) vehicleState.loading = false
     }
@@ -1952,10 +1984,6 @@
       color: var(--theme-color);
       background: var(--art-gray-100);
       border-radius: var(--art-control-radius);
-    }
-
-    &__tabs {
-      margin-bottom: 14px;
     }
 
     &__workarea {

@@ -28,7 +28,7 @@
       :columns-factory="table.columnsFactory"
       :header-actions="table.headerActions"
       header-actions-placement="workspace"
-      :search-bar-props="{ span: 6, labelWidth: 86 }"
+      :search-bar-props="{ span: 6, labelWidth: 82 }"
       :table-props="{
         rowKey: 'id',
         tableLayout: 'fixed',
@@ -318,9 +318,9 @@
       {
         label: '开单日期',
         key: 'createTimeRange',
-        type: 'date',
+        type: 'daterange',
+        span: 12,
         props: {
-          type: 'daterange',
           valueFormat: 'YYYY-MM-DD',
           startPlaceholder: '开始日期',
           endPlaceholder: '结束日期',

@@ -40,7 +40,7 @@
       "
     >
       <template v-if="detail">
-        <ElTabs v-model="activeDetailTab">
+        <ElTabs v-model="activeDetailTab" class="art-card-xs art-overlay-tab-card">
           <ElTabPane name="base" label="基础信息">
             <ArtDescriptions :data="detail" :items="baseDetailItems" :columns="3" />
           </ElTabPane>

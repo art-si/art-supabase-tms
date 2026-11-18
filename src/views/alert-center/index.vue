@@ -23,7 +23,7 @@
         :search-items="searchItems"
         :api-fn="fetchTableData"
         :columns-factory="columnsFactory"
-        :search-bar-props="{ span: 8, labelWidth: 82, showExpand: false }"
+        :search-bar-props="{ span: 8, labelWidth: 100, showExpand: false }"
         :table-props="{
           rowKey: 'subjectId',
           emptyText: '暂无合同预警',

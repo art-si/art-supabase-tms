@@ -56,7 +56,6 @@
 <script setup lang="ts">
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import { h } from 'vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import { useAuth } from '@/hooks/core/useAuth'
   import { ElMessage } from 'element-plus'
@@ -80,15 +79,9 @@
         rows: 3,
         maxlength: 300,
         showWordLimit: true,
-        placeholder: '请说明业务必要性、临时处置及后续换证责任（至少 10 字）',
-        'aria-describedby': 'dispatch-certificate-override-help'
+        placeholder: '请说明业务必要性、临时处置及后续换证责任（至少 10 字）'
       },
-      description: () =>
-        h(
-          'span',
-          { id: 'dispatch-certificate-override-help' },
-          '确认后将继续本次配载，并记录强制派车审计日志。'
-        )
+      description: '确认后将继续本次配载，并记录强制派车审计日志。'
     }
   ]
   const allowOverride = ref(false)
